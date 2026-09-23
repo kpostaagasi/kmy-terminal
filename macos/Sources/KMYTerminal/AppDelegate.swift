@@ -68,7 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         main.showStatus(title: "Gateway'e ulaşılamadı",
           detail: Gateway.shared.bundled
             ? "Sunucu başlatılamadı. Ayrıntılar için logları açın. 7420 portunu başka bir uygulama kullanıyor olabilir."
-            : "Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminalde <code>./bin/kmy gateway status</code> ile kontrol edin.",
+            : Gateway.shared.serviceInstalled
+              ? "Arka plan servisi başlatılamadı. Ayrıntılar için logları açın veya Terminal'de <code>./bin/kmy gateway status</code> çalıştırın."
+              : "Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminal'de <code>./bin/kmy gateway status</code> ile kontrol edin.",
           retry: true)
       }
     }
