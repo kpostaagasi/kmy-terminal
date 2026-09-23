@@ -549,9 +549,11 @@ listenWithRetry(server, PORT, () => {
   restartTimers();
   scheduler.start(agent, (s) => broadcast({ t: 'schedule.ran', name: s.name }));
   // Kurum raporu akışını arka planda hazır tut (ilk açılışta beklemeyi önler)
-  // Kurum raporu klasör izleme (Ayarlar › Veri'den açılır)
+  // Kurum raporu klasör izleme (varsayılan açık; Ayarlar › Veri'den kapatılabilir)
   setInterval(() => inbox.scan({ notify: inboxNotify }).catch((e) => console.error('[klasör izleme]', e.message)), 60_000);
-  const warm = () => research.refresh().catch(() => {});
+  // Kurum raporu akışı: açılışta ve 30 dakikada bir; yeni rapor gelince açık arayüzler kendiliğinden yenilenir
+  let lastResearch = 0;
+  const warm = () => research.refresh().then((d) => { if (d?.at && d.at !== lastResearch) { lastResearch = d.at; broadcast({ t: 'research.updated', at: d.at, count: d.items.length }); } }).catch(() => {});
   setTimeout(warm, 5_000);
   setInterval(warm, 30 * 60_000);
 });

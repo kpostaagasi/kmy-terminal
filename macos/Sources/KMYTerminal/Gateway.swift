@@ -55,6 +55,55 @@ final class Gateway {
     do { let (_, res) = try await URLSession.shared.data(for: req); return (res as? HTTPURLResponse) != nil } catch { return false }
   }
 
+  /// Sunucu durumu (menü çubuğu için): erişim anahtarı dosyasındaki anahtarla /api/health
+  func status() async -> (Bool, [String: Any]) {
+    var req = URLRequest(url: baseURL.appendingPathComponent("api/health"), timeoutInterval: 2)
+    if let d = try? Data(contentsOf: dataDir.appendingPathComponent("gateway.json")),
+       let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let t = j["token"] as? String {
+      req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+    }
+    do {
+      let (data, res) = try await URLSession.shared.data(for: req)
+      guard let http = res as? HTTPURLResponse else { return (false, [:]) }
+      let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+      return (true, http.statusCode == 200 ? body : [:])
+    } catch { return (false, [:]) }
+  }
+
+  // Menü çubuğu oturum ajanı: gateway servisi yüklü olduğu sürece (launchd OtherJobEnabled) uygulamayı menü çubuğunda tutar.
+  // Yalnız dosya yazılır; bir sonraki oturum açılışında launchd yükler (şimdi yüklemek ikinci bir kopya başlatırdı).
+  var menubarPlist: String { NSHomeDirectory() + "/Library/LaunchAgents/com.kmyterminal.menubar.plist" }
+  func syncMenubarAgent() {
+    let fm = FileManager.default
+    guard serviceInstalled, let exe = Bundle.main.executablePath else {
+      if fm.fileExists(atPath: menubarPlist) { try? fm.removeItem(atPath: menubarPlist) }
+      return
+    }
+    let xml = { (s: String) in s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;") }
+    let plist = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <!-- kmy terminal menü çubuğu: gateway servisi yüklü olduğu sürece uygulama menü çubuğunda çalışır -->
+    <plist version="1.0">
+    <dict>
+      <key>Label</key><string>com.kmyterminal.menubar</string>
+      <key>ProgramArguments</key><array><string>\(xml(exe))</string><string>--menubar</string></array>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><dict><key>OtherJobEnabled</key><dict><key>com.kmyterminal.gateway</key><true/></dict></dict>
+      <key>ProcessType</key><string>Interactive</string>
+      <key>LimitLoadToSessionType</key><string>Aqua</string>
+    </dict>
+    </plist>
+    """
+    if (try? String(contentsOfFile: menubarPlist, encoding: .utf8)) != plist {
+      try? fm.createDirectory(atPath: (menubarPlist as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+      try? plist.write(toFile: menubarPlist, atomically: true, encoding: .utf8)
+    }
+  }
+
+  /// Servis modunda gateway'i bu oturum için durdurur (kurulu kalır; sonraki oturum açılışında yeniden başlar)
+  func stopService() { _ = shell("launchctl bootout gui/\(getuid())/com.kmyterminal.gateway") }
+
   /// Çalışmıyorsa başlatır ve en fazla ~30 sn hazır olmasını bekler
   func ensureRunning() async -> Bool {
     if await isUp() { return true }

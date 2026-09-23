@@ -122,7 +122,7 @@ export const DEFAULT_SETTINGS = {
   baseCurrency: 'TRY',
   riskFreeRate: 0.40,
   riskFreeSource: 'tlref',
-  inboxEnabled: false,
+  inboxEnabled: true,
   inboxDir: '',
   benchmark: 'XU100',
   benchmarks: ['XU100', 'USDTRY', 'GRAM', 'SPX_TRY', 'BTC_TRY'],

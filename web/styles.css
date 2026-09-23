@@ -553,3 +553,18 @@ table.fin-sum th.r { font-weight: 500; }
 .pal-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--text-3); background: var(--bg-2); }
 @media (max-width: 600px) { .pal-row { grid-template-columns: 76px minmax(0, 1fr) auto; } .pal-px { display: none; } .pal-back { padding-top: 8vh; } }
 @media (max-width: 1250px) { .cm-hint { display: none; } }
+/* ── DASHBOARD: dar orta alanda kartlar alt alta; temettü / sermaye artırımı listesi ── */
+#view-market { container-type: inline-size; }
+@container (max-width: 1000px) { #view-market .g2, #view-market .g3 { grid-template-columns: minmax(0, 1fr); } }
+@container (min-width: 1001px) and (max-width: 1300px) { #view-market .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ca-list { display: flex; flex-direction: column; }
+.ca-row { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.ca-row:last-child { border-bottom: 0; }
+.ca-date { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); white-space: nowrap; }
+.ca-what { min-width: 0; }
+.ca-kind { font-weight: 600; }
+.ca-kind.div::before, .ca-kind.cap::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; background: var(--up); }
+.ca-kind.cap::before { background: var(--info); }
+.ca-amt { text-align: right; white-space: nowrap; }
+.ca-note { font-size: 11px; margin-top: 6px; }
+@container (max-width: 520px) { .ca-row { grid-template-columns: minmax(0, 1fr) auto; } .ca-what { grid-column: 1 / -1; grid-row: 2; } }

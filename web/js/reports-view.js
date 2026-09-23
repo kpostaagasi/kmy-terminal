@@ -11,7 +11,7 @@ root.innerHTML = `<div class="reports">
     <div id="feedBox" hidden>
       <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
         <div class="seg" id="fDays" style="display:flex"><button data-d="7" style="flex:1">7G</button><button data-d="30" style="flex:1">30G</button><button data-d="90" style="flex:1">90G</button><button data-d="0" style="flex:1">TÜMÜ</button></div>
-        <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="fSym" placeholder="Ticker" style="width:84px" aria-label="Ticker"><select id="fBroker" style="flex:1;min-width:0" aria-label="Kurum"><option value="">Tüm Kurumlar</option></select><button class="icon-btn sm" id="fRefresh" title="Kurumlardan yenile">↻</button></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="fSym" placeholder="Ticker" style="width:84px" aria-label="Ticker"><select id="fBroker" style="flex:1;min-width:0" aria-label="Kurum"><option value="">Tüm Kurumlar</option></select></div>
       </div>
       <div id="feedList"></div>
       <div class="dim" id="feedNote" style="font-size:11px;padding:8px"></div>
@@ -164,7 +164,7 @@ async function loadFeed() {
       <div class="m">${dateTR(x.date)} · ${esc(x.category)}${x.size ? ` · ${esc(x.size)}` : ''}${x.access === 'web' ? ' · web' : ''}</div></div>`).join('') || '<div class="empty">Bu filtrede rapor yok</div>';
     $$('.feed-item', root).forEach((el) => el.onclick = () => showFeed(el.dataset.id));
     const fails = Object.entries(r.status || {}).filter(([, s]) => !s.ok).map(([k]) => r.brokers[k]?.name);
-    $('#feedNote').innerHTML = `${r.total} şirket raporu · güncelleme ${dateTR(r.at, true)}${fails.length ? ` · <span class="down">alınamadı: ${esc(fails.join(', '))}</span>` : ''}<br>Girişli kaynaklar (${r.unavailable.map((u) => `<span title="${esc(u.reason)}">${esc(u.name)}</span>`).join(', ')}): kendi hesabınızla indirin, Ayarlar › Veri › Kurum raporu klasör izleme arşive alır.`;
+    $('#feedNote').innerHTML = `${r.total} şirket raporu · otomatik güncelleme ${dateTR(r.at, true)} (30 dk'da bir)${fails.length ? ` · <span class="down">alınamadı: ${esc(fails.join(', '))}</span>` : ''}<br>Girişli kaynaklar (${r.unavailable.map((u) => `<span title="${esc(u.reason)}">${esc(u.name)}</span>`).join(', ')}): kendi hesabınızla indirin, Ayarlar › Veri › Kurum raporu klasör izleme arşive alır.`;
   } catch (e) { if (tok === feedTok) $('#feedList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function showFeed(id) {
@@ -188,7 +188,7 @@ function showFeed(id) {
 $('#fDays').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; feedDays = Number(b.dataset.d); localSet('feedDays', feedDays); loadFeed(); };
 $('#fSym').addEventListener('input', debounce(loadFeed, 300));
 $('#fBroker').onchange = loadFeed;
-$('#fRefresh').onclick = async () => { $('#fRefresh').disabled = true; try { const r = await api('/research/refresh', { method: 'POST', body: {} }); toast(`${r.count} kurum raporu güncellendi`, 'ok'); } catch (e) { toast(e.message, 'err'); } $('#fRefresh').disabled = false; loadFeed(); };
+on('ws:research.updated', () => { if (kind === 'akis' && root.classList.contains('active')) loadFeed(); });
 on('research:symbol', (s) => { kind = 'akis'; localSet('reportKind', kind); $('#fSym').value = s; emit('rtab', 'reports'); draw(); });
 $('#rFilter').addEventListener('input', debounce(draw, 150));
 $('#rBroker').onchange = draw;

@@ -161,7 +161,7 @@ export function toolSpecs(notify = () => {}) {
     },
     {
       name: 'set_manual_price', readOnly: false,
-      description: 'Canlı fiyatı olmayan varlıklar (TEFAS fonu, mevduat, özel ürün) için güncel birim fiyatı kaydeder; portföy değerlemesinde kullanılır. price boş verilirse elle fiyat silinir.',
+      description: 'Otomatik fiyat kaynağı olmayan varlıklar (mevduat, özel ürün, borsada işlem görmeyen tahvil) için güncel birim fiyatı kaydeder; portföy değerlemesinde kullanılır. price boş verilirse elle fiyat silinir.',
       schema: { symbol: z.string(), price: z.number().nullable(), date: z.string().optional().describe('Fiyat tarihi YYYY-AA-GG') },
       handler: async ({ symbol, price, date }) => { const r = portfolio.setManualPrice(symbol, price, date); notify('portfolio.changed', {}); return r; },
     },

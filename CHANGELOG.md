@@ -1,5 +1,20 @@
 # Sürüm Notları
 
+## 0.9.0 — 23 Eylül 2026 (tam otomatik veri, menü çubuğu)
+
+### Yeni
+- **TEFAS fonları otomatik:** yatırım ve emeklilik fonlarının günlük birim fiyatı, günlük değişimi, fiyat grafiği ve fon adı araması TEFAS'tan kendiliğinden gelir. Portföy değerlemesi, watchlist ve sembol arama fonları doğrudan tanır; elle fiyat girmek gerekmez.
+- **Menü çubuğu simgesi:** gateway çalıştığı sürece menü çubuğunda kmy terminal logosu görünür. Menüde gateway durumu, sürüm, çalışma süresi, çalışan ajan işleri, sembol arama, yeni oturum, yeniden başlatma ve loglar var.
+- Pencere kapatılınca uygulama menü çubuğunda çalışmayı sürdürür (Dock'tan kalkar). Gateway servis olarak kuruluysa oturum açılışında menü çubuğunda kendiliğinden başlar; ⌘Q uygulamayı menü çubuğuna çeker, tamamen çıkış menü çubuğundaki "Gateway'i Durdur ve Çık" ile.
+
+### Değişen
+- Elle veri adımları kaldırıldı: "Fon fiyatlarını güncelle" zamanlanmış görevi ve `/fonlar` komutu yok (fiyatlar otomatik); kurum raporu akışındaki elle yenile düğmesi yerine liste 30 dakikada bir kendiliğinden güncellenir ve açık ekran yenilenir; DASHBOARD'da seçili hissenin haberleri, KAP bildirimleri ve kurum raporları 5 dakikada bir yenilenir.
+- Kurum raporu klasör izleme varsayılan olarak açık (İndirilenler klasörüne düşen aracı kurum raporları dakikada bir arşive alınır).
+- Elle fiyat yalnız otomatik kaynağı olmayan varlıklar (mevduat, özel ürün) için kaldı.
+
+### Düzeltilen
+- DASHBOARD: orta alan dar olduğunda yan yana kartlardaki tablolar (temettü ve sermaye artırımları, günün hareketlileri, temettü takvimi) kart dışına taşıp kesiliyordu. Kartlar artık orta alanın genişliğine göre alt alta diziliyor; temettü / sermaye artırımı kartı sade bir listeye dönüştü (tarih, olay, hisse başı tutar, toplam).
+
 ## 0.8.0 — 23 Eylül 2026 (kmy terminal)
 
 ### Yeni
