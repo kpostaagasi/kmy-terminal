@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { db, getSettings } from './db.js';
 import { WORKSPACE_DIR, ROOT } from './paths.js';
@@ -12,6 +14,18 @@ import { buildBorsaServer, AUTO_TOOLS } from './agent-tools.js';
 import { marketStatus } from './market.js';
 import * as memory from './memory.js';
 import { ompBin, ompModels, runOmp } from './omp-runner.js';
+
+// Claude Code yürütülebilir dosyası: SDK'nın platform paketi yoksa (DMG ile dağıtılan uygulama) kullanıcının kurduğu `claude` kullanılır
+const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
+export function claudeExecutable() {
+  if (process.env.KMY_CLAUDE_PATH) return process.env.KMY_CLAUDE_PATH;
+  if (hasBundledCli) return undefined;
+  for (const d of (process.env.PATH || '').split(path.delimiter)) {
+    const f = path.join(d, 'claude');
+    try { fs.accessSync(f, fs.constants.X_OK); return f; } catch { /* yok */ }
+  }
+  throw new Error('Claude Code bulunamadı. Kurun (https://claude.com/download veya: curl -fsSL https://claude.ai/install.sh | bash), ardından Terminal\'de `claude` yazıp giriş yapın ve uygulamayı yeniden açın.');
+}
 
 // omp (oh-my-pi) yalnız CLI bulunursa listelenir
 export const PROVIDERS = { claude: 'Claude Code', codex: 'ChatGPT / Codex', ...(ompBin() ? { omp: 'oh-my-pi' } : {}) };
@@ -156,11 +170,22 @@ export class AgentManager extends EventEmitter {
       return { sessionId };
     }
 
+    let claudeBin;
+    try { claudeBin = claudeExecutable(); } catch (e) {
+      // Claude Code kurulu değil: turu hemen, anlaşılır bir mesajla bitir
+      this.#record(sessionId, 'error', { message: e.message });
+      this.#emit(sessionId, 'error', { message: e.message });
+      this.running.delete(sessionId);
+      this.#emit(sessionId, 'run.end', {});
+      this.emit('jobs');
+      return { sessionId };
+    }
     const options = {
       cwd: WORKSPACE_DIR,
       abortController: abort,
       includePartialMessages: true,
       settingSources: ['user', 'project', 'local'],
+      ...(claudeBin ? { pathToClaudeCodeExecutable: claudeBin } : {}),
       mcpServers: { borsa: this.borsaServer },
       // Portföye yazan add_transaction bilerek listede yok: her seferinde kullanıcı onayı ister
       // Salt okunur piyasa verisi bağlayıcıları da onaysız çalışır (zamanlanmış görevler dahil); e-posta vb. yazma yetkili bağlayıcılar onay ister
@@ -562,7 +587,7 @@ export class AgentManager extends EventEmitter {
     const q = query({
       prompt: `Aşağıdaki alt ajan çıktısını Türkçe, en fazla 6 maddede özetle. Rakamları, tarihleri ve sonuçları koru; yorum ekleme.\n\n<cikti>\n${body}\n</cikti>`,
       options: {
-        model: 'claude-haiku-4-5-20251001', maxTurns: 1, settingSources: [], cwd: WORKSPACE_DIR,
+        model: 'claude-haiku-4-5-20251001', maxTurns: 1, settingSources: [], cwd: WORKSPACE_DIR, ...(claudeExecutable() ? { pathToClaudeCodeExecutable: claudeExecutable() } : {}),
         systemPrompt: 'Kısa ve doğru özetler yazan bir asistansın.', allowedTools: [],
         canUseTool: async () => ({ behavior: 'deny', message: 'Özetlemede araç kullanılmaz' }),
       },

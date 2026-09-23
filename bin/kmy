@@ -89,7 +89,7 @@ function serviceEnv(node) {
   const h = os.homedir();
   const dirs = [path.dirname(node), ...['claude', 'codex', 'git', 'python3', 'npm'].map(which), path.join(h, '.local', 'bin'), path.join(h, '.claude', 'local'), '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
   const env = { BORSA_DAEMON: '1', PATH: [...new Set(dirs.filter(Boolean))].join(path.delimiter) };
-  for (const k of ['LANG', 'BORSA_PORT', 'PORT', 'BORSA_REPORT_PORT', 'BORSA_DATA_DIR', 'BORSA_ALLOWED_HOSTS', 'HOST']) if (process.env[k]) env[k] = process.env[k];
+  for (const k of ['LANG', 'BORSA_PORT', 'PORT', 'BORSA_REPORT_PORT', 'BORSA_DATA_DIR', 'BORSA_WORKSPACE_DIR', 'BORSA_ALLOWED_HOSTS', 'HOST']) if (process.env[k]) env[k] = process.env[k];
   return env;
 }
 

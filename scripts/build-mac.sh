@@ -5,7 +5,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NAME="kmy terminal"
-APP="$ROOT/dist/$NAME.app"
+# KMY_APP_OUT: çıktı klasörü (DMG derlemesi ayrı klasör kullanır); KMY_BUNDLE=1: proje yolu yazılmaz (paket modu)
+APP="${KMY_APP_OUT:-$ROOT/dist}/$NAME.app"
 VERSION="$(node -p "require('$ROOT/package.json').version" 2>/dev/null || echo 0.0.0)"
 BUILD="$(date +%Y%m%d%H%M)"
 
@@ -52,7 +53,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>NSHumanReadableCopyright</key><string>kmy terminal · Analizler yatırım tavsiyesi değildir.</string>
-  <key>KMYProjectRoot</key><string>$ROOT</string>
+$( [[ "${KMY_BUNDLE:-}" == 1 ]] || echo "  <key>KMYProjectRoot</key><string>$ROOT</string>")
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict>
