@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# KMY Terminal macOS uygulamasını derler: dist/KMY Terminal.app
+# kmy terminal macOS uygulamasını derler: dist/kmy terminal.app
 # Kullanım: ./scripts/build-mac.sh [--install]   (--install: ~/Applications altına kopyalar)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="KMY Terminal"
+NAME="kmy terminal"
 APP="$ROOT/dist/$NAME.app"
 VERSION="$(node -p "require('$ROOT/package.json').version" 2>/dev/null || echo 0.0.0)"
 BUILD="$(date +%Y%m%d%H%M)"
@@ -51,7 +51,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.finance</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
-  <key>NSHumanReadableCopyright</key><string>KMY Terminal · Analizler yatırım tavsiyesi değildir.</string>
+  <key>NSHumanReadableCopyright</key><string>kmy terminal · Analizler yatırım tavsiyesi değildir.</string>
   <key>KMYProjectRoot</key><string>$ROOT</string>
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>

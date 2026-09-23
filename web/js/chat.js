@@ -493,7 +493,7 @@ function questionCard(e) {
 
 function notify(text) {
   toast(text);
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('KMY Terminal', { body: text });
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('kmy terminal', { body: text });
 }
 
 // ── Çalışma göstergesi ───────────────────────────

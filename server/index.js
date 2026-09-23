@@ -1,4 +1,4 @@
-// KMY Terminal sunucusu: statik arayüz + REST API + WebSocket (canlı fiyat, ajan, terminal)
+// kmy terminal sunucusu: statik arayüz + REST API + WebSocket (canlı fiyat, ajan, terminal)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -545,7 +545,7 @@ if (gw.isDaemon()) gw.trimLog();
 listenWithRetry(reportServer, REPORT_PORT);
 
 listenWithRetry(server, PORT, () => {
-  console.log(`\n  KMY Terminal v${VERSION}${gw.isDaemon() ? ' (Gateway servisi)' : ''}\n  → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}\n  Veri: ${DATA_DIR}\n  Raporlar: ${REPORTS_DIR}\n  Gateway anahtarı: ${gw.TOKEN_FILE}\n`);
+  console.log(`\n  kmy terminal v${VERSION}${gw.isDaemon() ? ' (Gateway servisi)' : ''}\n  → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}\n  Veri: ${DATA_DIR}\n  Raporlar: ${REPORTS_DIR}\n  Gateway anahtarı: ${gw.TOKEN_FILE}\n`);
   restartTimers();
   scheduler.start(agent, (s) => broadcast({ t: 'schedule.ran', name: s.name }));
   // Kurum raporu akışını arka planda hazır tut (ilk açılışta beklemeyi önler)

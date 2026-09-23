@@ -1,5 +1,5 @@
 #!/bin/sh
-# KMY Terminal kurulumu: bağımlılıklar + Gateway servisi (macOS LaunchAgent / Linux systemd --user).
+# kmy terminal kurulumu: bağımlılıklar + Gateway servisi (macOS LaunchAgent / Linux systemd --user).
 # Tekrar çalıştırılabilir (idempotent); sudo kullanmaz.
 #   sh scripts/install.sh              → npm install + servis kurulumu
 #   sh scripts/install.sh --link       → ayrıca `kmy` komutunu npm link ile PATH'e ekler
@@ -32,7 +32,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 if ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'; then
-  echo "Node $(node -v) eski. KMY Terminal Node 22.13 veya üstünü ister." >&2
+  echo "Node $(node -v) eski. kmy terminal Node 22.13 veya üstünü ister." >&2
   exit 1
 fi
 if ! command -v npm >/dev/null 2>&1; then

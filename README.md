@@ -1,4 +1,4 @@
-# KMY Terminal
+# kmy terminal
 
 Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda (`data/borsa.db`) tutulur.
 
@@ -23,7 +23,7 @@ Terminal, yerel bir macOS uygulaması olarak da çalışır (Swift + AppKit + WK
 npm run mac
 ```
 
-`dist/KMY Terminal.app` derlenir ve `~/Applications` altına kurulur; Dock, Spotlight ve Launchpad'den açılır. Gerekenler: Xcode veya Command Line Tools (Swift 5.10+), macOS 14+.
+`dist/kmy terminal.app` derlenir ve `~/Applications` altına kurulur; Dock, Spotlight ve Launchpad'den açılır. Gerekenler: Xcode veya Command Line Tools (Swift 5.10+), macOS 14+.
 
 - **Gateway:** uygulama açılınca sunucuya bağlanır. `./bin/kmy gateway install` ile servis kuruluysa onu kullanır (gerekirse başlatır); kurulu değilse sunucuyu kendi alt süreci olarak başlatır ve kapanınca durdurur.
 - **Yerel özellikler:** macOS bildirimleri (ajan izin ve soru istekleri), Dock rozeti (çalışan ajan işi sayısı), ~/Downloads'a indirme, dosya seçme penceresi, tema ile uyumlu pencere çubuğu, pencere konumunu hatırlama.
@@ -33,7 +33,7 @@ npm run mac
 
 ## Gateway
 
-KMY Gateway, sunucuyu arka planda çalışan yönetilen bir servis olarak kurar ve yerel API'yi bir erişim anahtarıyla korur. Oturum açıldığında kendiliğinden başlar, çökerse servis yöneticisi yeniden açar (macOS: LaunchAgent `com.kmyterminal.gateway`, Linux: `systemd --user` birimi `borsa-gateway.service`).
+kmy gateway, sunucuyu arka planda çalışan yönetilen bir servis olarak kurar ve yerel API'yi bir erişim anahtarıyla korur. Oturum açıldığında kendiliğinden başlar, çökerse servis yöneticisi yeniden açar (macOS: LaunchAgent `com.kmyterminal.gateway`, Linux: `systemd --user` birimi `borsa-gateway.service`).
 
 ```bash
 sh scripts/install.sh            # npm install + servis kurulumu (tekrar çalıştırılabilir, sudo kullanmaz; --link, --no-service, --dry-run)

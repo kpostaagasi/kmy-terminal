@@ -19,7 +19,7 @@ import * as feeds from './feeds.js';
 const r2 = (x) => (typeof x === 'number' ? Math.round(x * 100) / 100 : x);
 const noSpark = ({ spark, sparkTimes, ...x }) => x;
 
-export const INSTRUCTIONS = 'KMY Terminal yerel verileri: fiyat (BIST ~15 dk gecikmeli; döviz/altın serbest piyasa), geçmiş, teknik gösterge, sinyal taraması, temel oranlar (İş Yatırım), hisse tarayıcı, temettü/sermaye artırımı takvimi, KAP bildirimleri ve içerikleri, kullanıcının portföyü ve izleme listesi. BIST sembolleri kısa kodla verilir (THYAO). Özel semboller: USDTRY, EURTRY, GBPTRY, CHFTRY, GRAM (gram altın), CEYREK, YARIM, TAM, CUMHURIYET, ATA, HAS, GUMUS, ONS, BRENT, BTC, SPX, XU100, XU030, XBANK. ABD hisseleri AAPL.US biçiminde.';
+export const INSTRUCTIONS = 'kmy terminal yerel verileri: fiyat (BIST ~15 dk gecikmeli; döviz/altın serbest piyasa), geçmiş, teknik gösterge, sinyal taraması, temel oranlar (İş Yatırım), hisse tarayıcı, temettü/sermaye artırımı takvimi, KAP bildirimleri ve içerikleri, kullanıcının portföyü ve izleme listesi. BIST sembolleri kısa kodla verilir (THYAO). Özel semboller: USDTRY, EURTRY, GBPTRY, CHFTRY, GRAM (gram altın), CEYREK, YARIM, TAM, CUMHURIYET, ATA, HAS, GUMUS, ONS, BRENT, BTC, SPX, XU100, XU030, XBANK. ABD hisseleri AAPL.US biçiminde.';
 
 // notify(type, data): arayüze canlı güncelleme yayını
 export function toolSpecs(notify = () => {}) {

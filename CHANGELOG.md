@@ -31,7 +31,7 @@
 ## 0.5.0 — 23 Eylül 2026 (yeni düzen)
 
 ### Yeni
-- **KMY Gateway:** sunucu arka plan servisi olarak kurulabiliyor (macOS LaunchAgent, Linux systemd --user); oturum açılınca başlıyor, çökünce yeniden açılıyor.
+- **kmy gateway:** sunucu arka plan servisi olarak kurulabiliyor (macOS LaunchAgent, Linux systemd --user); oturum açılınca başlıyor, çökünce yeniden açılıyor.
 - `borsa` komut satırı: `gateway install / uninstall / start / stop / restart / status / logs / token / open` (kurulumda `--dry-run`). `scripts/install.sh` ile tek komutta kurulum (tekrar çalıştırılabilir, sudo gerekmez).
 - Yerel API güvenliği: tüm `/api` istekleri ve WebSocket erişim anahtarı istiyor (tarayıcıda otomatik çerez, betiklerde `Authorization: Bearer`); yabancı Host / Origin istekleri reddediliyor (DNS rebinding koruması).
 - Ayarlar › SİSTEM › Gateway: durum, mod, PID, çalışma süresi, portlar, oturum / istemci sayısı; erişim anahtarını göster / kopyala / yenile; yeniden başlat, servis modunda durdur. Port ayarı: `BORSA_PORT` / `BORSA_REPORT_PORT`.

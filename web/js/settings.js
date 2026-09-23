@@ -42,7 +42,7 @@ export function openSettings(section = 'genel') {
     title: 'Ayarlar', wide: true,
     body: `<div class="stg">
       <aside class="stg-side">
-        <div class="stg-brand"><b>Ayarlar</b><span>KMY Terminal</span></div>
+        <div class="stg-brand"><b>Ayarlar</b><span>kmy terminal</span></div>
         <nav class="stg-nav" role="tablist" aria-label="Ayar bölümleri">${SECTIONS.map(([k, l]) => `<button type="button" role="tab" data-s="${k}">${svg(k)}<span>${l}</span></button>`).join('')}</nav>
         <div class="stg-tip"><kbd>⌘</kbd><kbd>,</kbd> ile açılır · <kbd>Esc</kbd> kapatır</div>
       </aside>

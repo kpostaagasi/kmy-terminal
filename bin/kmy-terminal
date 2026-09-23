@@ -1,5 +1,5 @@
 #!/bin/zsh
-# KMY Terminal başlatıcı: sunucu çalışmıyorsa başlatır, tarayıcıda açar.
+# kmy terminal başlatıcı: sunucu çalışmıyorsa başlatır, tarayıcıda açar.
 DIR="${0:A:h:h}"
 PORT="${PORT:-7420}"
 URL="http://127.0.0.1:$PORT"
