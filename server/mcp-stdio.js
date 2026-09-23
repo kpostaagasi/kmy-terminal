@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // kmy terminal araçlarını stdio MCP sunucusu olarak açar (Codex, harici Claude Code, diğer MCP istemcileri).
 // Çalışan terminal sunucusu varsa çağrıları ona iletir (arayüz canlı güncellenir); yoksa yerelde çalıştırır.
-//   claude mcp add borsa -- node /yol/borsa_terminal/server/mcp-stdio.js
+//   claude mcp add borsa -- node /yol/kmy-terminal/server/mcp-stdio.js
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { toolSpecs, INSTRUCTIONS, toolResult, toolError } from './agent-tools.js';
