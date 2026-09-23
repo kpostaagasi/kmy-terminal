@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       bar.addItem(host)
       return m
     }
-    let name = "KMY Terminal"
+    let name = "kmy terminal"
     _ = menu(name, [
       item("\(name) Hakkında", #selector(about)),
       .separator(),
@@ -139,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   // MARK: Menü eylemleri
   @objc private func about() {
     NSApp.orderFrontStandardAboutPanel(options: [
-      .applicationName: "KMY Terminal",
+      .applicationName: "kmy terminal",
       .credits: NSAttributedString(string: "Yapay zekâ destekli borsa terminali\nGateway: \(Gateway.shared.baseURL.absoluteString)"),
     ])
   }

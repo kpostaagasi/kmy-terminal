@@ -50,7 +50,7 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     window.titlebarAppearsTransparent = true
     window.titleVisibility = main ? .hidden : .visible
-    window.title = "KMY Terminal"
+    window.title = "kmy terminal"
     window.minSize = NSSize(width: 760, height: 520)
     window.backgroundColor = NSColor(srgbRed: 0.055, green: 0.07, blue: 0.098, alpha: 1)
     window.tabbingMode = .disallowed
@@ -116,7 +116,7 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     guard let m = message.body as? [String: Any], let type = m["type"] as? String else { return }
     switch type {
     case "notify":
-      notify(title: m["title"] as? String ?? "KMY Terminal", body: m["body"] as? String ?? "")
+      notify(title: m["title"] as? String ?? "kmy terminal", body: m["body"] as? String ?? "")
     case "badge":
       NSApp.dockTile.badgeLabel = (m["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
     case "theme":

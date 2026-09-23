@@ -1,4 +1,4 @@
-// KMY Gateway: yerel API erişim anahtarı, Host/Origin denetimi ve servis (launchd / systemd) bilgileri.
+// kmy gateway: yerel API erişim anahtarı, Host/Origin denetimi ve servis (launchd / systemd) bilgileri.
 // Sunucu (server/index.js), CLI (bin/kmy) ve stdio MCP köprüsü aynı modülü kullanır; dış bağımlılık yok.
 import fs from 'node:fs';
 import os from 'node:os';

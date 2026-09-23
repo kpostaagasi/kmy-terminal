@@ -1,5 +1,5 @@
 // swift-tools-version:5.10
-// KMY Terminal — macOS uygulaması (AppKit + WKWebView). Derleme: ./scripts/build-mac.sh
+// kmy terminal — macOS uygulaması (AppKit + WKWebView). Derleme: ./scripts/build-mac.sh
 import PackageDescription
 
 let package = Package(

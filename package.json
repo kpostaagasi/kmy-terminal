@@ -1,7 +1,7 @@
 {
   "name": "kmy-terminal",
   "version": "0.7.0",
-  "description": "KMY Terminal — yapay zekâ destekli BIST terminali",
+  "description": "kmy terminal — yapay zekâ destekli BIST terminali",
   "main": "server/index.js",
   "bin": {
     "kmy": "bin/kmy"

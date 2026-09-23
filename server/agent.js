@@ -50,7 +50,7 @@ function systemAppend(newSession = false) {
     ? `\n- Tetikleyici radarı: ${rs.theses} izlenen tez var, son tarama ${rs.lastRun ? `${rs.daysSince} gün önce` : 'hiç yapılmadı'}. Kullanıcının isteğini yanıtladıktan sonra, yanıtın sonunda bir cümleyle tetikleyici radarı taramasını öner (tetikleyici-radar becerisi).`
     : '';
   return `
-# KMY Terminal bağlamı
+# kmy terminal bağlamı
 - Şu an: ${now} (İstanbul). BIST durumu: ${ms.label}.
 - Kullanıcıyla Türkçe konuş. Kişisel bir borsa terminalinin içindeki analiz asistanısın.
 - Yerel veriler için mcp__borsa__* araçlarını kullan (fiyat, geçmiş, teknik analiz, KAP, portföy, izleme listesi, rapor kaydetme).

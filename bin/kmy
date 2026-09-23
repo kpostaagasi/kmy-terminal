@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// kmy: KMY Terminal komut satırı. Gateway'i (sunucuyu) arka plan servisi olarak kurar, yönetir ve izler.
+// kmy: kmy terminal komut satırı. Gateway'i (sunucuyu) arka plan servisi olarak kurar, yönetir ve izler.
 // Bağımlılık yok: launchd (macOS) ve systemd --user (Linux) komutlarını doğrudan çağırır.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,7 +24,7 @@ const c = (code) => (s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : String(s));
 const bold = c(1), dim = c(2), green = c(32), red = c(31), yellow = c(33);
 const home = (p) => (p || '').replace(os.homedir(), '~');
 
-const HELP = `${bold('kmy')} — KMY Terminal komut satırı
+const HELP = `${bold('kmy')} — kmy terminal komut satırı
 
 ${bold('Kullanım')}
   kmy gateway install      Servis olarak kur ve başlat (macOS: LaunchAgent, Linux: systemd --user)
@@ -98,7 +98,7 @@ function plist(node, env) {
   const kv = (k, v) => `    <key>${xml(k)}</key><string>${xml(v)}</string>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- KMY Gateway — bin/kmy gateway install tarafından oluşturuldu -->
+<!-- kmy gateway — bin/kmy gateway install tarafından oluşturuldu -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>${gw.LABEL}</string>
@@ -126,9 +126,9 @@ ${Object.entries(env).map(([k, v]) => kv(k, v)).join('\n')}
 const sd = (s) => String(s).replace(/%/g, '%%');
 const sq = (s) => `"${sd(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 function unit(node, env) {
-  return `# KMY Gateway — bin/kmy gateway install tarafından oluşturuldu
+  return `# kmy gateway — bin/kmy gateway install tarafından oluşturuldu
 [Unit]
-Description=KMY Terminal Gateway
+Description=kmy terminal Gateway
 After=network-online.target
 
 [Service]
@@ -210,7 +210,7 @@ async function install() {
     if (wasActive) run('systemctl', ['--user', 'restart', gw.UNIT]);
   }
   if (DRY) return;
-  console.log(`${green('✓')} KMY Gateway servis olarak kuruldu (${SVC.manager}).`);
+  console.log(`${green('✓')} kmy gateway servis olarak kuruldu (${SVC.manager}).`);
   console.log(`  Arayüz : ${bold(URL_UI)}`);
   console.log(`  Log    : ${home(gw.LOG_FILE)}   (./bin/kmy gateway logs -f)`);
   if (SVC.manager === 'systemd') console.log(dim('  Oturum kapalıyken de çalışması için: loginctl enable-linger $USER'));
@@ -270,7 +270,7 @@ async function status() {
     return;
   }
   const row = (k, v) => console.log(`  ${k.padEnd(18)} ${v}`);
-  console.log(bold('KMY Gateway'));
+  console.log(bold('kmy gateway'));
   row('Servis yöneticisi', SVC.manager ? `${SVC.manager} (${SVC.label})` : 'desteklenmiyor');
   row('Kurulu', installed ? `${green('evet')} ${dim(home(SVC.file))}` : `${yellow('hayır')} ${dim('→ ./bin/kmy gateway install')}`);
   if (SVC.manager) row('Servis durumu', st.loaded ? `${st.state === 'running' || st.state === 'active' ? green(st.state) : yellow(st.state || 'yüklü')}${st.pid ? ` (PID ${st.pid})` : ''}` : dim(installed ? 'yüklü değil (durduruldu)' : '—'));
