@@ -1,0 +1,14 @@
+#!/bin/zsh
+# KMY Terminal başlatıcı: sunucu çalışmıyorsa başlatır, tarayıcıda açar.
+DIR="${0:A:h:h}"
+PORT="${PORT:-7420}"
+URL="http://127.0.0.1:$PORT"
+LOG="$DIR/data/server.log"
+mkdir -p "$DIR/data"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+
+if ! curl -s -o /dev/null "$URL/api/health"; then
+  cd "$DIR" && nohup node server/index.js >> "$LOG" 2>&1 &
+  for i in {1..40}; do curl -s -o /dev/null "$URL/api/health" && break; sleep 0.25; done
+fi
+open "$URL"

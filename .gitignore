@@ -1,0 +1,16 @@
+*.log
+*.pdf
+.DS_Store
+/.claude/
+data/
+dist/
+macos/.build/
+node_modules/
+workspace/.claude/settings.local.json
+workspace/.omp/
+workspace/.omp/mcp.json
+workspace/belgeler/
+workspace/hafiza/
+workspace/reports/
+workspace/tahminler.md
+workspace/uploads/
