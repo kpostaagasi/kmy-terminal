@@ -15,6 +15,15 @@ Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`c
 
 Portföy hesaplarını doğrulamak için: `npm test` (geçici veritabanında 30 kontrol; gerçek verinize dokunmaz).
 
+## Kurulum (DMG)
+
+Hazır paket: GitHub › Releases › `kmy-terminal-<sürüm>-arm64.dmg`. DMG'yi açın, **kmy terminal**'i Applications klasörüne sürükleyin.
+
+- Gereksinimler: Apple Silicon (M1+) Mac, macOS 14+. Yapay zekâ ajanı için **Claude Code** kurulu ve giriş yapılmış olmalı (https://claude.com/download); Codex ve oh-my-pi isteğe bağlı. Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.
+- Uygulama Apple Developer ID ile imzalı değildir; ilk açılışta macOS uyarı verirse Sistem Ayarları › Gizlilik ve Güvenlik › **Yine de Aç**.
+- Veriler: `~/Library/Application Support/kmy terminal` (uygulamayı silmek verileri silmez).
+- Paketi yeniden üretmek için: `npm run dmg` → `dist/kmy-terminal-<sürüm>-arm64.dmg`.
+
 ## macOS uygulaması
 
 Terminal, yerel bir macOS uygulaması olarak da çalışır (Swift + AppKit + WKWebView, ~1 MB; Chromium taşımaz).

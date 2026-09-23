@@ -2,7 +2,7 @@
 import AppKit
 import UserNotifications
 
-final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSMenuItemValidation {
   private var main: WebWindowController!
   private var connecting = false
 
@@ -25,7 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       connecting = false
       if ok { main.loadApp() } else {
         main.showStatus(title: "Gateway'e ulaşılamadı",
-          detail: "Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminalde <code>./bin/kmy gateway status</code> ile kontrol edin.",
+          detail: Gateway.shared.bundled
+            ? "Sunucu başlatılamadı. Ayrıntılar için logları açın. 7420 portunu başka bir uygulama kullanıyor olabilir."
+            : "Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminalde <code>./bin/kmy gateway status</code> ile kontrol edin.",
           retry: true)
       }
     }
@@ -125,7 +127,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       item("Durum", #selector(gatewayStatus)),
       item("Yeniden Başlat", #selector(gatewayRestart)),
       item("Logları Aç", #selector(gatewayLogs)),
-      item("Proje Klasörünü Göster", #selector(showProject)),
+      .separator(),
+      item("Arka Planda Çalıştır (servis)", #selector(toggleService)),
+      item("Çalışma Klasörünü Göster", #selector(showProject)),
     ])
     let win = menu("Pencere", [
       fr("Küçült", #selector(NSWindow.performMiniaturize(_:)), "m"),
@@ -173,8 +177,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       if await Gateway.shared.restart() { main.loadApp() } else { connect() }
     }
   }
+  // Servis: uygulama kapalıyken de sunucu (zamanlanmış görevler, KAP takibi) çalışır; oturum açılışında başlar
+  @objc private func toggleService() {
+    let on = !Gateway.shared.serviceInstalled
+    main.showStatus(title: on ? "Arka plan servisi kuruluyor…" : "Arka plan servisi kaldırılıyor…", detail: "Birkaç saniye sürer.", retry: false)
+    Task { @MainActor in
+      _ = await Gateway.shared.setService(on)
+      if await Gateway.shared.ensureRunning() { main.loadApp() } else { connect() }
+    }
+  }
+  func validateMenuItem(_ item: NSMenuItem) -> Bool {
+    if item.action == #selector(toggleService) { item.state = Gateway.shared.serviceInstalled ? .on : .off }
+    return true
+  }
   @objc private func gatewayLogs() { NSWorkspace.shared.open(Gateway.shared.logURL) }
-  @objc private func showProject() { NSWorkspace.shared.activateFileViewerSelecting([Gateway.shared.projectRoot]) }
+  @objc private func showProject() { NSWorkspace.shared.activateFileViewerSelecting([Gateway.shared.bundled ? Gateway.shared.workspaceDir : Gateway.shared.projectRoot]) }
 
   private func focus() { main.showWindow(nil); NSApp.activate(ignoringOtherApps: true) }
 }

@@ -1,5 +1,15 @@
 # Sürüm Notları
 
+## 0.8.0 — 23 Eylül 2026 (kmy terminal)
+
+### Yeni
+- Uygulamanın adı **kmy terminal** oldu (arayüz, macOS uygulaması, `kmy` komut satırı, servis).
+- **Kuruluma hazır DMG** (`npm run dmg`): Node, sunucu, arayüz ve bağımlılıklar uygulamanın içinde; başka bir Mac'e sürükle-bırak ile kurulur. Veriler `~/Library/Application Support/kmy terminal` altında tutulur, ilk açılışta çalışma alanı (ajan talimatları, beceriler, alt ajanlar) hazırlanır ve sürüm yükseldikçe güncellenir.
+- Gateway menüsünde **Arka Planda Çalıştır (servis)**: uygulama kapalıyken de zamanlanmış görevler ve KAP takibi sürer.
+
+### Değişen
+- Claude Code uygulamaya gömülü gelmez: ajan, bilgisayarda kurulu `claude` programını kullanır. Kurulu değilse sohbette nasıl kurulacağını anlatan bir mesaj çıkar.
+
 ## 0.7.0 — 23 Eylül 2026 (macOS uygulaması)
 
 ### Yeni

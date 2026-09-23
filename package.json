@@ -1,6 +1,6 @@
 {
   "name": "kmy-terminal",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "kmy terminal — yapay zekâ destekli BIST terminali",
   "main": "server/index.js",
   "bin": {
@@ -14,7 +14,8 @@
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "gateway": "node bin/kmy gateway",
     "setup": "sh scripts/install.sh",
-    "mac": "./scripts/build-mac.sh --install"
+    "mac": "./scripts/build-mac.sh --install",
+    "dmg": "./scripts/build-dmg.sh"
   },
   "keywords": [],
   "author": "",
