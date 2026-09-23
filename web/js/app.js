@@ -270,6 +270,13 @@ $('#btnPalette').onclick = openPalette;
 $('#btnSettings').onclick = () => openSettings();
 on('settings:open', (sec) => openSettings(sec || 'genel'));
 // macOS uygulaması (WKWebView) menüleri bu kancaları çağırır; tarayıcıda zararsız
+// ⌘ (Ctrl) basılı tutulunca kısayolu olan sekmelerde numara rozeti görünür
+const keyHints = (on) => document.body.classList.toggle('show-keys', on);
+document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 'Control') keyHints(true); else if (!e.metaKey && !e.ctrlKey) keyHints(false); });
+document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control' || (!e.metaKey && !e.ctrlKey)) keyHints(false); });
+addEventListener('blur', () => keyHints(false));
+document.addEventListener('visibilitychange', () => keyHints(false));
+
 window.borsaApp = {
   view: (v) => showView(v), settings: (sec) => openSettings(sec), palette: () => openPalette(),
   newSession: () => { showView('agent'); emit('chat:new'); }, toggleRight: () => toggleRight(),

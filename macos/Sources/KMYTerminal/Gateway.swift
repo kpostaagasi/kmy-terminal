@@ -8,7 +8,7 @@ import Foundation
 final class Gateway {
   static let shared = Gateway()
 
-  let port: Int
+  private(set) var port: Int
   /// Sunucu kaynak klasörü (server/, web/, bin/ …)
   let projectRoot: URL
   let bundled: Bool
@@ -49,11 +49,19 @@ final class Gateway {
     }
   }
 
-  /// Sunucu yanıt veriyor mu? (401 de "çalışıyor" demektir: API anahtar ister)
-  func isUp() async -> Bool {
-    let req = URLRequest(url: baseURL.appendingPathComponent("api/health"), timeoutInterval: 1.5)
-    do { let (_, res) = try await URLSession.shared.data(for: req); return (res as? HTTPURLResponse) != nil } catch { return false }
+  /// Portta ne var? kmy sunucusu (401 = anahtar ister, 200 = sağlık yanıtı), başka bir program ya da hiçbir şey
+  enum PortState { case kmy, other, free }
+  func probe(_ p: Int? = nil) async -> PortState {
+    let url = URL(string: "http://127.0.0.1:\(p ?? port)/api/health")!
+    do {
+      let (data, res) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 1.5))
+      let body = String(data: data, encoding: .utf8) ?? ""
+      guard let code = (res as? HTTPURLResponse)?.statusCode else { return .other }
+      return (code == 401 && body.contains("Gateway")) || (code == 200 && body.contains("\"version\"")) ? .kmy : .other
+    } catch { return .free }
   }
+  /// Sunucu yanıt veriyor mu? (yalnız kmy sunucusu sayılır)
+  func isUp() async -> Bool { await probe() == .kmy }
 
   /// Sunucu durumu (menü çubuğu için): erişim anahtarı dosyasındaki anahtarla /api/health
   func status() async -> (Bool, [String: Any]) {
@@ -101,6 +109,18 @@ final class Gateway {
     }
   }
 
+  /// Uygulama taşındıysa (servis eski konumdaki sunucuyu gösteriyor ve orada dosya yoksa) servisi yeni konuma göre yeniden kur
+  func repairMovedService() {
+    guard bundled, !serviceInstalled, let text = try? String(contentsOfFile: plistPath, encoding: .utf8),
+          let r = text.range(of: #"<string>([^<]*kmy terminal\.app/Contents/Resources/app/server/index\.js)</string>"#, options: .regularExpression) else { return }
+    let old = String(text[r]).replacingOccurrences(of: "<string>", with: "").replacingOccurrences(of: "</string>", with: "")
+    guard !FileManager.default.fileExists(atPath: old) else { return }
+    _ = shell("launchctl bootout gui/\(getuid())/com.kmyterminal.gateway")
+    let node = nodeURL?.path ?? "node", cli = projectRoot.appendingPathComponent("bin/kmy").path
+    let env = serverEnv().filter { $0.key.hasPrefix("BORSA_") || $0.key == "PATH" }.map { "\($0.key)=\(shellQuote($0.value))" }.joined(separator: " ")
+    _ = shell("env \(env) \(shellQuote(node)) \(shellQuote(cli)) gateway install")
+  }
+
   /// Servisi başlatır. "Durdur ve Çık" sonrası servis launchd'den kaldırılmış olur: kickstart yetmez, önce yeniden yüklenir.
   func startService(restart: Bool = false) {
     let target = "gui/\(getuid())/com.kmyterminal.gateway"
@@ -114,7 +134,22 @@ final class Gateway {
   /// Çalışmıyorsa başlatır ve en fazla ~30 sn hazır olmasını bekler
   func ensureRunning() async -> Bool {
     if await isUp() { return true }
-    if bundled { prepareWorkspace() }
+    if bundled {
+      prepareWorkspace()
+      repairMovedService()
+      // Port başka bir programdaysa (kmy değil) sıradaki boş portu kullan ve hatırla
+      if await probe() == .other && !serviceInstalled {
+        for cand in stride(from: port + 10, through: port + 200, by: 10) {
+          let appFree = await probe(cand) == .free
+          let reportFree = await probe(cand + 1) == .free
+          if appFree && reportFree {
+            port = cand
+            UserDefaults.standard.set(cand, forKey: "gatewayPort")
+            break
+          }
+        }
+      }
+    }
     if serviceInstalled { startService() } else { startChild() }
     for _ in 0..<60 {
       try? await Task.sleep(nanoseconds: 500_000_000)
@@ -153,17 +188,25 @@ final class Gateway {
   /// Kullanıcının giriş kabuğundaki PATH (claude / codex / omp / python3 bulunabilsin); Finder'dan açılan uygulamalar kısa PATH alır
   private func userPath() -> String {
     if let p = loginPath { return p }
-    let fallback = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    let h = NSHomeDirectory()
+    var extra = ["\(h)/.local/bin", "\(h)/.claude/local", "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "\(h)/.npm-global/bin", "\(h)/.volta/bin", "\(h)/.bun/bin", "\(h)/Library/pnpm"]
+    if let v = try? FileManager.default.contentsOfDirectory(atPath: "\(h)/.nvm/versions/node") { extra += v.sorted().reversed().map { "\(h)/.nvm/versions/node/\($0)/bin" } }
+    let fallback = (extra + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]).joined(separator: ":")
+    // Kullanıcının kendi kabuğu, etkileşimli oturum olarak (nvm vb. .zshrc / .bashrc'de tanımlanır); çıktıdaki gürültüden işaretle ayrılır
+    let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { FileManager.default.isExecutableFile(atPath: $0) ? $0 : nil } ?? "/bin/zsh"
     let p = Process(), out = Pipe()
-    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-    p.arguments = ["-lc", "printf %s \"$PATH\""]
+    p.executableURL = URL(fileURLWithPath: shell)
+    p.arguments = ["-ilc", "printf '__KMYPATH__%s__KMYPATH__' \"$PATH\""]
+    p.standardInput = FileHandle.nullDevice
     p.standardOutput = out
     p.standardError = FileHandle.nullDevice
     do { try p.run() } catch { loginPath = fallback; return fallback }
     let deadline = Date().addingTimeInterval(3)
     while p.isRunning && Date() < deadline { usleep(50_000) }
     if p.isRunning { p.terminate() }
-    let s = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    let raw = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    let parts = raw.components(separatedBy: "__KMYPATH__")
+    let s = parts.count >= 3 ? parts[1] : ""
     loginPath = s.isEmpty ? fallback : "\(s):\(fallback)"
     return loginPath!
   }
