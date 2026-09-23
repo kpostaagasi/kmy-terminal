@@ -148,25 +148,50 @@ function loadOlder() {
   log.scrollTop += log.scrollHeight - before;
 }
 
+// Oturumlar penceresi: tarihe göre gruplu liste; satıra tıklayınca açılır, işlemler satır sonunda simge düğmeler
 function sessionsModal() {
-  const m = modal({ title: 'Oturumlar', wide: true, body: '<input id="sessQ" placeholder="Oturum ara…" aria-label="Oturum ara" style="width:100%;margin-bottom:10px"><div id="sessT"></div>' });
+  const m = modal({ title: 'Oturumlar', wide: true, body: `<div class="ss">
+    <div class="ss-top"><input id="sessQ" class="ss-q" placeholder="Oturum ara…" aria-label="Oturum ara"><button class="btn" id="sessNew2">＋ Yeni oturum</button></div>
+    <div class="ss-list" id="sessT"></div><div class="ss-foot dim" id="sessF"></div></div>` });
   const qIn = $('#sessQ', m.body);
   qIn.addEventListener('input', () => draw());
+  $('#sessNew2', m.body).onclick = () => { openSession(null); m.close(); };
   setTimeout(() => qIn.focus(), 30);
+  const dayKey = (d) => {
+    if (!d) return 'Daha eski';
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const diff = (t0 - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400_000;
+    return diff <= 0 ? 'Bugün' : diff === 1 ? 'Dün' : diff < 7 ? 'Bu hafta' : diff < 31 ? 'Bu ay' : 'Daha eski';
+  };
+  const cost = (x) => (paid(x.provider) || x.cost_usd ? `$${num(x.cost_usd || 0, 2)}` : 'abonelik');
   const draw = () => {
     const q = qIn.value.toLocaleLowerCase('tr').trim();
-    const list = sessions.filter((s) => !q || (s.title || '').toLocaleLowerCase('tr').includes(q));
-    $('#sessT', m.body).innerHTML = list.length ? `<table class="t"><thead><tr><th>Başlık</th><th>Sağlayıcı · model</th><th class="r">Maliyet</th><th>Son</th><th></th></tr></thead><tbody>${list.map((s) => `<tr>
-      <td>${s.running ? '<span class="spinner"></span> ' : ''}${esc(s.title || '')}</td><td class="muted">${esc(provName(s.provider))} · ${esc(s.model || 'varsayılan')}</td><td class="r num">${paid(s.provider) ? '$' + num(s.cost_usd, 3) : s.cost_usd ? '$' + num(s.cost_usd, 3) : 'abonelik'}</td><td>${dateTR(sqlDate(s.updated_at), true)}</td>
-      <td class="r" style="white-space:nowrap"><button class="ghost" data-o="${s.id}">Aç</button> <button class="ghost" data-r="${s.id}">Yeniden adlandır</button> <button class="ghost" data-x="${s.id}">JSON</button> <button class="ghost" data-d="${s.id}">Sil</button></td></tr>`).join('')}</tbody></table>
-      <p class="dim" style="margin-top:10px">Toplam Claude maliyeti: $${num(sessions.reduce((a, s) => a + (s.cost_usd || 0), 0), 3)} · Codex oturumları ChatGPT aboneliğinden düşer.</p>` : `<div class="empty">${sessions.length ? 'Sonuç bulunamadı' : 'Henüz oturum yok'}</div>`;
-    $$('[data-o]', m.body).forEach((b) => b.onclick = () => { openSession(b.dataset.o); m.close(); });
+    const list = sessions.filter((x) => !q || (x.title || '').toLocaleLowerCase('tr').includes(q));
+    const groups = [];
+    for (const x of list) {
+      const k = dayKey(sqlDate(x.updated_at));
+      (groups.find((g) => g[0] === k) || groups[groups.push([k, []]) - 1])[1].push(x);
+    }
+    $('#sessT', m.body).innerHTML = list.length ? groups.map(([k, xs]) => `<div class="ss-grp">${k}</div>${xs.map((x) => `
+      <div class="ss-row ${x.id === current ? 'cur' : ''}" data-o="${x.id}" tabindex="0">
+        <span class="ss-st ${x.running ? 'run' : ''}">${x.running ? '<span class="spinner"></span>' : ''}</span>
+        <div class="ss-main"><div class="ss-title">${esc(x.title || 'Oturum')}</div>
+          <div class="ss-meta"><span class="ss-prov">${esc(provName(x.provider))}</span>${x.model ? ` · ${esc(x.model)}` : ''} · ${dateTR(sqlDate(x.updated_at), true)} · <span class="${paid(x.provider) ? 'up' : ''}">${cost(x)}</span></div></div>
+        <div class="ss-acts"><button class="icon-btn sm" data-r="${x.id}" title="Yeniden adlandır" aria-label="Yeniden adlandır">✎</button><button class="icon-btn sm" data-x="${x.id}" title="JSON olarak indir" aria-label="İndir">⤓</button><button class="icon-btn sm ss-del" data-d="${x.id}" title="Sil" aria-label="Sil">🗑</button></div>
+      </div>`).join('')}`).join('')
+      : `<div class="empty">${sessions.length ? 'Sonuç bulunamadı' : 'Henüz oturum yok'}</div>`;
+    const claude = sessions.reduce((a, x) => a + (paid(x.provider) ? x.cost_usd || 0 : 0), 0);
+    $('#sessF', m.body).textContent = `${sessions.length} oturum · Claude toplam maliyet $${num(claude, 2)} · Codex ve oh-my-pi oturumları abonelikten düşer`;
+    $$('.ss-row', m.body).forEach((r) => {
+      r.onclick = (e) => { if (e.target.closest('.ss-acts')) return; openSession(r.dataset.o); m.close(); };
+      r.onkeydown = (e) => { if (e.key === 'Enter') { openSession(r.dataset.o); m.close(); } };
+    });
     $$('[data-x]', m.body).forEach((b) => b.onclick = () => exportChat(b.dataset.x));
     $$('[data-r]', m.body).forEach((b) => b.onclick = () => renameSession(b.dataset.r, draw));
     $$('[data-d]', m.body).forEach((b) => b.onclick = async () => {
-      const s = sessions.find((x) => x.id === b.dataset.d);
-      if (s?.running) { toast('Çalışan oturum silinemez; önce durdurun', 'err'); return; }
-      if (!(await confirmBox('Oturum silinsin mi? Geri alınamaz.', { danger: true, ok: 'Sil' }))) return;
+      const x = sessions.find((y) => y.id === b.dataset.d);
+      if (x?.running) { toast('Çalışan oturum silinemez; önce durdurun', 'err'); return; }
+      if (!(await confirmBox(`"${(x?.title || 'Oturum').slice(0, 60)}" silinsin mi? Geri alınamaz.`, { danger: true, ok: 'Sil' }))) return;
       await api(`/sessions/${b.dataset.d}`, { method: 'DELETE' });
       if (current === b.dataset.d) openSession(null);
       await loadSessions(); draw();
