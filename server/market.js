@@ -7,6 +7,7 @@
 import https from 'node:https';
 import { cacheGet, cachePut, db } from './db.js';
 import * as universe from './universe.js';
+import { isFundCode, fundQuote, fundBars, searchFunds } from './funds.js';
 
 const UA = 'Mozilla/5.0';
 const Y1 = 'https://query1.finance.yahoo.com';
@@ -119,7 +120,13 @@ export function currencyOf(sym) {
 
 export function isBist(sym) {
   const s = normalize(sym);
-  return !SPECIAL[s] && !s.endsWith('.US') && !/[=^\-.]/.test(s);
+  return !SPECIAL[s] && !s.endsWith('.US') && !/[=^\-.]/.test(s) && !isFund(s);
+}
+
+/** TEFAS fonu mu? (3 karakterli kod; özel semboller ve endeksler hariç) */
+export function isFund(sym) {
+  const s = normalize(sym);
+  return isFundCode(s) && !SPECIAL[s] && !INDICES.includes(s);
 }
 
 async function getJson(url, { timeoutMs = 12000, headers = {} } = {}) {
@@ -291,8 +298,12 @@ export async function getQuotes(symbols) {
     }
   }
 
-  // 2) Yahoo: BIST, endeksler, yurt dışı + yedekler
-  const yahooNeed = need.filter((s) => !result[s]);
+  // 2) TEFAS: yatırım / emeklilik fonları (günlük birim fiyat)
+  const fundNeed = need.filter((s) => !result[s] && isFund(s));
+  if (fundNeed.length) await Promise.all(fundNeed.map(async (s) => { try { put(s, await fundQuote(s)); } catch { /* TEFAS geçici hata: bir sonraki yenilemede */ } }));
+
+  // 3) Yahoo: BIST, endeksler, yurt dışı + yedekler
+  const yahooNeed = need.filter((s) => !result[s] && !isFund(s));
   const ySyms = new Set();
   for (const s of yahooNeed) {
     const y = toYahoo(s);
@@ -371,7 +382,8 @@ export async function getHistory(symbol, range = '1y', interval) {
   const cached = cacheGet(key, ttl);
   if (cached) return cached;
   let bars;
-  if (['GRAM', 'HAS', 'ONS', 'GUMUS'].includes(s)) bars = await derivedGoldBars(s, range, interval);
+  if (isFund(s)) bars = await fundBars(s, range);
+  else if (['GRAM', 'HAS', 'ONS', 'GUMUS'].includes(s)) bars = await derivedGoldBars(s, range, interval);
   else if (SPECIAL[s]?.tg && SPECIAL[s].type === 'gold') {
     // Sikke ve ayar altınlar: gram altın serisi × (güncel ürün fiyatı / güncel gram fiyatı)
     const [g, qs] = await Promise.all([getHistory('GRAM', range, interval), getQuotes([s, 'GRAM'])]);
@@ -391,7 +403,7 @@ export async function getDividends(symbol, range = '5y') {
   const s = normalize(symbol);
   const y = toYahoo(s);
   const empty = { dividends: [], splits: [] };
-  if (!y || SPECIAL[s] || INDICES.includes(s)) return empty;
+  if (!y || SPECIAL[s] || INDICES.includes(s) || isFund(s)) return empty;
   const key = `divs:${s}:${range}`;
   const cached = cacheGet(key, 12 * 3600_000);
   if (cached) return cached;
@@ -424,6 +436,7 @@ export async function search(q) {
   for (const [k, v] of Object.entries(SPECIAL)) if (k.startsWith(up) || v.name.toLocaleUpperCase('tr').includes(q.toLocaleUpperCase('tr'))) local.push({ symbol: k, name: v.name, type: v.type, exchange: TYPE_TR[v.type] || '' });
   for (const k of INDICES) if (k.startsWith(up) || INDEX_NAMES[k].toLocaleUpperCase('tr').includes(q.toLocaleUpperCase('tr'))) local.push({ symbol: k, name: INDEX_NAMES[k], type: 'index', exchange: 'BIST' });
   for (const s of universe.searchLocal(q, 10)) local.push({ symbol: s.code, name: s.name, type: 'equity', exchange: 'BIST', sector: s.sector });
+  for (const f of await searchFunds(q, 6).catch(() => [])) local.push({ symbol: f.code, name: f.name, type: 'fund', exchange: 'TEFAS' });
   let remote = [];
   try {
     const d = await getJson(`${Y2}/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&lang=tr-TR&region=TR`);
@@ -432,7 +445,10 @@ export async function search(q) {
     }));
   } catch { /* çevrimdışı: yerel sonuçlar yeter */ }
   const seen = new Set();
-  return [...local, ...remote].filter((r) => (seen.has(r.symbol) ? false : seen.add(r.symbol))).slice(0, 15);
+  const all = [...local, ...remote].filter((r) => (seen.has(r.symbol) ? false : seen.add(r.symbol)));
+  // Kodu birebir eşleşen sonuç (ör. fon kodu AFT) en üstte
+  all.sort((x, y) => (y.symbol === up) - (x.symbol === up));
+  return all.slice(0, 15);
 }
 
 // Haberler: BIST ve genel konular için Google News (Türkçe), ABD hisseleri için Yahoo

@@ -15,7 +15,7 @@ Kullanıcının kişisel borsa terminalinin içinde çalışan analiz asistanıs
    - Hafıza: `get_memory`, `save_memory` (şirket ve konu notları, `hafiza/`)
    - Portföy: `get_portfolio`, `get_portfolio_risk` (TWR, XIRR, kıyaslar), `get_dividend_report`, `get_transactions`
    - İzleme listesi: `get_watchlist`
-   - Yazma: `add_transaction` (her seferinde kullanıcı onayı), `set_manual_price` (fon vb. elle fiyat), `update_watchlist`, `save_report`
+   - Yazma: `add_transaction` (her seferinde kullanıcı onayı), `set_manual_price` (yalnız otomatik fiyatı olmayan mevduat / özel ürün; TEFAS fonları, BIST, döviz, altın ve kripto fiyatları `get_quotes` ile otomatik gelir), `update_watchlist`, `save_report`
 2. **Kullanıcının Claude Code bağlayıcıları** (varsa): Borsa MCP ve Matriks MCP gibi sunucular ayrıntılı finansal kalemler, analist konsensüsü, fon (TEFAS) verisi ve makro veri için ek kaynaktır. Terminal araçlarıyla çelişirse kaynağı ve tarihi belirterek ikisini de göster.
 3. **WebSearch / WebFetch** — haber, şirket sunumları, KAP bildirim metinleri.
 

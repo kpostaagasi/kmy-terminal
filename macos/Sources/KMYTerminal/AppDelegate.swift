@@ -5,14 +5,55 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSMenuItemValidation {
   private var main: WebWindowController!
   private var connecting = false
+  private var statusBar: StatusBar!
+  private var reallyQuit = false
+  /// launchd menü çubuğu ajanı tarafından (oturum açılışında) başlatıldı: pencere açılmaz
+  private let menubarMode = CommandLine.arguments.contains("--menubar")
+  private static let showNote = Notification.Name("com.kmyterminal.show")
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    // Tek kopya: uygulama zaten çalışıyorsa onun penceresini aç ve çık
+    let me = ProcessInfo.processInfo.processIdentifier
+    if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").contains(where: { $0.processIdentifier != me }) {
+      if !menubarMode { DistributedNotificationCenter.default().postNotificationName(AppDelegate.showNote, object: nil, userInfo: nil, deliverImmediately: true) }
+      exit(0)
+    }
+    DistributedNotificationCenter.default().addObserver(forName: AppDelegate.showNote, object: nil, queue: .main) { [weak self] _ in self?.showMain() }
+    NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in self?.reallyQuit = true }
+
     UNUserNotificationCenter.current().delegate = self
     buildMenu()
     main = WebWindowController(url: nil, main: true)
+    main.onClose = { [weak self] in self?.didCloseMain() }
+    if menubarMode { NSApp.setActivationPolicy(.accessory) } else { showMain() }
+    statusBar = StatusBar(app: self)
+    statusBar.start()
+    Gateway.shared.syncMenubarAgent()
+    connect()
+  }
+
+  // MARK: Pencere ↔ menü çubuğu
+  /// Pencereyi göster (Dock simgesi geri gelir)
+  func showMain() {
+    NSApp.setActivationPolicy(.regular)
     main.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
-    connect()
+  }
+  /// Pencere kapandı: gateway açıksa uygulama menü çubuğunda sürer (Dock'tan kalkar)
+  private func didCloseMain() {
+    if statusBar?.gatewayUp == true { NSApp.setActivationPolicy(.accessory) }
+  }
+  /// Gateway kapanırsa ve pencere gizliyse Dock simgesi geri gelir (uygulamaya erişim kaybolmasın)
+  func gatewayStateChanged(_ up: Bool) {
+    if !up && main.window?.isVisible != true && NSApp.activationPolicy() == .accessory { NSApp.setActivationPolicy(.regular) }
+  }
+  func runJS(_ code: String) { main.js(code) }
+  func restartGateway() { gatewayRestart() }
+  /// Menü çubuğundan tamamen çık: servis modunda gateway de bu oturum için durdurulur (simge gateway'le birlikte kalkar)
+  func quitAll() {
+    if Gateway.shared.serviceInstalled { Gateway.shared.stopService() }
+    reallyQuit = true
+    NSApp.terminate(nil)
   }
 
   /// Gateway'i hazırla ve arayüzü yükle; ulaşılamazsa durum sayfası göster
@@ -36,8 +77,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    if !flag { main.showWindow(nil) }
+    showMain()
     return true
+  }
+
+  /// ⌘Q: gateway servis olarak çalışıyorsa uygulama kapanmaz, menü çubuğuna çekilir (tamamen çıkış menü çubuğundan)
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    if reallyQuit || !Gateway.shared.serviceInstalled || statusBar?.gatewayUp != true { return .terminateNow }
+    main.window?.orderOut(nil)
+    NSApp.setActivationPolicy(.accessory)
+    return .terminateCancel
   }
 
   func applicationWillTerminate(_ notification: Notification) {
@@ -183,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     main.showStatus(title: on ? "Arka plan servisi kuruluyor…" : "Arka plan servisi kaldırılıyor…", detail: "Birkaç saniye sürer.", retry: false)
     Task { @MainActor in
       _ = await Gateway.shared.setService(on)
+      Gateway.shared.syncMenubarAgent()
       if await Gateway.shared.ensureRunning() { main.loadApp() } else { connect() }
     }
   }
@@ -193,5 +243,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   @objc private func gatewayLogs() { NSWorkspace.shared.open(Gateway.shared.logURL) }
   @objc private func showProject() { NSWorkspace.shared.activateFileViewerSelecting([Gateway.shared.bundled ? Gateway.shared.workspaceDir : Gateway.shared.projectRoot]) }
 
-  private func focus() { main.showWindow(nil); NSApp.activate(ignoringOtherApps: true) }
+  private func focus() { showMain() }
 }

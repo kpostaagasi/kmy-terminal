@@ -173,23 +173,12 @@ async function loadSymbol() {
     if (!(f.actions || []).length) loadYahooDividends(s, fresh);
   }).catch((e) => { if (fresh()) $('#fund').innerHTML = `<div class="dim">${esc(e.message)}</div>`; });
 
-  $('#news').innerHTML = '<div class="skeleton"></div>';
-  Promise.all([api(`/news?q=${encodeURIComponent(s)}`).catch(() => []), api(`/newsfeed?symbol=${encodeURIComponent(s)}&limit=10`).then((r) => r.items.map((x) => ({ title: x.title, publisher: x.source, link: x.link, time: x.time }))).catch(() => [])]).then(([g, f]) => {
-    if (!fresh()) return;
-    const seen = new Set();
-    const n = [...f, ...g].filter((x) => { const k = x.title.toLocaleLowerCase('tr').slice(0, 50); return seen.has(k) ? false : seen.add(k); }).sort((a, b) => (b.time || 0) - (a.time || 0));
-    $('#news').innerHTML = n.length ? n.slice(0, 10).map((x) => `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}<br><small>${esc(x.publisher)} · ${dateTR(x.time, true)}</small></a>`).join('') : '<div class="dim">Haber bulunamadı</div>';
-  });
+  loadSymNews(s, fresh, true);
 
   loadNotes(s, fresh);
   loadFinancials(s, fresh);
   loadSymReports(s, fresh);
-  $('#symKap').innerHTML = '<div class="skeleton"></div>';
-  api(`/kap?scope=symbol&symbol=${encodeURIComponent(s)}&days=30&limit=12`).then((k) => {
-    if (!fresh()) return;
-    $('#symKap').innerHTML = k.items.length ? `<div class="news">${k.items.map((x) => `<a href="${esc(x.url)}" data-kap="${x.id}">${signalPill(x.signal)} ${esc(x.subject)}${x.summary ? ` — <span class="muted">${esc(x.summary)}</span>` : ''}<br><small>${esc(x.clsLabel)} · ${esc(x.publishDate)}</small></a>`).join('')}</div>`
-      : `<div class="dim">${k.error ? esc(k.error) : 'Son 30 günde bildirim yok'}</div>`;
-  }).catch(() => { if (fresh()) $('#symKap').innerHTML = '<div class="dim">KAP alınamadı</div>'; });
+  loadSymKap(s, fresh, true);
 }
 $('#symKap').addEventListener('click', (e) => { const a = e.target.closest('[data-kap]'); if (a) { e.preventDefault(); openKapDetail(Number(a.dataset.kap)); } });
 
@@ -259,6 +248,32 @@ function drawFinSummary(f) {
     makeChart($(`#fc${i}`), { type: 'bar', data: { labels: qs.map((q) => q.label), datasets: [{ label: t, data, backgroundColor: data.map((v) => (v < 0 ? red : blue)), borderRadius: 4, maxBarThickness: 44 }] }, options: o });
   });
 }
+// Sembol haberleri ve KAP kartı: seçimde ve DASHBOARD açıkken 5 dakikada bir kendiliğinden yenilenir
+function loadSymNews(s, fresh = () => true, first = false) {
+  if (first) $('#news').innerHTML = '<div class="skeleton"></div>';
+  Promise.all([api(`/news?q=${encodeURIComponent(s)}`).catch(() => []), api(`/newsfeed?symbol=${encodeURIComponent(s)}&limit=10`).then((r) => r.items.map((x) => ({ title: x.title, publisher: x.source, link: x.link, time: x.time }))).catch(() => [])]).then(([g, f]) => {
+    if (!fresh()) return;
+    const seen = new Set();
+    const n = [...f, ...g].filter((x) => { const k = x.title.toLocaleLowerCase('tr').slice(0, 50); return seen.has(k) ? false : seen.add(k); }).sort((a, b) => (b.time || 0) - (a.time || 0));
+    $('#news').innerHTML = n.length ? n.slice(0, 10).map((x) => `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}<br><small>${esc(x.publisher)} · ${dateTR(x.time, true)}</small></a>`).join('') : '<div class="dim">Haber bulunamadı</div>';
+  });
+
+}
+function loadSymKap(s, fresh = () => true, first = false) {
+  if (first) $('#symKap').innerHTML = '<div class="skeleton"></div>';
+  api(`/kap?scope=symbol&symbol=${encodeURIComponent(s)}&days=30&limit=12`).then((k) => {
+    if (!fresh()) return;
+    $('#symKap').innerHTML = k.items.length ? `<div class="news">${k.items.map((x) => `<a href="${esc(x.url)}" data-kap="${x.id}">${signalPill(x.signal)} ${esc(x.subject)}${x.summary ? ` — <span class="muted">${esc(x.summary)}</span>` : ''}<br><small>${esc(x.clsLabel)} · ${esc(x.publishDate)}</small></a>`).join('')}</div>`
+      : `<div class="dim">${k.error ? esc(k.error) : 'Son 30 günde bildirim yok'}</div>`;
+  }).catch(() => { if (fresh()) $('#symKap').innerHTML = '<div class="dim">KAP alınamadı</div>'; });
+}
+setInterval(() => {
+  const s = state.selected;
+  if (!s || !root.classList.contains('active') || document.hidden) return;
+  const same = () => state.selected === s;
+  loadSymNews(s, same); loadSymKap(s, same); loadSymReports(s, same);
+}, 5 * 60_000);
+
 async function loadFinancials(s, fresh = () => true) {
   $('#fin').innerHTML = '<div class="skeleton"></div>';
   $('#finSum').hidden = false;
@@ -335,21 +350,33 @@ async function loadNotes(s, fresh = () => true) {
 on('ws:memory.changed', () => { if (state.selected) loadNotes(state.selected); });
 on('ws:documents.changed', () => { if (state.selected) loadNotes(state.selected); });
 
+// Temettü ve sermaye artırımları: taşmayan liste (tarih · olay · tutar), dar kartta alt satıra kırılır
+function caList(rows, note) {
+  return `<div class="ca-list">${rows.map((r) => `<div class="ca-row"><div class="ca-date">${r.date}${r.soon ? ' <span class="pill acc">yaklaşan</span>' : ''}</div>
+    <div class="ca-what"><span class="ca-kind ${r.cls || ''}">${esc(r.kind)}</span>${r.detail ? ` <span class="muted">${r.detail}</span>` : ''}</div><div class="ca-amt num">${r.amount || ''}</div></div>`).join('')}</div>
+    <div class="dim ca-note">${note}</div>`;
+}
 function renderActions(acts) {
   const today = new Date().toISOString().slice(0, 10);
-  const rows = [...acts].reverse().slice(0, 10).map((a) => {
-    const kind = [a.dpsGross > 0 ? `Temettü ${num(a.dpsGross, 4)} ₺/hisse` : null, a.bonusPct > 0 ? `Bedelsiz %${num(a.bonusPct, 2)}` : null, a.bonusDivPct > 0 ? `Bedelsiz (temettü) %${num(a.bonusDivPct, 2)}` : null, a.rightsPct > 0 ? `Bedelli %${num(a.rightsPct, 2)}` : null].filter(Boolean).join(' · ') || '—';
-    return `<tr><td>${dateTR(a.date)} ${a.date >= today ? '<span class="pill acc">yaklaşan</span>' : ''}</td><td>${kind}</td><td class="r num">${a.cashTotal ? compact(a.cashTotal) + ' ₺' : ''}</td></tr>`;
-  });
-  $('#divs').innerHTML = rows.length ? `<table class="t"><thead><tr><th>Tarih</th><th>Olay</th><th class="r">Toplam nakit</th></tr></thead><tbody>${rows.join('')}</tbody></table><div class="dim" style="font-size:11px;margin-top:4px">Kaynak: İş Yatırım (bu yıl + ilan edilmiş)</div>` : '<div class="dim">Bu yıl kayıt yok</div>';
+  const rows = [];
+  for (const a of [...acts].reverse().slice(0, 10)) {
+    const base = { date: dateTR(a.date), soon: a.date >= today };
+    if (a.dpsGross > 0) rows.push({ ...base, kind: 'Nakit temettü', cls: 'div', detail: `${num(a.dpsGross, 4)} ₺ / hisse`, amount: a.cashTotal ? `${compact(a.cashTotal)} ₺` : '' });
+    if (a.bonusPct > 0) rows.push({ ...base, kind: 'Bedelsiz', cls: 'cap', detail: `%${num(a.bonusPct, 2)}` });
+    if (a.bonusDivPct > 0) rows.push({ ...base, kind: 'Bedelsiz (temettüden)', cls: 'cap', detail: `%${num(a.bonusDivPct, 2)}` });
+    if (a.rightsPct > 0) rows.push({ ...base, kind: 'Bedelli', cls: 'cap', detail: `%${num(a.rightsPct, 2)}` });
+  }
+  $('#divs').innerHTML = rows.length ? caList(rows, 'Kaynak: İş Yatırım (bu yıl ve ilan edilmiş) · brüt tutarlar') : '<div class="dim">Bu yıl kayıt yok</div>';
 }
 
 function loadYahooDividends(s, fresh) {
   api(`/dividends/${encodeURIComponent(s)}`).then((d) => {
     if (!fresh()) return;
-    const rows = [...d.dividends.slice(-8).reverse().map((x) => `<tr><td>${dateTR(x.date)}</td><td>Temettü</td><td class="r num">${num(x.amount, 4)}</td></tr>`),
-      ...d.splits.slice(-4).reverse().map((x) => `<tr><td>${dateTR(x.date)}</td><td>Bölünme</td><td class="r num">${esc(x.text || num(x.ratio, 3))}</td></tr>`)];
-    $('#divs').innerHTML = rows.length ? `<table class="t"><thead><tr><th>Tarih</th><th>Olay</th><th class="r">Hisse başı / oran</th></tr></thead><tbody>${rows.join('')}</tbody></table><div class="dim" style="font-size:11px;margin-top:4px">Kaynak: Yahoo Finance (5 yıl)</div>` : '<div class="dim">Son 5 yılda kayıt yok</div>';
+    const rows = [
+      ...d.dividends.slice(-8).reverse().map((x) => ({ date: dateTR(x.date), kind: 'Nakit temettü', cls: 'div', detail: `${num(x.amount, 4)} / hisse`, t: x.date })),
+      ...d.splits.slice(-4).reverse().map((x) => ({ date: dateTR(x.date), kind: 'Bölünme / bedelsiz', cls: 'cap', detail: esc(x.text || num(x.ratio, 3)), t: x.date })),
+    ].sort((a, b) => b.t.localeCompare(a.t));
+    $('#divs').innerHTML = rows.length ? caList(rows, 'Kaynak: Yahoo Finance (son 5 yıl)') : '<div class="dim">Son 5 yılda kayıt yok</div>';
   }).catch(() => { if (fresh()) $('#divs').innerHTML = '<div class="dim">Veri yok</div>'; });
 }
 

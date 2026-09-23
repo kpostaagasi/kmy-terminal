@@ -217,15 +217,15 @@ export function openSettings(section = 'genel') {
         ['Mali tablolar', 'İş Yatırım', ''],
         ['Kurum raporları', '12 kurumun açık yayınları', ''],
         ['Kurlar · Risksiz faiz', 'TCMB · TLREF', ''],
-        ['TEFAS fonları', 'Elle fiyat veya ajanın <span class="mono">/fonlar</span> komutu', ''],
+        ['TEFAS yatırım ve emeklilik fonları', 'TEFAS', 'günlük (akşam)'],
       ];
       el.innerHTML = card(
         row('Fiyat yenileme aralığı', 'İzleme listesi ve piyasa şeridi', sel('sQuote', [[5, '5 saniye'], [15, '15 saniye'], [30, '30 saniye'], [60, '1 dakika'], [300, '5 dakika']], s.quoteRefreshSec))
         + row('KAP / rapor yenileme aralığı', 'KAP hız sınırı uyguladığı için en az 1 dakika', sel('sKap', [[60, '1 dakika'], [120, '2 dakika'], [300, '5 dakika'], [900, '15 dakika'], [1800, '30 dakika']], s.kapRefreshSec)),
         'Yenileme')
         + card(
-          row('Klasör izleme', 'Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım şirket raporları, Deniz, Alnus, e-posta ekleri) bu klasörden dakikada bir arşive alır. Yalnız ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen, son 30 günde inen PDF\'ler kopyalanır; asıl dosyaya dokunulmaz.', toggle('sInbox', !!s.inboxEnabled))
-          + row('İzlenecek klasör', 'Boş bırakılırsa ~/Downloads kullanılır', `<input id="sInboxDir" class="stg-w" placeholder="~/Downloads (varsayılan)" value="${esc(s.inboxDir || '')}"><button class="btn sec" id="sInboxScan">Şimdi tara</button>`, { id: 'sInboxRow' }),
+          row('Klasör izleme', 'Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım şirket raporları, Deniz, Alnus, e-posta ekleri) bu klasörden dakikada bir otomatik olarak arşive alır. Yalnız ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen, son 30 günde inen PDF\'ler kopyalanır; asıl dosyaya dokunulmaz.', toggle('sInbox', !!s.inboxEnabled))
+          + row('İzlenecek klasör', 'Boş bırakılırsa ~/Downloads kullanılır', `<input id="sInboxDir" class="stg-w" placeholder="~/Downloads (varsayılan)" value="${esc(s.inboxDir || '')}">`, { id: 'sInboxRow' }),
           'Kurum raporu klasör izleme')
         + card(row('Yerel önbellek', 'Geçmiş fiyat, temettü ve KAP önbelleği', '<button class="btn sec" id="sCache">Önbelleği Temizle</button>'), 'Önbellek')
         + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>Veri</th><th>Kaynak</th><th class="r">Gecikme</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
@@ -236,9 +236,6 @@ export function openSettings(section = 'genel') {
       $('#sKap').onchange = (e) => save({ kapRefreshSec: Number(e.target.value) });
       $('#sInbox').onchange = (e) => { dimInbox(); save({ inboxEnabled: e.target.checked }); };
       $('#sInboxDir').onchange = (e) => save({ inboxDir: e.target.value.trim() });
-      $('#sInboxScan').onclick = async () => {
-        try { const r = await api('/inbox/scan', { method: 'POST', body: {} }); toast(r.imported.length ? `${r.imported.length} kurum raporu arşive alındı` : `Yeni kurum raporu yok (${r.dir})`, 'ok'); } catch (e) { toast(e.message, 'err'); }
-      };
       $('#sCache').onclick = async () => { await api('/cache/clear', { method: 'POST', body: {} }); toast('Önbellek temizlendi', 'ok'); };
     },
     // Gateway: sunucunun servis durumu ve yerel API erişim anahtarı
@@ -370,7 +367,7 @@ export function openSettings(section = 'genel') {
         + card(cmds([
           ['/analiz SEMBOL', 'Kapsamlı analiz + rapor'], ['/teknik SEMBOL', 'Teknik analiz'], ['/karsilastir A B', 'Karşılaştırma'], ['/piyasa', 'Günlük özet'],
           ['/portfoy', 'Portföy değerlendirmesi'], ['/kap [SEMBOL]', 'Son KAP sinyalleri (sembolle: ajan taraması)'], ['/rapor KONU', 'HTML rapor'], ['/temettu', 'Temettü analizi'],
-          ['/tarama KOŞUL', 'Hisse tarayıcı'], ['/fonlar', 'Fon fiyatlarını güncelle'], ['/plan · /model · /think', 'Çalışma modu, model, düşünme seviyesi'],
+          ['/tarama KOŞUL', 'Hisse tarayıcı'], ['/plan · /model · /think', 'Çalışma modu, model, düşünme seviyesi'],
           ['/yeni [İSİM] · /durdur · /status · /doctor', 'Oturum yönetimi ve sağlık'], ['/help', 'Tüm komutlar'],
         ]), 'Sohbet komutları')
         + '<p class="stg-foot">BIST fiyatları ~15 dk gecikmelidir; kaynak ve gecikme her fiyatın yanında gösterilir. Terminal ve ajan çıktıları yatırım tavsiyesi değildir.</p>';

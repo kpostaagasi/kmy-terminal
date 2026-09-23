@@ -39,6 +39,7 @@ npm run mac
 - **Menü:** Dosya (⌘N yeni ajan oturumu, ⌘K sembol ara), Görünüm (⌘1 Terminal, ⌘2 Dashboard, ⌘3 Portföy, ⌘\\ sağ panel, yakınlaştırma, ⌘R yenile), Gateway (durum, yeniden başlat, loglar), ⌘, Ayarlar.
 - Dış bağlantılar varsayılan tarayıcıda, yerel raporlar yeni uygulama penceresinde açılır. Safari › Geliştir menüsünden sayfa incelenebilir.
 - Uygulama yerel (ad-hoc) imzalıdır; başka bir Mac'e dağıtmak için Developer ID ile imzalanıp notarize edilmesi gerekir.
+- **Menü çubuğu:** gateway çalıştığı sürece menü çubuğunda logo görünür (durum, çalışma süresi, çalışan işler, hızlı komutlar). Pencere kapatılınca uygulama menü çubuğunda sürer; servis kuruluysa oturum açılışında menü çubuğunda başlar.
 
 ## Gateway
 
@@ -129,7 +130,7 @@ claude mcp add borsa -- node "$(pwd)/server/mcp-stdio.js"
 
 - Her fiyatın yanında kaynak ve gecikme etiketi gösterilir.
 - Çeyrek, yarım, tam, Cumhuriyet ve ata altın ile 22 ayar bilezik **alış** fiyatıyla (elinizdekini bugün satsanız alacağınız tutar) değerlenir. Gram altın, döviz ve gümüş alış-satış ortalamasıyla değerlenir.
-- TEFAS fonları için canlı kaynak yoktur. Portföy › Varlıklar › "Fiyat gir" ile elle fiyat girin ya da sohbette `/fonlar` komutunu kullanın.
+- TEFAS fonlarının günlük birim fiyatı TEFAS'tan otomatik gelir (fon kodu, ör. `TTE`, watchlist'e ve portföye doğrudan eklenebilir). Elle fiyat yalnız otomatik kaynağı olmayan varlıklar (mevduat, özel ürün) için gerekir.
 - Sunucu yalnızca `127.0.0.1` üzerinde dinler ve başka kökenlerden gelen istekleri reddeder. Raporlar ayrı bir porttan (7421) sunulur; rapor içindeki betikler uygulama API'sine erişemez.
 
 Değişiklikler için `CHANGELOG.md` dosyasına bakın. Bu yazılımın ürettiği analizler yatırım tavsiyesi değildir.

@@ -19,7 +19,6 @@ export const TEMPLATES = [
   { name: 'Günlük kapanış raporu', time: '18:20', days: '1,2,3,4,5', prompt: 'Bugünkü BIST kapanışını özetleyen bir HTML rapor hazırla: endeksler, döviz/altın, en çok yükselen/düşen hisseler, sektör performansı, izleme listem ve portföyümdeki öne çıkan hareketler ve bugünkü önemli KAP bildirimleri. save_report ile kaydet.' },
   { name: 'Sabah KAP taraması', time: '09:30', days: '1,2,3,4,5', prompt: 'İzleme listem ve portföyümdeki hisselerin son 1 günlük KAP bildirimlerini tara, önem sırasına koy ve kısa bir HTML rapor olarak kaydet.' },
   { name: 'Haftalık portföy raporu', time: '18:40', days: '5', prompt: 'Portföyümün haftalık değerlendirmesini yap: haftalık getiri (XU100, USD/TL ve gram altın ile karşılaştırmalı), risk metrikleri, yoğunlaşma, temettü takvimi ve pozisyonlarımla ilgili haftanın KAP bildirimleri. HTML rapor olarak kaydet.' },
-  { name: 'Fon fiyatlarını güncelle', time: '19:30', days: '1,2,3,4,5', prompt: 'Portföyümdeki canlı fiyatı olmayan varlıkların (TEFAS fonları vb.; get_portfolio sonucunda priceSource "son işlem" veya "manuel" olanlar) güncel birim fiyatlarını bağlı Borsa MCP get_fund_data aracıyla al ve set_manual_price ile kaydet. Güncellenenleri listele.' },
   { name: 'Sinyal radarı', time: '18:30', days: '1,2,3,4,5', prompt: 'signal_scan aracıyla BIST 100 sinyal taraması yap; izleme listemdeki hisselerde çıkan sinyalleri öne al, en dikkat çekici 10 sinyali kısa gerekçeleriyle HTML rapor olarak kaydet.' },
 ];
 

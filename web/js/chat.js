@@ -648,7 +648,6 @@ const SLASH = [
   ['/kap', 'SEMBOL? — son KAP sinyalleri (sembolle: ajan taraması)', (a) => `${a} için son 30 günün KAP bildirimlerini incele; önemli olanların içeriğini get_kap_detail ile oku ve özetle.`],
   ['/tarama', 'KOŞUL — hisse tarayıcı', (a) => `screen_stocks aracıyla şu kritere göre BIST hisselerini tara: ${a || 'BIST 100, F/K ≤ 8, PD/DD ≤ 1,5'}. Sonuçları tablo halinde göster ve öne çıkanları kısaca yorumla.`, ['/screen']],
   ['/temettu', 'Temettü analizi', () => 'Portföyümün temettü gelirini ve ilan edilmiş yaklaşan temettüleri analiz et; temettü verimi yüksek BIST hisselerinden izleme listeme eklenebilecek adayları gerekçeleriyle listele.'],
-  ['/fonlar', 'Fon fiyatlarımı güncelle', () => 'Portföyümdeki canlı fiyatı olmayan varlıkların (TEFAS fonları vb.) güncel birim fiyatlarını bağlı Borsa MCP get_fund_data aracıyla al ve set_manual_price ile kaydet; hangi fiyatların güncellendiğini listele.'],
   ['/rapor', 'KONU — HTML rapor üret', (a) => `"${a}" konusunda ayrıntılı bir HTML rapor hazırla (tablolar ve gerekiyorsa SVG grafiklerle) ve mcp__borsa__save_report ile kaydet.`],
   ['/ekran', 'Ekranda açık olanı bağlam olarak ekle', null],
   ['/plan', 'Plan modunu aç/kapat', null],
@@ -741,7 +740,7 @@ const slash = $('#slash');
 let slashSel = 0, slashItems = [];
 // Komut grupları (popup'ta başlık altında listelenir)
 const SLASH_GROUPS = [
-  ['ANALİZ', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/fonlar', '/rapor', '/ekran']],
+  ['ANALİZ', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/rapor', '/ekran']],
   ['OTURUM', ['/yeni', '/temizle', '/durdur', '/rename', '/export', '/compact', '/context']],
   ['AJAN', ['/plan', '/model', '/think']],
   ['BİLGİ', ['/cost', '/status', '/doctor', '/settings', '/help']],
