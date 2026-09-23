@@ -14,6 +14,7 @@
 
 ### Düzeltilen
 - DASHBOARD: orta alan dar olduğunda yan yana kartlardaki tablolar (temettü ve sermaye artırımları, günün hareketlileri, temettü takvimi) kart dışına taşıp kesiliyordu. Kartlar artık orta alanın genişliğine göre alt alta diziliyor; temettü / sermaye artırımı kartı sade bir listeye dönüştü (tarih, olay, hisse başı tutar, toplam).
+- Menü çubuğundan "Gateway'i Durdur ve Çık" sonrası uygulama yeniden açıldığında "Gateway'e ulaşılamadı" hatası çıkıyordu (durdurulan servis yeniden yüklenmiyordu). Uygulama artık servisi önce yükleyip sonra başlatıyor.
 - AGENT CHAT › Oturumlar penceresi: tablo taşıyor ve düğmeler kesiliyordu. Artık tarihe göre gruplu (Bugün, Dün, Bu hafta…) bir liste; satıra tıklayınca oturum açılır, yeniden adlandır / indir / sil satır sonunda simge olarak durur, üstte arama ve yeni oturum düğmesi var.
 
 ## 0.8.0 — 23 Eylül 2026 (kmy terminal)

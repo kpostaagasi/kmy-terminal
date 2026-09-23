@@ -101,6 +101,13 @@ final class Gateway {
     }
   }
 
+  /// Servisi başlatır. "Durdur ve Çık" sonrası servis launchd'den kaldırılmış olur: kickstart yetmez, önce yeniden yüklenir.
+  func startService(restart: Bool = false) {
+    let target = "gui/\(getuid())/com.kmyterminal.gateway"
+    if shell("launchctl print \(target)") != 0 { _ = shell("launchctl bootstrap gui/\(getuid()) '\(plistPath)'") }
+    _ = shell("launchctl kickstart \(restart ? "-k " : "")\(target)")
+  }
+
   /// Servis modunda gateway'i bu oturum için durdurur (kurulu kalır; sonraki oturum açılışında yeniden başlar)
   func stopService() { _ = shell("launchctl bootout gui/\(getuid())/com.kmyterminal.gateway") }
 
@@ -108,11 +115,7 @@ final class Gateway {
   func ensureRunning() async -> Bool {
     if await isUp() { return true }
     if bundled { prepareWorkspace() }
-    if serviceInstalled {
-      _ = shell("launchctl kickstart gui/\(getuid())/com.kmyterminal.gateway")
-    } else {
-      startChild()
-    }
+    if serviceInstalled { startService() } else { startChild() }
     for _ in 0..<60 {
       try? await Task.sleep(nanoseconds: 500_000_000)
       if await isUp() { return true }
@@ -123,7 +126,7 @@ final class Gateway {
 
   func restart() async -> Bool {
     if serviceInstalled {
-      _ = shell("launchctl kickstart -k gui/\(getuid())/com.kmyterminal.gateway")
+      startService(restart: true)
     } else {
       stopChild()
       startChild()
