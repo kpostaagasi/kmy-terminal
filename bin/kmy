@@ -1,0 +1,333 @@
+#!/usr/bin/env node
+// kmy: KMY Terminal komut satırı. Gateway'i (sunucuyu) arka plan servisi olarak kurar, yönetir ve izler.
+// Bağımlılık yok: launchd (macOS) ve systemd --user (Linux) komutlarını doğrudan çağırır.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { ROOT, DATA_DIR } from '../server/paths.js';
+import * as gw from '../server/gateway.js';
+
+const argv = process.argv.slice(2);
+const flags = new Set(argv.filter((a) => a.startsWith('-')));
+const args = argv.filter((a) => !a.startsWith('-'));
+const DRY = flags.has('--dry-run');
+const PORT = gw.appPort();
+const URL_UI = `http://127.0.0.1:${PORT}`;
+const SVC = gw.serviceInfo();
+const UID = process.getuid?.() ?? 0;
+const DOMAIN = `gui/${UID}`;
+const TARGET = `${DOMAIN}/${gw.LABEL}`;
+const SERVER = path.join(ROOT, 'server', 'index.js');
+const tty = process.stdout.isTTY;
+const c = (code) => (s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : String(s));
+const bold = c(1), dim = c(2), green = c(32), red = c(31), yellow = c(33);
+const home = (p) => (p || '').replace(os.homedir(), '~');
+
+const HELP = `${bold('kmy')} — KMY Terminal komut satırı
+
+${bold('Kullanım')}
+  kmy gateway install      Servis olarak kur ve başlat (macOS: LaunchAgent, Linux: systemd --user)
+  kmy gateway uninstall    Servisi durdur ve kaldır
+  kmy gateway start        Servisi başlat
+  kmy gateway stop         Servisi durdur
+  kmy gateway restart      Servisi yeniden başlat
+  kmy gateway status       Kurulum, çalışma durumu, PID, port ve çalışma süresi  (--json)
+  kmy gateway logs [-f]    Servis logunu göster (-f: canlı izle, -n 200: satır sayısı)
+  kmy gateway token        Erişim anahtarını göster  (--rotate: yenile)
+  kmy gateway open         Arayüzü tarayıcıda aç
+
+${bold('Seçenekler')}
+  --dry-run                  install/uninstall/start/stop/restart: dosyaları ve komutları yazdır, çalıştırma
+  BORSA_PORT=7420            Arayüz portu (rapor portu: BORSA_REPORT_PORT, varsayılan port+1)
+  BORSA_DATA_DIR=…           Veri klasörü (varsayılan: ${home(path.join(ROOT, 'data'))})
+`;
+
+// ── Yardımcılar ───────────────────────────────────────────
+function die(msg, code = 1) { console.error(red(msg)); process.exit(code); }
+function sleep(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
+
+// Komutu çalıştır; --dry-run'da yalnız yazdır
+function run(cmd, cargs, { ignore = false, quiet = false } = {}) {
+  const line = [cmd, ...cargs].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ');
+  if (DRY) { console.log(dim('$ ') + line); return { status: 0, stdout: '', stderr: '' }; }
+  const r = spawnSync(cmd, cargs, { encoding: 'utf8' });
+  if (r.error) { if (ignore) return { status: 1, stdout: '', stderr: r.error.message }; die(`${cmd} çalıştırılamadı: ${r.error.message}`); }
+  if (r.status !== 0 && !ignore) die(`Komut başarısız (${r.status}): ${line}\n${(r.stderr || r.stdout || '').trim()}`);
+  if (!quiet && r.stdout.trim()) console.log(dim(r.stdout.trim()));
+  return r;
+}
+// Durum sorgusu (dry-run'da da çalışır, sistem durumunu değiştirmez)
+const probe = (cmd, cargs) => { const r = spawnSync(cmd, cargs, { encoding: 'utf8' }); return { ok: !r.error && r.status === 0, out: r.stdout || '' }; };
+
+function writeFile(file, content) {
+  if (DRY) { console.log(dim(`# ${file}`)); console.log(content); return; }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+  console.log(`${green('✓')} Yazıldı: ${home(file)}`);
+}
+
+// PATH'teki kararlı node bağlantısını tercih et (sürüm güncellemesinde yol bozulmasın); aynı ikili değilse bu süreçinkini kullan
+function nodeBin() {
+  const real = fs.realpathSync(process.execPath);
+  for (const d of (process.env.PATH || '').split(path.delimiter)) {
+    const f = path.join(d, 'node');
+    try { fs.accessSync(f, fs.constants.X_OK); if (fs.realpathSync(f) === real) return f; } catch { /* yok */ }
+  }
+  return process.execPath;
+}
+
+// Servis ortamı: launchd / systemd kısa PATH verir; node ile claude / codex / git / python3 CLI'larının klasörleri
+// (kurulum anındaki PATH'te bulundukları yer) ve bilinen kalıcı klasörler eklenir; oturuma özel geçici yollar taşınmaz
+function which(bin) {
+  for (const d of (process.env.PATH || '').split(path.delimiter)) {
+    try { fs.accessSync(path.join(d, bin), fs.constants.X_OK); return d; } catch { /* yok */ }
+  }
+  return null;
+}
+function serviceEnv(node) {
+  const h = os.homedir();
+  const dirs = [path.dirname(node), ...['claude', 'codex', 'git', 'python3', 'npm'].map(which), path.join(h, '.local', 'bin'), path.join(h, '.claude', 'local'), '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+  const env = { BORSA_DAEMON: '1', PATH: [...new Set(dirs.filter(Boolean))].join(path.delimiter) };
+  for (const k of ['LANG', 'BORSA_PORT', 'PORT', 'BORSA_REPORT_PORT', 'BORSA_DATA_DIR', 'BORSA_ALLOWED_HOSTS', 'HOST']) if (process.env[k]) env[k] = process.env[k];
+  return env;
+}
+
+const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function plist(node, env) {
+  const kv = (k, v) => `    <key>${xml(k)}</key><string>${xml(v)}</string>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- KMY Gateway — bin/kmy gateway install tarafından oluşturuldu -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${gw.LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xml(node)}</string>
+    <string>${xml(SERVER)}</string>
+  </array>
+  <key>WorkingDirectory</key><string>${xml(ROOT)}</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>StandardOutPath</key><string>${xml(gw.LOG_FILE)}</string>
+  <key>StandardErrorPath</key><string>${xml(gw.LOG_FILE)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+${Object.entries(env).map(([k, v]) => kv(k, v)).join('\n')}
+  </dict>
+</dict>
+</plist>
+`;
+}
+
+// systemd birim dosyası: % → %%, değerler çift tırnakla
+const sd = (s) => String(s).replace(/%/g, '%%');
+const sq = (s) => `"${sd(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+function unit(node, env) {
+  return `# KMY Gateway — bin/kmy gateway install tarafından oluşturuldu
+[Unit]
+Description=KMY Terminal Gateway
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${sd(ROOT)}
+ExecStart=${sq(node)} ${sq(SERVER)}
+${Object.entries(env).map(([k, v]) => `Environment=${sq(`${k}=${v}`)}`).join('\n')}
+Restart=always
+RestartSec=2
+StandardOutput=append:${sd(gw.LOG_FILE)}
+StandardError=append:${sd(gw.LOG_FILE)}
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+// ── Servis yöneticisi durumu ──────────────────────────────
+function launchdState() {
+  const r = probe('launchctl', ['print', TARGET]);
+  if (!r.ok) return { loaded: false };
+  return { loaded: true, state: /^\s*state = (.+)$/m.exec(r.out)?.[1]?.trim() || null, pid: Number(/^\s*pid = (\d+)/m.exec(r.out)?.[1]) || null };
+}
+function systemdState() {
+  const r = probe('systemctl', ['--user', 'show', gw.UNIT, '-p', 'ActiveState', '-p', 'MainPID', '-p', 'LoadState', '-p', 'UnitFileState']);
+  if (!r.ok) return { loaded: false };
+  const v = Object.fromEntries(r.out.trim().split('\n').map((l) => l.split('=')));
+  return { loaded: v.LoadState === 'loaded', state: v.ActiveState || null, pid: Number(v.MainPID) || null, enabled: v.UnitFileState };
+}
+const svcState = () => (SVC.manager === 'launchd' ? launchdState() : SVC.manager === 'systemd' ? systemdState() : { loaded: false });
+
+function unsupported() {
+  die(`Bu işletim sistemi (${os.platform()}) için servis kurulumu desteklenmiyor. Sunucuyu elle başlatın: npm start  (${URL_UI})`);
+}
+function needInstalled() {
+  if (!SVC.manager) unsupported();
+  if (!fs.existsSync(SVC.file) && !DRY) die(`Servis kurulu değil. Önce kurun: ./bin/kmy gateway install`);
+}
+
+// Sunucu API'si (anahtar data/gateway.json'dan)
+async function callApi(p, { method = 'GET', timeout = 8000 } = {}) {
+  const tok = gw.readToken();
+  try {
+    const res = await fetch(URL_UI + p, { method, headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}) }, body: method !== 'GET' ? '{}' : undefined, signal: AbortSignal.timeout(timeout) });
+    const data = await res.json().catch(() => null);
+    return { up: true, status: res.status, ok: res.ok, data };
+  } catch (e) {
+    return { up: false, error: e.cause?.code || e.name || e.message };
+  }
+}
+
+// ── Komutlar ──────────────────────────────────────────────
+async function install() {
+  if (!SVC.manager) unsupported();
+  const node = nodeBin(), env = serviceEnv(node);
+  const h = await callApi('/api/health', { timeout: 3000 });
+  if (h.up && !h.data?.gateway?.daemon && !DRY) {
+    console.log(yellow(`! ${URL_UI} üzerinde elle başlatılmış bir sunucu çalışıyor${h.data?.pid ? ` (PID ${h.data.pid})` : ''}.`));
+    console.log(yellow('  Servis portu devralamaz; kurulumdan sonra o süreci kapatın (Ctrl+C), servis birkaç saniye içinde başlar.'));
+  }
+  if (DRY) console.log(bold('— Deneme (dry-run): hiçbir şey yazılmaz veya çalıştırılmaz —\n'));
+  else { fs.mkdirSync(path.dirname(gw.LOG_FILE), { recursive: true }); gw.tokenInfo(); }
+
+  if (SVC.manager === 'launchd') {
+    writeFile(SVC.file, plist(node, env));
+    if (launchdState().loaded) run('launchctl', ['bootout', TARGET], { ignore: true });
+    // bootout sonrası launchd'nin eski işi bırakması biraz sürebilir
+    for (let i = 0; ; i++) {
+      const r = run('launchctl', ['bootstrap', DOMAIN, SVC.file], { ignore: true });
+      if (r.status === 0) break;
+      if (i >= 4) die(`launchctl bootstrap başarısız: ${(r.stderr || '').trim()}`);
+      sleep(1000);
+    }
+  } else {
+    const wasActive = systemdState().state === 'active';
+    writeFile(SVC.file, unit(node, env));
+    run('systemctl', ['--user', 'daemon-reload']);
+    run('systemctl', ['--user', 'enable', '--now', gw.UNIT]);
+    if (wasActive) run('systemctl', ['--user', 'restart', gw.UNIT]);
+  }
+  if (DRY) return;
+  console.log(`${green('✓')} KMY Gateway servis olarak kuruldu (${SVC.manager}).`);
+  console.log(`  Arayüz : ${bold(URL_UI)}`);
+  console.log(`  Log    : ${home(gw.LOG_FILE)}   (./bin/kmy gateway logs -f)`);
+  if (SVC.manager === 'systemd') console.log(dim('  Oturum kapalıyken de çalışması için: loginctl enable-linger $USER'));
+}
+
+async function uninstall() {
+  if (!SVC.manager) unsupported();
+  if (DRY) console.log(bold('— Deneme (dry-run) —\n'));
+  if (SVC.manager === 'launchd') {
+    if (launchdState().loaded || DRY) run('launchctl', ['bootout', TARGET], { ignore: true });
+  } else {
+    run('systemctl', ['--user', 'disable', '--now', gw.UNIT], { ignore: true });
+  }
+  if (DRY) console.log(dim('$ rm ') + SVC.file);
+  else if (fs.existsSync(SVC.file)) fs.rmSync(SVC.file);
+  if (SVC.manager === 'systemd') run('systemctl', ['--user', 'daemon-reload'], { ignore: true });
+  if (!DRY) console.log(`${green('✓')} Servis kaldırıldı. Veriler ve erişim anahtarı yerinde (${home(DATA_DIR)}).`);
+}
+
+function start() {
+  needInstalled();
+  if (SVC.manager === 'launchd') {
+    if (launchdState().loaded) run('launchctl', ['kickstart', TARGET]);
+    else run('launchctl', ['bootstrap', DOMAIN, SVC.file]);
+  } else run('systemctl', ['--user', 'start', gw.UNIT]);
+  if (!DRY) console.log(`${green('✓')} Başlatıldı → ${URL_UI}`);
+}
+
+function stop() {
+  needInstalled();
+  if (SVC.manager === 'launchd') {
+    // KeepAlive süreci geri getirir; durdurmak için iş launchd'den çıkarılır (sonraki oturum açılışında yeniden yüklenir)
+    if (launchdState().loaded || DRY) run('launchctl', ['bootout', TARGET]);
+    else return console.log('Servis zaten durdurulmuş.');
+  } else run('systemctl', ['--user', 'stop', gw.UNIT]);
+  if (!DRY) console.log(`${green('✓')} Durduruldu. Yeniden başlatmak için: ./bin/kmy gateway start`);
+}
+
+function restart() {
+  needInstalled();
+  if (SVC.manager === 'launchd') {
+    if (launchdState().loaded || DRY) run('launchctl', ['kickstart', '-k', TARGET]);
+    else run('launchctl', ['bootstrap', DOMAIN, SVC.file]);
+  } else run('systemctl', ['--user', 'restart', gw.UNIT]);
+  if (!DRY) console.log(`${green('✓')} Yeniden başlatılıyor → ${URL_UI}`);
+}
+
+const dur = (s) => (s == null ? '—' : s < 60 ? `${s} sn` : s < 3600 ? `${Math.floor(s / 60)} dk` : s < 86400 ? `${Math.floor(s / 3600)} sa ${Math.floor((s % 3600) / 60)} dk` : `${Math.floor(s / 86400)} gün ${Math.floor((s % 86400) / 3600)} sa`);
+
+async function status() {
+  const installed = !!SVC.file && fs.existsSync(SVC.file);
+  const st = SVC.manager ? svcState() : { loaded: false };
+  const h = await callApi('/api/health');
+  const g = h.ok ? h.data?.gateway || {} : null;
+  if (flags.has('--json')) {
+    console.log(JSON.stringify({ manager: SVC.manager, serviceFile: SVC.file, installed, service: st, url: URL_UI, responding: !!h.ok, authorized: h.up ? h.status !== 401 : null, health: h.ok ? { version: h.data.version, uptimeSec: h.data.uptimeSec, pid: h.data.pid, gateway: g } : null }, null, 2));
+    return;
+  }
+  const row = (k, v) => console.log(`  ${k.padEnd(18)} ${v}`);
+  console.log(bold('KMY Gateway'));
+  row('Servis yöneticisi', SVC.manager ? `${SVC.manager} (${SVC.label})` : 'desteklenmiyor');
+  row('Kurulu', installed ? `${green('evet')} ${dim(home(SVC.file))}` : `${yellow('hayır')} ${dim('→ ./bin/kmy gateway install')}`);
+  if (SVC.manager) row('Servis durumu', st.loaded ? `${st.state === 'running' || st.state === 'active' ? green(st.state) : yellow(st.state || 'yüklü')}${st.pid ? ` (PID ${st.pid})` : ''}` : dim(installed ? 'yüklü değil (durduruldu)' : '—'));
+  if (!h.up) row('Sunucu', `${red('yanıt yok')} ${dim(`${URL_UI} (${h.error})`)}`);
+  else if (h.status === 401) row('Sunucu', `${yellow('çalışıyor, anahtar eşleşmedi')} ${dim(`(${home(gw.TOKEN_FILE)})`)}`);
+  else if (!h.ok) row('Sunucu', `${yellow(`HTTP ${h.status}`)} ${dim(h.data?.error || '')}`);
+  else {
+    row('Sunucu', `${green('çalışıyor')} → ${URL_UI}  ${dim(`v${h.data.version}`)}`);
+    row('Mod', g.daemon ? 'Servis (daemon)' : h.data.gateway ? 'Elle başlatıldı' : dim('eski sürüm (gateway yok; yeniden başlatın)'));
+    row('PID', h.data.pid);
+    row('Port', `UI ${g.port || PORT} · rapor ${g.reportPort || gw.reportPort(PORT)}`);
+    row('Çalışma süresi', dur(h.data.uptimeSec));
+    row('Oturum / istemci', `${g.activeSessions ?? h.data.runningSessions ?? 0} aktif ajan oturumu · ${g.clients ?? h.data.clients ?? 0} bağlı istemci`);
+  }
+  row('Log', home(gw.LOG_FILE));
+}
+
+function logs() {
+  const i = argv.indexOf('-n');
+  const n = String(Number(argv[i + 1]) || 100);
+  if (!fs.existsSync(gw.LOG_FILE)) {
+    const alt = path.join(DATA_DIR, 'server.log');
+    if (!fs.existsSync(alt)) die(`Log dosyası yok: ${gw.LOG_FILE} (servis henüz çalışmadı).`);
+    console.log(dim(`Servis logu yok; elle başlatılan sunucunun logu gösteriliyor: ${home(alt)}`));
+    return spawn('tail', ['-n', n, ...(flags.has('-f') ? ['-f'] : []), alt], { stdio: 'inherit' });
+  }
+  spawn('tail', ['-n', n, ...(flags.has('-f') || flags.has('--follow') ? ['-f'] : []), gw.LOG_FILE], { stdio: 'inherit' });
+}
+
+async function token() {
+  if (flags.has('--rotate')) {
+    const r = await callApi('/api/gateway/token/rotate', { method: 'POST' });
+    if (r.ok) console.log(`${green('✓')} Anahtar çalışan sunucuda yenilendi. Açık arayüz sekmeleri kendini tazeler.`);
+    else {
+      gw.rotate();
+      console.log(`${green('✓')} Anahtar yenilendi${r.up ? ` (sunucu HTTP ${r.status} döndü; dosya doğrudan güncellendi)` : ' (sunucu kapalı)'}.`);
+    }
+    console.log(`  Eski anahtarı kullanan betik ve istemcileri güncelleyin.`);
+  }
+  const t = gw.tokenInfo();
+  if (tty) console.log(dim(`# ${home(gw.TOKEN_FILE)}${t.rotatedAt ? ` · son yenileme ${t.rotatedAt}` : ''}`));
+  console.log(t.token);
+}
+
+function openUi() {
+  const opener = os.platform() === 'darwin' ? 'open' : os.platform() === 'win32' ? null : 'xdg-open';
+  if (!opener) return console.log(URL_UI);
+  const r = spawnSync(opener, [URL_UI], { stdio: 'ignore' });
+  if (r.error || r.status !== 0) console.log(`Tarayıcı açılamadı; adres: ${URL_UI}`);
+  else console.log(`Açılıyor → ${URL_UI}`);
+}
+
+// ── Giriş ────────────────────────────────────────────────
+const [group, cmd] = args;
+if (!group || group === 'help' || flags.has('--help') || flags.has('-h')) { console.log(HELP); process.exit(0); }
+if (group !== 'gateway') die(`Bilinmeyen komut: ${group}\n\n${HELP}`);
+const CMDS = { install, uninstall, start, stop, restart, status, logs, token, open: openUi };
+if (!cmd) { console.log(HELP); process.exit(0); }
+if (!CMDS[cmd]) die(`Bilinmeyen gateway komutu: ${cmd}\n\n${HELP}`);
+await CMDS[cmd]();

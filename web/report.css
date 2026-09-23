@@ -1,0 +1,22 @@
+/* Ajan raporları için okunaklı, yazdırılabilir stil */
+:root { --acc: #c77700; --up: #16a34a; --down: #dc2626; --line: #e3e7ee; --muted: #5b6678; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #16202e; font: 15px/1.65 Inter, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main.report { max-width: 900px; margin: 0 auto; padding: 36px 28px 60px; }
+h1 { font-size: 26px; margin: 0 0 6px; } h2 { font-size: 19px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--acc); }
+h3 { font-size: 16px; margin: 20px 0 8px; }
+.meta, .muted { color: var(--muted); font-size: 13px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; }
+th { background: #f6f8fb; font-weight: 700; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.up, .pos { color: var(--up); } .down, .neg { color: var(--down); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 14px 0; }
+.kpi { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.kpi .l { font-size: 11px; letter-spacing: .06em; color: var(--muted); font-weight: 700; text-transform: uppercase; }
+.kpi .v { font-size: 20px; font-weight: 600; margin-top: 2px; }
+.callout { border-left: 4px solid var(--acc); background: #fff8ec; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.risk { border-left-color: var(--down); background: #fdf1f1; }
+svg { max-width: 100%; height: auto; }
+.disclaimer { margin-top: 40px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+@media print { main.report { padding: 0; } h2 { break-after: avoid; } table, .kpi { break-inside: avoid; } }
