@@ -13,7 +13,7 @@ import * as pf from './portfolio.js';
 import * as store from './store.js';
 import * as term from './terminal.js';
 import { technicalSummary, indicatorSeries } from './indicators.js';
-import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, providerModels } from './agent.js';
+import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, providerModels, claudeExecutable } from './agent.js';
 import { runTool, screen } from './agent-tools.js';
 import { radar } from './radar.js';
 import * as universe from './universe.js';
@@ -348,7 +348,10 @@ route('POST', '/api/gateway/stop', async () => {
 const cliVersions = {};
 function cliVersion(bin) {
   if (cliVersions[bin]) return Promise.resolve(cliVersions[bin]);
-  return new Promise((resolve) => execFile(bin, ['--version'], { timeout: 5000 }, (err, out) => { cliVersions[bin] = err ? null : out.trim(); resolve(cliVersions[bin]); }));
+  // claude, PATH'te olmasa da bilinen kurulum yerlerinde aranır; bulunamazsa önbelleğe alınmaz (sonradan kurulabilir)
+  let exe = bin;
+  if (bin === 'claude') { try { exe = claudeExecutable() || 'claude'; } catch { return Promise.resolve(null); } }
+  return new Promise((resolve) => execFile(exe, ['--version'], { timeout: 5000 }, (err, out) => { const v = err ? null : out.trim(); if (v) cliVersions[bin] = v; resolve(v); }));
 }
 
 // Tarayıcıdaki başka sitelerin (ve rapor sayfalarının) yerel API'ye yazmasını engelle

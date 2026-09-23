@@ -1,5 +1,19 @@
 # Sürüm Notları
 
+## 0.10.0 — 23 Eylül 2026 (macOS görünümü, kuruluma hazırlık)
+
+### Yeni
+- ⌘ (Ctrl) basılı tutulunca TERMINAL / DASHBOARD / PORTFÖY sekmelerinin yanında 1 · 2 · 3 kısayol rozetleri görünür.
+- **macOS görünümü:** pencere düğmeleri üst çubuğun içinde; üst çubuğun ve sekme çubuğunun boş yerinden pencere sürüklenir, çift tıklama sistem ayarına göre büyütür / küçültür. Yan panellerde macOS kenar çubuğu dokusu (yarı saydam), sistem yazı tipi, macOS kaydırma çubukları, macOS tarzı imleç; pencere etkin değilken üst çubuk solar; tam ekranda düzen uyarlanır; WebKit'in "Yeniden yükle / Öğeyi incele" sağ tık menüsü gizlendi.
+- DMG ile ilk açılışta uygulama Uygulamalar klasörü dışından çalışıyorsa oraya taşımayı önerir (taşı ve yeniden aç).
+- Claude Code kurulu değilse sohbet ekranı ilk açılışta nasıl kurulacağını gösterir.
+
+### Değişen
+- Claude Code aranırken yalnız PATH değil yaygın kurulum yerleri de taranır (resmî kurulum, Homebrew, npm, nvm, volta, bun); kullanıcının kabuğu etkileşimli olarak okunur (.zshrc / .bashrc'deki PATH ayarları dahil).
+- Giriş yapılmamış Claude hesabı, eski Claude Code sürümü ve kullanım sınırı hataları anlaşılır Türkçe yönlendirmeyle gösterilir.
+- 7420 portu başka bir programdaysa uygulama boş bir portu seçip hatırlar.
+- Uygulama başka bir klasöre taşındığında arka plan servisi yeni konuma göre kendiliğinden yeniden kurulur.
+
 ## 0.9.0 — 23 Eylül 2026 (tam otomatik veri, menü çubuğu)
 
 ### Yeni

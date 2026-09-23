@@ -9,6 +9,33 @@ private let bridgeJS = """
 (() => {
   const post = (m) => { try { window.webkit.messageHandlers.borsa.postMessage(m); } catch (e) {} };
   window.borsaNative = { platform: 'macos' };
+  const mark = () => document.documentElement && document.documentElement.classList.add('native-mac');
+  mark();
+  // Pencere sürükleme bölgeleri: üst çubuk ve sekme çubuğunun boş yerleri (düğmeler, sekmeler, şerit hariç)
+  const HOLES = 'button, a, input, select, textarea, label, [role=tab], .ticker, .conn, .clock, .mkt-status, .suggest';
+  const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+  let pending = false;
+  const report = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      const areas = [...document.querySelectorAll('.topbar, .viewbar')];
+      post({ type: 'drag', regions: areas.map(box), holes: areas.flatMap((a) => [...a.querySelectorAll(HOLES)]).filter((e) => e.offsetParent).map(box) });
+    });
+  };
+  addEventListener('resize', report);
+  addEventListener('load', () => {
+    report();
+    const mo = new MutationObserver(report);
+    document.querySelectorAll('.topbar, .viewbar').forEach((el) => mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] }));
+    setInterval(report, 3000);
+  });
+  // Uygulama menüsü olmayan yerlerde WebKit'in "Yeniden Yükle / Öğeyi İncele" sağ tık menüsü gösterilmez
+  addEventListener('contextmenu', (e) => {
+    if (e.defaultPrevented || e.target.closest('input, textarea, [contenteditable]') || String(getSelection() || '').trim()) return;
+    e.preventDefault();
+  });
   class NativeNotification {
     constructor(title, opts = {}) { post({ type: 'notify', title: String(title || ''), body: String(opts.body || '') }); }
     static get permission() { return 'granted'; }
@@ -26,10 +53,69 @@ private let bridgeJS = """
     post({ type: 'theme', theme: root.dataset.theme || 'dark', bg });
   };
   new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
-  addEventListener('DOMContentLoaded', sync);
+  addEventListener('DOMContentLoaded', () => { mark(); sync(); });
   addEventListener('load', sync);
 })();
 """
+
+/// Başlık çubuğu davranışı: sayfanın bildirdiği sürükleme bölgelerinde pencere taşınır, çift tıklama sistem ayarına göre büyütür / küçültür
+final class KMYWebView: WKWebView {
+  var dragRegions: [CGRect] = []
+  var dragHoles: [CGRect] = []
+  override func mouseDown(with event: NSEvent) {
+    let p = convert(event.locationInWindow, from: nil)
+    let z = max(pageZoom, 0.1)
+    let css = CGPoint(x: p.x / z, y: (isFlipped ? p.y : bounds.height - p.y) / z)
+    if dragRegions.contains(where: { $0.contains(css) }) && !dragHoles.contains(where: { $0.contains(css) }) {
+      if event.clickCount == 2 {
+        let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
+        if action == "Minimize" { window?.performMiniaturize(nil) } else if action != "None" { window?.performZoom(nil) }
+      } else {
+        window?.performDrag(with: event)
+      }
+      return
+    }
+    super.mouseDown(with: event)
+  }
+}
+
+/// Ana pencere: başlık çubuğu bölgesindeki (üst 46 px) fare olayları, pencere düğmeleri dışında sayfaya yönlendirilir.
+/// AppKit'in başlık katmanı bu bölgeyi yakalar; yönlendirme olmadan üst çubuktaki düğmelere tıklanamazdı.
+final class KMYWindow: NSWindow {
+  weak var web: WKWebView?
+  var titlebarHeight: CGFloat = 46
+  private var routing = false
+
+  private func inTitlebar(_ e: NSEvent) -> Bool {
+    guard !styleMask.contains(.fullScreen) else { return false }
+    return e.locationInWindow.y >= frame.height - titlebarHeight
+  }
+  private func onWindowButton(_ e: NSEvent) -> Bool {
+    [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].contains { t in
+      guard let b = standardWindowButton(t), let sv = b.superview else { return false }
+      return sv.convert(b.frame, to: nil).insetBy(dx: -4, dy: -4).contains(e.locationInWindow)
+    }
+  }
+  override func sendEvent(_ e: NSEvent) {
+    guard let web else { return super.sendEvent(e) }
+    switch e.type {
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+      if inTitlebar(e) && !onWindowButton(e) {
+        routing = true
+        if e.type == .leftMouseDown { web.mouseDown(with: e) } else if e.type == .rightMouseDown { web.rightMouseDown(with: e) } else { web.otherMouseDown(with: e) }
+        return
+      }
+    case .leftMouseDragged where routing: web.mouseDragged(with: e); return
+    case .leftMouseUp where routing: routing = false; web.mouseUp(with: e); return
+    case .rightMouseUp where routing: routing = false; web.rightMouseUp(with: e); return
+    case .otherMouseUp where routing: routing = false; web.otherMouseUp(with: e); return
+    case .mouseMoved where inTitlebar(e) && !onWindowButton(e): web.mouseMoved(with: e); return
+    case .scrollWheel where inTitlebar(e): web.scrollWheel(with: e); return
+    default: break
+    }
+    super.sendEvent(e)
+  }
+}
 
 final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
   let webView: WKWebView
@@ -40,28 +126,40 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   init(url: URL?, main: Bool, configuration: WKWebViewConfiguration? = nil) {
     isMain = main
     let config = configuration ?? WebWindowController.makeConfig()
-    webView = WKWebView(frame: .zero, configuration: config)
+    webView = KMYWebView(frame: .zero, configuration: config)
     webView.allowsMagnification = true
     webView.allowsBackForwardNavigationGestures = false
     webView.setValue(false, forKey: "drawsBackground") // yüklenirken beyaz parlama olmasın
     if #available(macOS 13.3, *) { webView.isInspectable = true } // Safari › Geliştir ile incelenebilir
 
     let frame = NSRect(x: 0, y: 0, width: main ? 1440 : 1100, height: main ? 900 : 800)
-    let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+    let window = KMYWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+    if main { window.web = webView; window.titlebarHeight = WebWindowController.topbarHeight }
     window.titlebarAppearsTransparent = true
     window.titleVisibility = main ? .hidden : .visible
     window.title = "kmy terminal"
     window.minSize = NSSize(width: 760, height: 520)
     window.backgroundColor = NSColor(srgbRed: 0.055, green: 0.07, blue: 0.098, alpha: 1)
     window.tabbingMode = .disallowed
+    window.titlebarSeparatorStyle = .none
     super.init(window: window)
 
-    // Başlık çubuğu yüksekliği kadar üst boşluk: trafik ışıkları sayfanın üstünde kalmasın
-    let container = NSView()
+    // Ana pencere: sayfa başlık çubuğunun altına kadar uzanır (pencere düğmeleri üst çubukta), arkada macOS kenar çubuğu dokusu.
+    // Açılır pencereler (raporlar) klasik başlık çubuğuyla açılır.
+    let container: NSView
+    if main {
+      let fx = NSVisualEffectView()
+      fx.material = .sidebar
+      fx.blendingMode = .behindWindow
+      fx.state = .followsWindowActiveState
+      container = fx
+    } else {
+      container = NSView()
+    }
     container.wantsLayer = true
     webView.translatesAutoresizingMaskIntoConstraints = false
     container.addSubview(webView)
-    let top = NSLayoutConstraint(item: webView, attribute: .top, relatedBy: .equal, toItem: container, attribute: .top, multiplier: 1, constant: 28)
+    let top = NSLayoutConstraint(item: webView, attribute: .top, relatedBy: .equal, toItem: container, attribute: .top, multiplier: 1, constant: main ? 0 : 28)
     NSLayoutConstraint.activate([top,
       webView.leadingAnchor.constraint(equalTo: container.leadingAnchor), webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
       webView.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
@@ -119,6 +217,13 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
       notify(title: m["title"] as? String ?? "kmy terminal", body: m["body"] as? String ?? "")
     case "badge":
       NSApp.dockTile.badgeLabel = (m["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    case "drag":
+      let rect = { (a: Any) -> CGRect? in
+        guard let v = a as? [Double], v.count == 4 else { return nil }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+      }
+      (webView as? KMYWebView)?.dragRegions = (m["regions"] as? [Any] ?? []).compactMap(rect)
+      (webView as? KMYWebView)?.dragHoles = (m["holes"] as? [Any] ?? []).compactMap(rect)
     case "theme":
       let dark = (m["theme"] as? String) != "light"
       window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -192,6 +297,38 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
 
   var onClose: (() -> Void)?
   func windowWillClose(_ notification: Notification) { onClose?() }
+
+  // MARK: Pencere düğmeleri üst çubukta (46 px) dikey ortalı; tam ekranda ve etkin olmayan pencerede sayfaya bildirilir
+  static let topbarHeight: CGFloat = 46
+  func layoutTrafficLights() {
+    guard isMain, let w = window, !w.styleMask.contains(.fullScreen),
+          let close = w.standardWindowButton(.closeButton), let mini = w.standardWindowButton(.miniaturizeButton),
+          let zoom = w.standardWindowButton(.zoomButton), let container = close.superview?.superview else { return }
+    let h = WebWindowController.topbarHeight
+    var f = container.frame
+    f.size.height = h
+    f.origin.y = w.frame.height - h
+    container.frame = f
+    for (i, b) in [close, mini, zoom].enumerated() {
+      var r = b.frame
+      r.origin.x = 16 + CGFloat(i) * 20
+      r.origin.y = (h - r.height) / 2
+      b.frame = r
+    }
+  }
+  private func pageClass(_ name: String, _ on: Bool) {
+    js("document.documentElement.classList.toggle('\(name)', \(on))")
+  }
+  func windowDidResize(_ notification: Notification) { layoutTrafficLights() }
+  func windowDidBecomeKey(_ notification: Notification) { layoutTrafficLights(); pageClass("mac-inactive", false) }
+  func windowDidResignKey(_ notification: Notification) { pageClass("mac-inactive", true) }
+  func windowWillEnterFullScreen(_ notification: Notification) { pageClass("mac-fullscreen", true) }
+  func windowDidExitFullScreen(_ notification: Notification) { pageClass("mac-fullscreen", false); layoutTrafficLights() }
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    layoutTrafficLights()
+    pageClass("mac-fullscreen", window?.styleMask.contains(.fullScreen) == true)
+    pageClass("mac-inactive", window?.isKeyWindow != true)
+  }
 
   func webViewDidClose(_ webView: WKWebView) { if !isMain { window?.close() } }
 

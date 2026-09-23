@@ -461,10 +461,10 @@ button.cm-chip::after { display: none; }
 .skeleton { background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: 6px; min-height: 18px; }
 @keyframes sk { to { background-position: -200% 0; } }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-corner { background: transparent; }
+html:not(.native-mac) ::-webkit-scrollbar { width: 8px; height: 8px; }
+html:not(.native-mac) ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+html:not(.native-mac) ::-webkit-scrollbar-track { background: transparent; }
+html:not(.native-mac) ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ── KAP sinyal sınıfları ───────────────────────── */
 .sig { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .05em; padding: 1px 5px; border-radius: 4px; font-family: var(--mono); vertical-align: 1px; }
@@ -586,3 +586,28 @@ table.fin-sum th.r { font-weight: 500; }
 .ss-row:hover .ss-acts, .ss-row:focus-within .ss-acts, .ss-row.cur .ss-acts { opacity: 1; }
 .ss-del:hover { color: var(--down); }
 .ss-foot { font-size: 11px; border-top: 1px solid var(--line); padding-top: 8px; }
+/* ⌘ basılıyken sekme kısayol rozetleri (⌘1 · ⌘2 · ⌘3) */
+.viewbar button[data-key] { position: relative; }
+.viewbar button[data-key]::after { content: attr(data-key) / ""; position: absolute; top: 50%; right: 3px; transform: translateY(-50%) scale(.6); opacity: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 5px; background: var(--text); color: var(--bg); font: 700 10px/16px var(--mono); text-align: center; box-shadow: var(--shadow-sm); transition: opacity .12s, transform .12s; pointer-events: none; z-index: 2; }
+body.show-keys .viewbar button[data-key]::after { opacity: 1; transform: translateY(-50%) scale(1); }
+.viewbar button[role=tab][data-key] { padding-right: 20px; }
+/* ── macOS uygulaması (html.native-mac): pencere düğmeleri üst çubukta, yan panellerde sistem dokusu,
+      sistem yazı tipi ve kaydırma çubukları, macOS tarzı imleç ve seçim davranışı ── */
+html.native-mac { --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace; }
+html.native-mac, html.native-mac body { background: transparent; }
+html.native-mac .topbar { padding-left: 84px; background: color-mix(in srgb, var(--bg-2) 55%, transparent); border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent); }
+html.native-mac.mac-fullscreen .topbar { padding-left: 12px; }
+html.native-mac .viewbar { background: color-mix(in srgb, var(--bg-2) 55%, transparent); border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent); }
+html.native-mac .left { background: color-mix(in srgb, var(--bg) 35%, transparent); }
+html.native-mac .right { background: color-mix(in srgb, var(--bg-2) 72%, transparent); }
+html.native-mac .center { background: var(--bg); }
+html.native-mac .splitter { background: color-mix(in srgb, var(--line) 80%, transparent); }
+html.native-mac .wl-add input, html.native-mac .left .panel-head { background-color: color-mix(in srgb, var(--panel) 70%, transparent); }
+html.native-mac.mac-inactive :is(.topbar, .viewbar) { filter: saturate(.55); }
+html.native-mac.mac-inactive :is(.brand, .viewbar button[role=tab].active) { opacity: .72; }
+html.native-mac :is(button, [role=tab], .tick, .wl-row, .report-item, .kap-item, .ss-row, .pal-row, .sl-row, .seg button, summary) { cursor: default; }
+html.native-mac :is(.topbar, .viewbar, .panel-head, .right-tabs, .agent-head, .subtabs, .cm-bar, .cm-status, .wl-row) { -webkit-user-select: none; user-select: none; }
+html.native-mac .modal-back { backdrop-filter: blur(2px); }
+html.native-mac .modal { border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .25), 0 22px 60px rgba(0, 0, 0, .35); }
+.welcome .w-setup { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); color: var(--text); font-size: 12.5px; line-height: 1.55; }
+.welcome .w-setup ol { margin: 6px 0; padding-left: 18px; }

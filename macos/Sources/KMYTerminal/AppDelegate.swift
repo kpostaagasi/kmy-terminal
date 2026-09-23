@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   private static let showNote = Notification.Name("com.kmyterminal.show")
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    // Taşıma sonrası açıldıysa eski kopyanın kapanmasını bekle
+    if CommandLine.arguments.contains("--moved") { Thread.sleep(forTimeInterval: 1.5) }
     // Tek kopya: uygulama zaten çalışıyorsa onun penceresini aç ve çık
     let me = ProcessInfo.processInfo.processIdentifier
     if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").contains(where: { $0.processIdentifier != me }) {
@@ -21,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     DistributedNotificationCenter.default().addObserver(forName: AppDelegate.showNote, object: nil, queue: .main) { [weak self] _ in self?.showMain() }
     NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in self?.reallyQuit = true }
 
+    if offerMoveToApplications() { return }
     UNUserNotificationCenter.current().delegate = self
     buildMenu()
     main = WebWindowController(url: nil, main: true)
@@ -32,11 +35,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     connect()
   }
 
+  // MARK: Uygulamalar klasörüne taşıma
+  /// DMG'den ya da İndirilenler'den açılan uygulama macOS tarafından geçici, salt okunur bir konumda çalıştırılır (App Translocation);
+  /// servis ve menü çubuğu kaydı bozulmasın diye Uygulamalar klasörüne taşımayı önerir. Taşınırsa yeni kopyayı açar ve true döner.
+  private func offerMoveToApplications() -> Bool {
+    guard Gateway.shared.bundled, !menubarMode else { return false }
+    let here = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+    let home = NSHomeDirectory()
+    if here.hasPrefix("/Applications/") || here.hasPrefix("\(home)/Applications/") { return false }
+    if UserDefaults.standard.bool(forKey: "skipMoveOffer") { return false }
+    NSApp.activate(ignoringOtherApps: true)
+    let a = NSAlert()
+    a.messageText = "kmy terminal Uygulamalar klasörüne taşınsın mı?"
+    a.informativeText = "Uygulama şu an \(here.contains("/AppTranslocation/") || here.hasPrefix("/Volumes/") ? "disk görüntüsünden ya da İndirilenler klasöründen" : "Uygulamalar klasörü dışından") çalışıyor. Arka plan servisi ve menü çubuğu simgesinin düzgün çalışması için Uygulamalar klasörüne taşınması önerilir."
+    a.addButton(withTitle: "Uygulamalar'a Taşı")
+    a.addButton(withTitle: "Şimdi Değil")
+    a.showsSuppressionButton = true
+    a.suppressionButton?.title = "Bir daha sorma"
+    let r = a.runModal()
+    if a.suppressionButton?.state == .on { UserDefaults.standard.set(true, forKey: "skipMoveOffer") }
+    guard r == .alertFirstButtonReturn else { return false }
+    let fm = FileManager.default
+    for dir in ["/Applications", "\(home)/Applications"] {
+      let dest = URL(fileURLWithPath: dir).appendingPathComponent("kmy terminal.app")
+      do {
+        try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        if fm.fileExists(atPath: dest.path) { try fm.trashItem(at: dest, resultingItemURL: nil) }
+        try fm.copyItem(at: Bundle.main.bundleURL, to: dest)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-n", dest.path, "--args", "--moved"]
+        try p.run()
+        exit(0)
+      } catch { continue }
+    }
+    let e = NSAlert()
+    e.messageText = "Taşınamadı"
+    e.informativeText = "kmy terminal'i Finder'da Uygulamalar klasörüne sürükleyip oradan açın."
+    e.runModal()
+    return false
+  }
+
   // MARK: Pencere ↔ menü çubuğu
   /// Pencereyi göster (Dock simgesi geri gelir)
   func showMain() {
     NSApp.setActivationPolicy(.regular)
     main.showWindow(nil)
+    main.layoutTrafficLights()
     NSApp.activate(ignoringOtherApps: true)
   }
   /// Pencere kapandı: gateway açıksa uygulama menü çubuğunda sürer (Dock'tan kalkar)

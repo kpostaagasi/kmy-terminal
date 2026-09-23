@@ -17,11 +17,18 @@ import { ompBin, ompModels, runOmp } from './omp-runner.js';
 
 // Claude Code yürütülebilir dosyası: SDK'nın platform paketi yoksa (DMG ile dağıtılan uygulama) kullanıcının kurduğu `claude` kullanılır
 const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
+// Uygulama Finder'dan açıldığında PATH kısa olabilir: yaygın kurulum yerleri de taranır (resmî kurulum, Homebrew, npm, nvm, volta, bun)
+function claudeCandidates() {
+  const h = process.env.HOME || '';
+  const dirs = [...(process.env.PATH || '').split(path.delimiter), path.join(h, '.local', 'bin'), path.join(h, '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin',
+    path.join(h, '.npm-global', 'bin'), path.join(h, '.volta', 'bin'), path.join(h, '.bun', 'bin'), path.join(h, 'Library', 'pnpm')];
+  try { for (const v of fs.readdirSync(path.join(h, '.nvm', 'versions', 'node')).sort().reverse()) dirs.push(path.join(h, '.nvm', 'versions', 'node', v, 'bin')); } catch { /* nvm yok */ }
+  return [...new Set(dirs.filter(Boolean))].map((d) => path.join(d, 'claude'));
+}
 export function claudeExecutable() {
   if (process.env.KMY_CLAUDE_PATH) return process.env.KMY_CLAUDE_PATH;
   if (hasBundledCli) return undefined;
-  for (const d of (process.env.PATH || '').split(path.delimiter)) {
-    const f = path.join(d, 'claude');
+  for (const f of claudeCandidates()) {
     try { fs.accessSync(f, fs.constants.X_OK); return f; } catch { /* yok */ }
   }
   throw new Error('Claude Code bulunamadı. Kurun (https://claude.com/download veya: curl -fsSL https://claude.ai/install.sh | bash), ardından Terminal\'de `claude` yazıp giriş yapın ve uygulamayı yeniden açın.');
@@ -54,6 +61,17 @@ const PERMISSION_TIMEOUT = 10 * 60_000;
 // SDK'nın ham tanı metinleri ([ede_diagnostic] …) kullanıcıya gösterilmez; yalnız sunucu logunda kalır
 const NO_REPLY = 'Claude yanıt vermedi. Tekrar gönderin veya /yeni ile yeni oturum açın.';
 const isDiag = (m) => /\[ede_diagnostic\]|Claude Code returned an error result/i.test(String(m || ''));
+// Sık karşılaşılan kurulum / hesap hatalarını anlaşılır Türkçe yönlendirmeye çevirir (ilk kurulumdaki kullanıcılar için)
+export function friendlyError(m) {
+  const t = String(m || '');
+  if (/invalid api key|please run \/login|not logged in|oauth token|authentication_error|401\b.*auth|login required/i.test(t)) {
+    return "Claude hesabına giriş yapılmamış. Ayarlar › Bağlantı › Claude › \"Giriş yap\" düğmesini kullanın (veya Terminal'de `claude` yazıp /login ile giriş yapın), sonra mesajı yeniden gönderin.";
+  }
+  if (/executable not found|ENOENT.*claude|spawn .*claude/i.test(t)) return 'Claude Code bulunamadı. Kurun (https://claude.com/download), ardından uygulamayı yeniden açın.';
+  if (/unknown option|unrecognized|unexpected argument|requires a newer version|please update/i.test(t)) return "Claude Code sürümü eski. Terminal'de `claude update` çalıştırın, ardından yeniden deneyin.";
+  if (/credit balance|usage limit|rate.?limit/i.test(t)) return `Claude kullanım sınırına ulaşıldı: ${t.slice(0, 200)}`;
+  return t;
+}
 
 function systemAppend(newSession = false) {
   const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'full', timeStyle: 'short' });
@@ -225,7 +243,7 @@ export class AgentManager extends EventEmitter {
       } catch (e) {
         const stopped = run.stopping || abort.signal.aborted;
         if (!stopped) console.error('[claude] çalışma hatası:', e.message);
-        const message = stopped ? 'Kullanıcı durdurdu' : isDiag(e.message) ? NO_REPLY : e.message;
+        const message = stopped ? 'Kullanıcı durdurdu' : isDiag(e.message) ? NO_REPLY : friendlyError(e.message);
         this.#record(sessionId, stopped ? 'stopped' : 'error', { message });
         this.#emit(sessionId, stopped ? 'stopped' : 'error', { message });
       } finally {
@@ -391,7 +409,7 @@ export class AgentManager extends EventEmitter {
         if (raw.length !== errors.length) console.error('[claude] sonuç tanısı:', msg.subtype, raw.join('; ').slice(0, 300));
         const data = {
           subtype: msg.subtype, isError: !!msg.is_error, cost, sdkCost: total, sdk: msg.session_id || null, durationMs: msg.duration_ms,
-          turns: msg.num_turns, usage: msg.usage || null, errors: errors.length ? errors : null, contextWindow,
+          turns: msg.num_turns, usage: msg.usage || null, errors: errors.length ? errors.map(friendlyError) : null, contextWindow,
         };
         // Kullanıcı durdurduysa kesintiden doğan hata sonucu hata olarak gösterilmez; "Durduruldu" kaydı çalışma sonunda
         if (run.stopping && data.isError) Object.assign(data, { subtype: 'interrupted', isError: false, errors: null });

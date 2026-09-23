@@ -248,6 +248,19 @@ function drawQuick() {
 function welcome() {
   log.innerHTML = `<div class="welcome"><div class="w-title">AJAN HAZIR</div><div class="dim">Bir hisse kodu veya soru yazın. Komutlar için <span class="mono">/</span></div><div class="quick" id="quick"></div></div>`;
   drawQuick();
+  setupCheck();
+}
+// İlk kurulum: Claude Code yoksa (ve seçili sağlayıcı Claude ise) sohbet açılışında nasıl kurulacağı gösterilir
+let setupChecked = null;
+async function setupCheck() {
+  setupChecked ||= api('/health').catch(() => null);
+  const h = await setupChecked;
+  const w = $('.welcome', log);
+  if (!h || !w || h.claudeCli || $('.w-setup', w)) return;
+  w.insertAdjacentHTML('beforeend', `<div class="w-setup"><b>Claude Code bulunamadı.</b> Yapay zekâ ajanı için bu Mac'e Claude Code kurun ve Claude hesabınızla giriş yapın:
+    <ol><li><a href="https://claude.com/download" target="_blank" rel="noopener">claude.com/download</a> adresinden kurun (veya Terminal'de <span class="mono">curl -fsSL https://claude.ai/install.sh | bash</span>).</li>
+    <li>Terminal'de <span class="mono">claude</span> yazıp giriş yapın.</li><li>kmy terminal'i kapatıp yeniden açın.</li></ol>
+    <span class="dim">Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.</span></div>`);
 }
 
 // ── Olay çizimi ───────────────────────────────────
