@@ -568,3 +568,21 @@ table.fin-sum th.r { font-weight: 500; }
 .ca-amt { text-align: right; white-space: nowrap; }
 .ca-note { font-size: 11px; margin-top: 6px; }
 @container (max-width: 520px) { .ca-row { grid-template-columns: minmax(0, 1fr) auto; } .ca-what { grid-column: 1 / -1; grid-row: 2; } }
+/* ── Oturumlar penceresi ─────────────────────────── */
+.ss { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.ss-top { display: flex; gap: 8px; }
+.ss-q { flex: 1; padding: 8px 12px 8px 32px; background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23778' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px 50%; }
+.ss-list { max-height: 58vh; overflow: auto; margin: 0 -6px; padding: 0 6px; }
+.ss-grp { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--text-3); padding: 12px 4px 4px; text-transform: uppercase; }
+.ss-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 9px; cursor: pointer; transition: background .12s; }
+.ss-row:hover, .ss-row:focus-visible { background: var(--panel-2); outline: none; }
+.ss-row.cur { background: var(--accent-soft); }
+.ss-st { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); display: grid; place-items: center; }
+.ss-st.run { background: none; }
+.ss-title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-prov { color: var(--text-2); font-weight: 600; }
+.ss-acts { display: flex; gap: 2px; opacity: .35; transition: opacity .12s; }
+.ss-row:hover .ss-acts, .ss-row:focus-within .ss-acts, .ss-row.cur .ss-acts { opacity: 1; }
+.ss-del:hover { color: var(--down); }
+.ss-foot { font-size: 11px; border-top: 1px solid var(--line); padding-top: 8px; }
