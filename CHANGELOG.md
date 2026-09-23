@@ -3,7 +3,7 @@
 ## 0.10.0 — 23 Eylül 2026 (macOS görünümü, kuruluma hazırlık)
 
 ### Yeni
-- ⌘ (Ctrl) basılı tutulunca TERMINAL / DASHBOARD / PORTFÖY sekmelerinin yanında 1 · 2 · 3 kısayol rozetleri görünür.
+- ⌘ (Ctrl) basılı tutulunca TERMINAL / DASHBOARD / PORTFÖY sekmelerinin adının sağında ⌘1 · ⌘2 · ⌘3 kısayol etiketi yumuşakça belirir (yazıyı örtmez).
 - **macOS görünümü:** pencere düğmeleri üst çubuğun içinde; üst çubuğun ve sekme çubuğunun boş yerinden pencere sürüklenir, çift tıklama sistem ayarına göre büyütür / küçültür. Yan panellerde macOS kenar çubuğu dokusu (yarı saydam), sistem yazı tipi, macOS kaydırma çubukları, macOS tarzı imleç; pencere etkin değilken üst çubuk solar; tam ekranda düzen uyarlanır; WebKit'in "Yeniden yükle / Öğeyi incele" sağ tık menüsü gizlendi.
 - DMG ile ilk açılışta uygulama Uygulamalar klasörü dışından çalışıyorsa oraya taşımayı önerir (taşı ve yeniden aç).
 - Claude Code kurulu değilse sohbet ekranı ilk açılışta nasıl kurulacağını gösterir.
