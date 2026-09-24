@@ -29,7 +29,6 @@ export function ompBin() {
 
 // ── Model listesi: `omp models --json` (oturum açılmış sağlayıcılar), önbellekli ──
 export const OMP_DEFAULT_MODELS = [
-  { id: '', label: 'Varsayılan (omp ayarı)' },
   { id: 'anthropic/claude-opus-5-5', label: 'Claude Opus 5.5 (anthropic)' },
   { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5 (anthropic)' },
   { id: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5 (anthropic)' },
@@ -51,7 +50,7 @@ function loadModels() {
       // Yüzlerce model listeleyen toplayıcılar (nous, nvidia…) seçiciyi boğar: yalnız küçük sağlayıcılar, tarihli kopyalar hariç
       const list = all.filter((m) => count[m.provider] <= 40 && m.reasoning && !/-\d{8}$|embed/i.test(m.id))
         .map((m) => ({ id: m.selector || `${m.provider}/${m.id}`, label: `${m.name || m.id} (${m.provider})` }));
-      if (list.length) models = [OMP_DEFAULT_MODELS[0], ...list];
+      if (list.length) models = list;
     } catch (e) {
       console.error('[omp] model listesi alınamadı:', String(e.message || e).slice(0, 200));
     }
