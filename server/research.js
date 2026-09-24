@@ -319,7 +319,7 @@ const ADAPTERS = {
 export const BROKERS = Object.fromEntries(Object.entries(ADAPTERS).map(([k, a]) => [k, { name: a.name, site: a.site }]));
 export const UNAVAILABLE = [
   { name: 'Halk Yatırım şirket raporları', reason: 'müşteri girişi gerektiriyor; hedef fiyat listesi akışta, tam raporlar klasör izleme ile arşive alınır' },
-  { name: 'Deniz Yatırım', reason: 'site bot korumalı' },
+  { name: 'Deniz Yatırım', reason: 'site bot koruması kullanıyor' },
   { name: 'Alnus Yatırım', reason: 'site otomatik erişimi engelliyor' },
 ];
 

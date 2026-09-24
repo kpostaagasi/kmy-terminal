@@ -242,7 +242,7 @@ export function runOmp({ run, session, prompt, model, permissionMode, sys, io },
   });
 
   child.on('error', (e) => {
-    const message = e.code === 'ENOENT' ? 'omp CLI bulunamadı: brew install omp, ardından omp içinde /login' : e.message;
+    const message = e.code === 'ENOENT' ? 'omp CLI bulunamadı. Kurun (brew install omp), ardından omp içinde /login ile giriş yapın.' : e.message;
     st.errors.push(message);
   });
 

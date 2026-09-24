@@ -128,6 +128,7 @@ export const DEFAULT_SETTINGS = {
   benchmarks: ['XU100', 'USDTRY', 'GRAM', 'SPX_TRY', 'BTC_TRY'],
   dividendTaxRate: 0.15,
   uiMode: 'chat',
+  language: 'auto', // 'auto' (sistem dili) | 'tr' | 'en'
 };
 
 export function getSettings() {

@@ -87,7 +87,7 @@ const isDiag = (m) => /\[ede_diagnostic\]|Claude Code returned an error result/i
 export function friendlyError(m) {
   const t = String(m || '');
   if (/invalid api key|please run \/login|not logged in|oauth token|authentication_error|401\b.*auth|login required/i.test(t)) {
-    return "Claude hesabına giriş yapılmamış. Ayarlar › Bağlantı › Claude › \"Giriş yap\" düğmesini kullanın (veya Terminal'de `claude` yazıp /login ile giriş yapın), sonra mesajı yeniden gönderin.";
+    return "Claude hesabına giriş yapılmamış. Ayarlar › Bağlantı › Sağlayıcılar bölümündeki \"Claude ile giriş\" düğmesini kullanın (veya Terminal'de `claude` yazıp /login ile giriş yapın), ardından mesajı yeniden gönderin.";
   }
   if (/executable not found|ENOENT.*claude|spawn .*claude/i.test(t)) return 'Claude Code bulunamadı. Kurun (https://claude.com/download), ardından uygulamayı yeniden açın.';
   if (/unknown option|unrecognized|unexpected argument|requires a newer version|please update/i.test(t)) return "Claude Code sürümü eski. Terminal'de `claude update` çalıştırın, ardından yeniden deneyin.";
@@ -95,7 +95,7 @@ export function friendlyError(m) {
   return t;
 }
 
-function systemAppend(newSession = false) {
+function systemAppend(newSession = false, lang = 'tr') {
   const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'full', timeStyle: 'short' });
   const ms = marketStatus();
   const rs = memory.radarStatus();
@@ -106,7 +106,7 @@ function systemAppend(newSession = false) {
   return `
 # kmy terminal bağlamı
 - Şu an: ${now} (İstanbul). BIST durumu: ${ms.label}.
-- Kullanıcıyla Türkçe konuş. Kişisel bir borsa terminalinin içindeki analiz asistanısın.
+- ${lang === 'en' ? 'The user interface is in English: always reply to the user in English (these instructions and the workspace files are in Turkish; keep tool names and file names as they are).' : 'Kullanıcıyla Türkçe konuş.'} Kişisel bir borsa terminalinin içindeki analiz asistanısın.
 - Yerel veriler için mcp__borsa__* araçlarını kullan (fiyat, geçmiş, teknik analiz, KAP, portföy, izleme listesi, rapor kaydetme).
 - Uzun analizleri mcp__borsa__save_report ile HTML rapor olarak kaydet; sohbette kısa özet ver.
 - Rakamları kaynağıyla ver; veri alamadıysan bunu açıkça söyle, uydurma.
@@ -161,7 +161,7 @@ export class AgentManager extends EventEmitter {
     this.emit('event', { sessionId, type, ...data });
   }
 
-  async send({ sessionId, text, context, model, effort, permissionMode, provider, title: forcedTitle, attachments = [] }) {
+  async send({ sessionId, text, context, model, effort, permissionMode, provider, title: forcedTitle, attachments = [], lang }) {
     const settings = getSettings();
     text = String(text || '').trim();
     if (!text) throw new Error('Boş mesaj');
@@ -196,7 +196,7 @@ export class AgentManager extends EventEmitter {
     // Claude Code yerleşik komutları (/compact, /context, /cost) doğrudan iletilir
     if (/^\/(compact|context|cost)\b/.test(text) && !context && !attachments.length) prompt = text;
     const abort = new AbortController();
-    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), activity: 'Düşünüyor' };
+    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), activity: 'Düşünüyor', lang: lang === 'en' ? 'en' : 'tr' };
     this.running.set(sessionId, run);
     this.#emit(sessionId, 'run.start', { startedAt: run.startedAt });
     this.emit('jobs');
@@ -246,7 +246,7 @@ export class AgentManager extends EventEmitter {
       try {
         for (let attempt = 0; ; attempt++) {
           const failed = await this.#claudeAttempt(sessionId, run, attemptPrompt, {
-            ...options, systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(!resume) }, ...(resume ? { resume } : {}),
+            ...options, systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(!resume, run.lang) }, ...(resume ? { resume } : {}),
           });
           if (!failed || run.stopping || abort.signal.aborted) break;
           console.error(`[claude] boş yanıt (deneme ${attempt + 1}, oturum ${sessionId}, sdk ${resume || 'yeni'}): ${failed.subtype} ${(failed.errors || []).join('; ')}`);
@@ -456,7 +456,7 @@ export class AgentManager extends EventEmitter {
     else args.push('-s', permissionMode === 'acceptEdits' ? 'workspace-write' : 'read-only');
     if (model) args.push('-m', model);
     for (const img of images) args.push('-i', path.join(WORKSPACE_DIR, img));
-    const sys = `${systemAppend(!session.sdk_session_id)}\n- Terminal araçları "borsa" MCP sunucusundadır. Kalıcı talimatlar: AGENTS.md / CLAUDE.md.`;
+    const sys = `${systemAppend(!session.sdk_session_id, run.lang)}\n- Terminal araçları "borsa" MCP sunucusundadır. Kalıcı talimatlar: AGENTS.md / CLAUDE.md.`;
     const fullPrompt = session.sdk_session_id ? prompt : `${sys}\n\n${prompt}`;
     if (session.sdk_session_id) args.push('resume', session.sdk_session_id);
     args.push(fullPrompt);
@@ -533,7 +533,7 @@ export class AgentManager extends EventEmitter {
       }
     });
     child.on('error', (e) => {
-      const message = e.code === 'ENOENT' ? 'Codex CLI bulunamadı: npm install -g @openai/codex ve codex login' : e.message;
+      const message = e.code === 'ENOENT' ? 'Codex CLI bulunamadı. Kurun (npm install -g @openai/codex), ardından `codex login` ile giriş yapın.' : e.message;
       this.#record(sessionId, 'error', { message });
       this.#emit(sessionId, 'error', { message });
     });
@@ -554,7 +554,7 @@ export class AgentManager extends EventEmitter {
   // ── oh-my-pi (omp) ─────────────────────────────────────
   // Ayrıntılar server/omp-runner.js'de; burada yalnız kayıt / yayın / izin köprüsü.
   #runOmp(sessionId, run, session, prompt, { model, permissionMode }) {
-    const sys = `${systemAppend(!session.sdk_session_id)}\n- Terminal araçları "borsa" MCP sunucusundadır (omp'de xd://mcp__borsa_<araç>). Kalıcı talimatlar: AGENTS.md / CLAUDE.md.${permissionMode === 'plan' ? '\n- PLAN MODU: dosya değiştirme, komut çalıştırma; yalnız okuyup plan öner.' : ''}`;
+    const sys = `${systemAppend(!session.sdk_session_id, run.lang)}\n- Terminal araçları "borsa" MCP sunucusundadır (omp'de xd://mcp__borsa_<araç>). Kalıcı talimatlar: AGENTS.md / CLAUDE.md.${permissionMode === 'plan' ? '\n- PLAN MODU: dosya değiştirme, komut çalıştırma; yalnız okuyup plan öner.' : ''}`;
     const io = {
       record: (kind, data) => this.#record(sessionId, kind, data),
       emit: (type, data) => this.#emit(sessionId, type, data),
@@ -620,12 +620,12 @@ export class AgentManager extends EventEmitter {
   }
 
   // Alt ajan çıktısını kısa özetleme (Haiku; araçsız, tek tur)
-  async summarize(text) {
+  async summarize(text, lang = 'tr') {
     const body = String(text || '').slice(0, 60_000);
     if (!body.trim()) throw new Error('Özetlenecek metin yok');
     let out = '';
     const q = query({
-      prompt: `Aşağıdaki alt ajan çıktısını Türkçe, en fazla 6 maddede özetle. Rakamları, tarihleri ve sonuçları koru; yorum ekleme.\n\n<cikti>\n${body}\n</cikti>`,
+      prompt: `Aşağıdaki alt ajan çıktısını ${lang === 'en' ? 'İngilizce (English)' : 'Türkçe'}, en fazla 6 maddede özetle. Rakamları, tarihleri ve sonuçları koru; yorum ekleme.\n\n<cikti>\n${body}\n</cikti>`,
       options: {
         model: 'claude-haiku-4-5-20251001', maxTurns: 1, settingSources: [], cwd: WORKSPACE_DIR, ...(claudeExecutable() ? { pathToClaudeCodeExecutable: claudeExecutable() } : {}),
         systemPrompt: 'Kısa ve doğru özetler yazan bir asistansın.', allowedTools: [],

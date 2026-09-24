@@ -1,6 +1,7 @@
 // Sol panel: izleme listesi (canlı fiyat, mini grafik, sürükle-bırak sıralama, sembol ekleme)
 import { state, on, emit, api, $, $$, esc, price, pct, cls, sparkSvg, selectSymbol, debounce, toast, askAgent, contextMenu, srcTag } from './core.js';
 import { openTxModal } from './portfolio-view.js';
+import { t, tx } from './i18n.js';
 
 const list = $('#watchlist');
 let sortMode = 'manual'; // manual | change | symbol
@@ -26,27 +27,27 @@ function ordered() {
 }
 
 // Sembol rozeti: harflerden sabit bir renk tonu (her sembol hep aynı renkte)
-const hue = (t) => [...t].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
+const hue = (str) => [...str].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
 function badge(sym, q) {
-  const t = q?.type;
-  const txt = t === 'fx' || /TRY$/.test(sym) ? '₺' : ['GRAM', 'ONS', 'CEYREK', 'YARIM', 'TAM'].includes(sym) ? 'Au' : sym.slice(0, 2);
+  const type = q?.type;
+  const txt = type === 'fx' || /TRY$/.test(sym) ? '₺' : ['GRAM', 'ONS', 'CEYREK', 'YARIM', 'TAM'].includes(sym) ? 'Au' : sym.slice(0, 2);
   return `<span class="wl-badge" style="--h:${hue(sym)}">${esc(txt)}</span>`;
 }
 function rowHtml(sym) {
   const q = state.quotes[sym];
-  const tip = `${q?.longName || q?.name || sym}${q ? ` · ${q.source || ''}${q.delayed ? ' · ~15 dk gecikmeli' : ''}` : ''}`;
+  const tip = `${tx(q?.longName || q?.name || sym)}${q ? ` · ${q.source || ''}${q.delayed ? ` · ${t('~15 dk gecikmeli')}` : ''}` : ''}`;
   const c = q?.changePct;
   return `<div class="wl-row ${sym === state.selected ? 'sel' : ''}" role="listitem" data-s="${esc(sym)}" draggable="${sortMode === 'manual'}" tabindex="0" title="${esc(tip)}">
     ${badge(sym, q)}
-    <div class="wl-id"><div class="sym">${esc(sym)}</div><div class="nm">${esc(q?.name || '')}</div></div>
+    <div class="wl-id"><div class="sym">${esc(sym)}</div><div class="nm">${esc(tx(q?.name || ''))}</div></div>
     ${sparkSvg(q?.spark, { w: 56, h: 24, area: true })}
     <div class="wl-q"><div class="px">${q ? price(q.price) : '…'}</div><div class="pc ${cls(c)}">${q ? pct(c) : ''}</div></div>
-    <button class="rm" data-rm="${esc(sym)}" title="Listeden çıkar" aria-label="${esc(sym)} listeden çıkar">✕</button>
+    <button class="rm" data-rm="${esc(sym)}" title="${t('Listeden çıkar')}" aria-label="${esc(t('{s} sembolünü listeden çıkar', { s: sym }))}">✕</button>
   </div>`;
 }
 
 function render() {
-  list.innerHTML = state.watchlist.length ? ordered().map(rowHtml).join('') : '<div class="empty">Liste boş. Yukarıdan sembol ekleyin.</div>';
+  list.innerHTML = state.watchlist.length ? ordered().map(rowHtml).join('') : `<div class="empty">${t('Liste boş. Yukarıdan sembol ekleyin.')}</div>`;
 }
 
 // Yalnızca değişen satırları güncelle (yanıp sönme efekti)
@@ -89,12 +90,12 @@ list.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   const s = row.dataset.s;
   contextMenu(e.clientX, e.clientY, [
-    { label: `${s} grafiğini aç`, run: () => selectSymbol(s) },
-    { label: 'Ajan: kısa özet', run: () => askAgent(`${s} için kısa bir teknik ve temel görünüm özeti çıkar.`) },
-    { label: 'KAP bildirimleri', run: () => { emit('kap:filter', { scope: 'symbol', symbol: s }); emit('rtab', 'kap'); } },
-    { label: 'Portföye işlem ekle…', run: () => openTxModal({ symbol: s, price: state.quotes[s]?.price }) },
+    { label: t('{s} grafiğini aç', { s }), run: () => selectSymbol(s) },
+    { label: t('Asistanla kısa özet'), run: () => askAgent(t('{s} için kısa bir teknik ve temel görünüm özeti çıkar.', { s })) },
+    { label: t('KAP bildirimleri'), run: () => { emit('kap:filter', { scope: 'symbol', symbol: s }); emit('rtab', 'kap'); } },
+    { label: t('Portföye işlem ekle…'), run: () => openTxModal({ symbol: s, price: state.quotes[s]?.price }) },
     '-',
-    { label: 'Listeden çıkar', run: async () => { state.watchlist = await api(`/watchlist/${encodeURIComponent(s)}`, { method: 'DELETE' }); render(); } },
+    { label: t('Listeden çıkar'), run: async () => { state.watchlist = await api(`/watchlist/${encodeURIComponent(s)}`, { method: 'DELETE' }); render(); } },
   ]);
 });
 
@@ -120,7 +121,7 @@ list.addEventListener('drop', async (e) => {
 
 $('#wlSort').onclick = () => {
   sortMode = { manual: 'change', change: 'symbol', symbol: 'manual' }[sortMode];
-  toast(`Sıralama: ${{ manual: 'elle', change: 'günlük değişim', symbol: 'alfabetik' }[sortMode]}`);
+  toast({ manual: t('Sıralama: elle'), change: t('Sıralama: günlük değişim'), symbol: t('Sıralama: alfabetik') }[sortMode]);
   render();
 };
 
@@ -129,7 +130,7 @@ const input = $('#wlAddInput'), sug = $('#wlSuggest');
 let items = [], sel = -1;
 const drawSug = () => {
   sug.hidden = !items.length;
-  sug.innerHTML = items.map((r, i) => `<button type="button" class="${i === sel ? 'sel' : ''}" data-i="${i}"><span class="s">${esc(r.symbol)}</span><span>${esc(r.name || '')}</span><span class="x">${esc(r.exchange || '')}</span></button>`).join('');
+  sug.innerHTML = items.map((r, i) => `<button type="button" class="${i === sel ? 'sel' : ''}" data-i="${i}"><span class="s">${esc(r.symbol)}</span><span>${esc(tx(r.name || ''))}</span><span class="x">${esc(tx(r.exchange || ''))}</span></button>`).join('');
 };
 const search = debounce(async () => {
   const q = input.value.trim();
@@ -156,7 +157,7 @@ async function add(sym) {
     input.value = ''; items = []; drawSug();
     await refreshQuotes();
     selectSymbol(sym.toUpperCase().replace(/\.IS$/, ''), { show: false });
-  } catch (e) { toast(e.message, 'err'); }
+  } catch (e) { toast(tx(e.message), 'err'); }
 }
 
 on('ws:watchlist', (m) => { state.watchlist = m.symbols; refreshQuotes(); });

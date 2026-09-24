@@ -13,7 +13,7 @@ export function watchlist() {
 }
 export function addWatch(symbol) {
   const s = normalize(symbol);
-  if (!s) throw new Error('Sembol boş');
+  if (!s) throw new Error('Sembol boş olamaz');
   const max = db.prepare('SELECT COALESCE(MAX(sort), -1) AS m FROM watchlist').get().m;
   db.prepare('INSERT OR IGNORE INTO watchlist(symbol, sort) VALUES(?, ?)').run(s, max + 1);
   return watchlist();

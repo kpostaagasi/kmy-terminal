@@ -5,7 +5,8 @@ import WebKit
 import UserNotifications
 
 /// Sayfaya belge başında eklenen betik: Notification API'yi macOS bildirimine, temayı pencere görünümüne bağlar
-private let bridgeJS = """
+private var bridgeJS: String { "window.__kmySystemLang = \"\(L10n.systemCode.replacingOccurrences(of: "\"", with: ""))\";\n" + bridgeBody }
+private let bridgeBody = """
 (() => {
   const post = (m) => { try { window.webkit.messageHandlers.borsa.postMessage(m); } catch (e) {} };
   window.borsaNative = { platform: 'macos' };
@@ -190,18 +191,18 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     let html = """
     <!doctype html><html><head><meta charset="utf-8"><style>
     :root { color-scheme: light dark; }
-    body { margin: 0; height: 100vh; display: grid; place-items: center; font: 14px -apple-system, sans-serif; background: #0e1219; color: #e3e8f0; }
-    @media (prefers-color-scheme: light) { body { background: #eaeef3; color: #121a26; } }
+    body { margin: 0; height: 100vh; display: grid; place-items: center; font: 14px -apple-system, sans-serif; background: #18191d; color: #e8e8eb; }
+    @media (prefers-color-scheme: light) { body { background: #f4f4f2; color: #1c1d21; } }
     .box { text-align: center; max-width: 440px; padding: 24px; }
-    h1 { font-size: 18px; margin: 12px 0 6px; } p { opacity: .7; line-height: 1.5; margin: 0 0 18px; }
-    .spin { width: 22px; height: 22px; border: 3px solid rgba(128,128,128,.3); border-top-color: #facc15; border-radius: 50%; margin: auto; animation: s .8s linear infinite; }
+    h1 { font-size: 17px; font-weight: 600; margin: 14px 0 6px; } p { opacity: .65; line-height: 1.55; margin: 0 0 20px; }
+    .spin { width: 20px; height: 20px; border: 2px solid rgba(128,128,128,.25); border-top-color: rgba(128,128,128,.8); border-radius: 50%; margin: auto; animation: s .8s linear infinite; }
     @keyframes s { to { transform: rotate(360deg); } }
-    button { background: #facc15; color: #1a1500; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 700; cursor: pointer; margin: 0 4px; }
+    button { background: #facc15; color: #1a1500; border: 0; border-radius: 10px; padding: 8px 16px; font-weight: 600; margin: 0 4px; }
     button.sec { background: rgba(128,128,128,.2); color: inherit; }
     </style></head><body><div class="box">
     \(retry ? "" : "<div class=\"spin\"></div>")
     <h1>\(title)</h1><p>\(detail)</p>
-    \(retry ? "<button onclick=\"webkit.messageHandlers.borsa.postMessage({type:'retry'})\">Tekrar dene</button><button class=\"sec\" onclick=\"webkit.messageHandlers.borsa.postMessage({type:'logs'})\">Logları aç</button>" : "")
+    \(retry ? "<button onclick=\"webkit.messageHandlers.borsa.postMessage({type:'retry'})\">\(L("Tekrar dene", "Try again"))</button><button class=\"sec\" onclick=\"webkit.messageHandlers.borsa.postMessage({type:'logs'})\">\(L("Logları aç", "Open logs"))</button>" : "")
     </div></body></html>
     """
     webView.loadHTMLString(html, baseURL: nil)
@@ -228,6 +229,8 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
       let dark = (m["theme"] as? String) != "light"
       window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
       if let c = NSColor(hex: m["bg"] as? String ?? "") { window?.backgroundColor = c }
+    case "lang":
+      if L10n.set(m["lang"] as? String ?? "") { (NSApp.delegate as? AppDelegate)?.languageChanged() }
     case "retry":
       (NSApp.delegate as? AppDelegate)?.connect()
     case "logs":
@@ -342,19 +345,19 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   }
 
   func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-    let a = NSAlert(); a.messageText = message; a.addButton(withTitle: "Tamam")
+    let a = NSAlert(); a.messageText = message; a.addButton(withTitle: L("Tamam", "OK"))
     a.beginSheetModal(for: window!) { _ in completionHandler() }
   }
 
   func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-    let a = NSAlert(); a.messageText = message; a.addButton(withTitle: "Tamam"); a.addButton(withTitle: "Vazgeç")
+    let a = NSAlert(); a.messageText = message; a.addButton(withTitle: L("Tamam", "OK")); a.addButton(withTitle: L("Vazgeç", "Cancel"))
     a.beginSheetModal(for: window!) { completionHandler($0 == .alertFirstButtonReturn) }
   }
 
   // MARK: İndirmeler: ~/Downloads, aynı adda dosya varsa numaralandırılır; bitince Finder'da gösterilir
   func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
     let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-    let name = suggestedFilename.isEmpty ? "indirilen" : suggestedFilename
+    let name = suggestedFilename.isEmpty ? L("indirilen", "download") : suggestedFilename
     var url = dir.appendingPathComponent(name)
     let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension
     var n = 1
@@ -369,12 +372,12 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   func downloadDidFinish(_ download: WKDownload) {
     guard let url = downloads.removeValue(forKey: download) else { return }
     NSWorkspace.shared.activateFileViewerSelecting([url])
-    notify(title: "İndirildi", body: url.lastPathComponent)
+    notify(title: L("İndirildi", "Downloaded"), body: url.lastPathComponent)
   }
 
   func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
     downloads.removeValue(forKey: download)
-    notify(title: "İndirme başarısız", body: error.localizedDescription)
+    notify(title: L("İndirme başarısız", "Download failed"), body: error.localizedDescription)
   }
 
   // Sayfadaki uygulama kancalarını çağır (menü komutları)

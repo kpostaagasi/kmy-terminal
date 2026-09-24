@@ -1,13 +1,16 @@
-// TERMINAL sekmesinin kabuk modu: gerçek kabuk sekmeleri (xterm.js + node-pty). Sayfa yenilense de oturumlar sürer.
+// Terminal sekmesinin kabuk modu: gerçek kabuk sekmeleri (xterm.js + node-pty). Sayfa yenilense de oturumlar sürer.
 import { state, on, emit, api, wsCall, wsSend, $, $$, h, esc, toast, css, localGet } from './core.js';
+import { t, tx } from './i18n.js';
+
+const SHELL = t('kabuk'); // yeni kabuk sekmesinin varsayılan adı
 
 const root = $('#agentTerm');
 const visible = () => root.offsetParent !== null;
 root.innerHTML = `<div class="term-tabs" id="termTabs">
     <span id="termTabList" class="row" style="gap:2px;flex-wrap:nowrap"></span>
-    <button class="ghost" id="tNew" title="Yeni kabuk">＋ Kabuk</button>
-    <button class="ghost" id="tClaude" title="Workspace klasöründe Claude Code başlat">＋ Claude Code</button>
-    <button class="ghost" id="tHome" title="Ev dizininde kabuk">＋ ~</button>
+    <button class="ghost" id="tNew" title="${t('Yeni kabuk')}">＋ ${t('Kabuk')}</button>
+    <button class="ghost" id="tClaude" title="${t('Çalışma alanı klasöründe Claude Code başlat')}">＋ Claude Code</button>
+    <button class="ghost" id="tHome" title="${t('Ev klasöründe kabuk aç')}">＋ ~</button>
   </div><div class="term-body" id="termBody"></div>`;
 
 const terms = new Map(); // id -> { term, fit, pane, tab, title }
@@ -34,21 +37,21 @@ function attach(id, title, buffer = '') {
   if (buffer) term.write(buffer);
   term.onData((d) => wsSend({ t: 'term.input', id, data: d }));
   term.onResize(({ cols, rows }) => wsSend({ t: 'term.resize', id, cols, rows }));
-  const tab = h(`<span class="term-tab" data-id="${id}"><span class="tt"></span><button class="x" title="Kapat" aria-label="Terminali kapat">✕</button></span>`);
+  const tab = h(`<span class="term-tab" data-id="${id}"><span class="tt"></span><button class="x" title="${t('Kapat')}" aria-label="${t('Kabuğu kapat')}">✕</button></span>`);
   $('.tt', tab).textContent = title;
   tab.onclick = (e) => { if (e.target.closest('.x')) return close(id); activate(id); };
   $('#termTabList').append(tab);
-  term.onTitleChange((t) => { $('.tt', tab).textContent = t.slice(0, 30) || title; });
-  const t = { term, fit, pane, tab, title };
-  terms.set(id, t);
-  return t;
+  term.onTitleChange((ttl) => { $('.tt', tab).textContent = ttl.slice(0, 30) || title; });
+  const tm = { term, fit, pane, tab, title };
+  terms.set(id, tm);
+  return tm;
 }
 
 function activate(id) {
   active = id;
-  for (const [k, t] of terms) { t.pane.classList.toggle('active', k === id); t.tab.classList.toggle('active', k === id); }
-  const t = terms.get(id);
-  if (t) requestAnimationFrame(() => { try { t.fit.fit(); } catch { /* görünmüyor */ } t.term.focus(); });
+  for (const [k, tm] of terms) { tm.pane.classList.toggle('active', k === id); tm.tab.classList.toggle('active', k === id); }
+  const tm = terms.get(id);
+  if (tm) requestAnimationFrame(() => { try { tm.fit.fit(); } catch { /* görünmüyor */ } tm.term.focus(); });
 }
 
 async function open(opts = {}, title = 'zsh') {
@@ -56,7 +59,7 @@ async function open(opts = {}, title = 'zsh') {
     const r = await wsCall({ t: 'term.open', cols: 100, rows: 30, ...opts });
     attach(r.id, title);
     activate(r.id);
-  } catch (e) { toast(e.message, 'err'); }
+  } catch (e) { toast(tx(e.message), 'err'); }
 }
 
 function close(id) {
@@ -64,39 +67,39 @@ function close(id) {
   drop(id);
 }
 function drop(id) {
-  const t = terms.get(id);
-  if (!t) return;
-  t.term.dispose(); t.pane.remove(); t.tab.remove();
+  const tm = terms.get(id);
+  if (!tm) return;
+  tm.term.dispose(); tm.pane.remove(); tm.tab.remove();
   terms.delete(id);
   if (active === id) { const next = [...terms.keys()].at(-1); if (next) activate(next); else active = null; }
 }
 
-$('#tNew').onclick = () => open({}, 'kabuk');
+$('#tNew').onclick = () => open({}, SHELL);
 $('#tClaude').onclick = () => open({ command: 'claude' }, 'claude');
 $('#tHome').onclick = () => open({ cwd: '~' }, '~');
 
-on('term:open', ({ title, ...opts }) => { opened = true; emit('view', 'terminal'); open(opts, title || 'kabuk'); });
+on('term:open', ({ title, ...opts }) => { opened = true; emit('view', 'terminal'); open(opts, title || SHELL); });
 on('ws:term.data', (m) => terms.get(m.id)?.term.write(m.data));
-on('ws:term.exit', (m) => { const t = terms.get(m.id); if (t) { t.term.write(`\r\n\x1b[90m[süreç sonlandı: ${m.code}]\x1b[0m\r\n`); setTimeout(() => drop(m.id), 1500); } });
+on('ws:term.exit', (m) => { const tm = terms.get(m.id); if (tm) { tm.term.write(`\r\n\x1b[90m[${t('süreç sonlandı: {code}', { code: m.code })}]\x1b[0m\r\n`); setTimeout(() => drop(m.id), 1500); } });
 
 // Yeniden bağlanınca sunucudaki açık terminallere yeniden bağlan
 on('hello', async (m) => {
   helloSeen = true;
-  for (const t of m.terminals || []) {
-    if (terms.has(t.id)) continue;
-    const r = await wsCall({ t: 'term.attach', id: t.id }).catch(() => null);
-    attach(t.id, t.command || 'kabuk', r?.data || '');
+  for (const x of m.terminals || []) {
+    if (terms.has(x.id)) continue;
+    const r = await wsCall({ t: 'term.attach', id: x.id }).catch(() => null);
+    attach(x.id, x.command || SHELL, r?.data || '');
   }
   if (!active && terms.size) activate([...terms.keys()][0]);
-  if (visible() && !terms.size && !opened) { opened = true; open({}, 'kabuk'); }
+  if (visible() && !terms.size && !opened) { opened = true; open({}, SHELL); }
 });
 
 const shown = () => {
   if (!visible()) return;
-  if (!terms.size && !opened && helloSeen) { opened = true; open({}, 'kabuk'); }
+  if (!terms.size && !opened && helloSeen) { opened = true; open({}, SHELL); }
   else if (active) activate(active);
 };
 on('agent:mode', () => requestAnimationFrame(shown));
 on('view:shown', (v) => { if (v === 'agent') requestAnimationFrame(shown); });
-on('settings', (s) => { for (const t of terms.values()) { t.term.options.fontSize = s.terminalFontSize || 13; try { t.fit.fit(); } catch { /* gizli */ } } });
-window.addEventListener('resize', () => { const t = terms.get(active); if (t && visible()) try { t.fit.fit(); } catch { /* gizli */ } });
+on('settings', (s) => { for (const tm of terms.values()) { tm.term.options.fontSize = s.terminalFontSize || 13; try { tm.fit.fit(); } catch { /* gizli */ } } });
+window.addEventListener('resize', () => { const tm = terms.get(active); if (tm && visible()) try { tm.fit.fit(); } catch { /* gizli */ } });

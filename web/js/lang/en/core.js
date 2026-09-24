@@ -1,0 +1,21 @@
+// core.js
+export default {
+  'Sunucu bağlantısı yok': 'Not connected to the server',
+  'Zaman aşımı': 'Timed out',
+  '{s} sn': '{s}s',
+  '{m} dk {s} sn': '{m}m {s}s',
+  '{h} sa {m} dk': '{h}h {m}m',
+  'az önce': 'just now',
+  '{n} dk önce': '{n} min ago',
+  '{n} sa önce': '{n}h ago',
+  '{n} gün önce': (v) => `${v.n} ${v.n === 1 ? 'day' : 'days'} ago`,
+  '{src} · yaklaşık 15 dk gecikmeli · {time}': '{src} · delayed about 15 min · {time}',
+  '15 dk': '15m',
+  'Kapat': 'Close',
+  'Belge': 'Document',
+  'İndir': 'Download',
+  'Yeni sekmede aç': 'Open in new tab',
+  'Onayla': 'Confirm',
+  'Emin misiniz?': 'Are you sure?',
+  'Vazgeç': 'Cancel',
+};
