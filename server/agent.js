@@ -36,17 +36,39 @@ export function claudeExecutable() {
 
 // omp (oh-my-pi) yalnız CLI bulunursa listelenir
 export const PROVIDERS = { claude: 'Claude Code', codex: 'ChatGPT / Codex', ...(ompBin() ? { omp: 'oh-my-pi' } : {}) };
-export const providerModels = () => ({ codex: CODEX_MODELS, ...(PROVIDERS.omp ? { omp: ompModels() } : {}) });
+// Sağlayıcıların gerçek varsayılan modeli (seçicide "varsayılan" yerine modelin adı görünsün):
+// Claude: ~/.claude/settings.json → son oturumun kullandığı model → Opus; Codex: ~/.codex/config.toml; omp: ~/.omp/agent/config.yml (modelRoles.default)
+const CLAUDE_ALIAS = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5-20251001', fable: 'claude-fable-5-1' };
+function normClaude(m) {
+  if (!m) return null;
+  const x = String(m).replace(/\[.*\]$/, '').toLowerCase();
+  return CLAUDE_ALIAS[x] || MODELS.find((y) => x.startsWith(y.id) || y.id.startsWith(x))?.id || x;
+}
+const readFile = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+export function defaultModels() {
+  const h = process.env.HOME || '';
+  let claude = null;
+  try { claude = JSON.parse(readFile(path.join(h, '.claude', 'settings.json')) || '{}').model || null; } catch { /* bozuk */ }
+  claude ||= db.prepare("SELECT model FROM chat_sessions WHERE provider = 'claude' AND model IS NOT NULL AND model != '' ORDER BY updated_at DESC LIMIT 1").get()?.model || null;
+  const codex = readFile(path.join(h, '.codex', 'config.toml')).match(/^model\s*=\s*"([^"]+)"/m)?.[1] || null;
+  const omp = readFile(path.join(h, '.omp', 'agent', 'config.yml')).match(/modelRoles:\s*\n(?:\s+\w+:.*\n)*?\s+default:\s*(\S+)/)?.[1]?.replace(/:[a-z]+$/, '') || null;
+  return { claude: normClaude(claude) || 'claude-opus-5-5', codex, omp };
+}
+const pretty = (id) => id.replace(/^gpt/i, 'GPT').replace(/-(\w)/g, (_, c) => ` ${c.toUpperCase()}`).replace(/^GPT /, 'GPT-');
+export const providerModels = () => {
+  const d = defaultModels();
+  const codex = d.codex ? [{ id: d.codex, label: pretty(d.codex) }] : [];
+  return { codex, ...(PROVIDERS.omp ? { omp: ompModels().filter((x) => x.id) } : {}) };
+};
 const MCP_STDIO = path.join(ROOT, 'server', 'mcp-stdio.js');
 
 export const MODELS = [
-  { id: '', label: 'Varsayılan (Claude Code ayarı)' },
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
   { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
   { id: 'claude-fable-5-1', label: 'Claude Fable 5.1' },
   { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
 ];
-export const CODEX_MODELS = [{ id: '', label: 'Varsayılan (Codex ayarı)' }];
+export const CODEX_MODELS = [];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const PERMISSION_MODES = {
   default: 'Sor (her riskli araç için onay)',

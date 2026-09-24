@@ -860,23 +860,30 @@ document.addEventListener('keydown', (e) => {
 
 // ── Seçenekler (izin modu Ayarlar › Bağlantı › Agent varsayılanlarından gelir) ─────────
 // Model listesi sağlayıcıya göre gruplanır; oturumun sağlayıcısı sabittir
+// Seçicide yalnız gerçek model adları: açık oturumun modeli, yoksa ayardaki / sağlayıcının kendi varsayılan modeli.
+// Sağlayıcının varsayılanı seçiliyse model boş gönderilir (Claude Code kendi ayarını, ör. 1M bağlamı, kullanır).
+const baseId = (id) => String(id || '').replace(/\[.*\]$/, '');
 function pickModel() {
   const o = $('#optModel').selectedOptions[0];
-  return { provider: o?.dataset.prov || 'claude', model: o?.dataset.id || '' };
+  const provider = o?.dataset.prov || 'claude', id = o?.dataset.id || '';
+  const key = provider === 'claude' ? 'model' : `${provider}Model`;
+  const isDefault = !state.settings[key] && id === baseId(state.meta?.defaultModels?.[provider]);
+  return { provider, model: isDefault ? '' : id };
 }
 function fillModels() {
-  const m = state.meta, s = state.settings;
+  const m = state.meta, s = state.settings, d = m.defaultModels || {};
   const listOf = (p) => {
-    const base = p === 'claude' ? m.models : m.providerModels?.[p] || (p === 'codex' ? m.codexModels : []) || [];
-    const own = s[`${p}Model`];
-    return [...base, ...(p !== 'claude' && own && !base.some((x) => x.id === own) ? [{ id: own, label: own }] : [])];
+    const base = (p === 'claude' ? m.models : m.providerModels?.[p] || (p === 'codex' ? m.codexModels : []) || []).filter((x) => x.id);
+    const extra = [s[p === 'claude' ? 'model' : `${p}Model`], d[p]].map(baseId).filter((id) => id && !base.some((x) => x.id === id));
+    return [...base, ...[...new Set(extra)].map((id) => ({ id, label: id }))];
   };
   const prov = sessionProvider || s.provider || 'claude';
-  const cur = pickModel();
-  const want = cur.provider === prov && $('#optModel').options.length ? cur.model : prov === 'claude' ? s.model || '' : s[`${prov}Model`] || '';
-  // Kısa ad seçicide görünür ("Claude", "Opus 5.5"), tam ad ipucunda
-  const short = (p, x) => (!x.id ? provName(p).replace(/ \/ .*| Code$/, '') : x.label.replace(/^Claude /, '').replace(/\s*\((?:[^)]*ayarı)\)$/, ''));
-  const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && x.id === want ? 'selected' : ''}>${esc(short(p, x))}</option>`).join('')}</optgroup>`;
+  const sess = sessions.find((x) => x.id === current);
+  // Açık oturumun kaydettiği model > ayar > sağlayıcı varsayılanı
+  const sessModel = sess && (sess.provider || 'claude') === prov ? baseId(sess.model) : '';
+  const want = sessModel || baseId(prov === 'claude' ? s.model : s[`${prov}Model`]) || baseId(d[prov]);
+  const short = (x) => x.label.replace(/^Claude /, '').replace(/\s*\([^)]*\)$/, '');
+  const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && (x.id === want || want.startsWith(x.id)) ? 'selected' : ''}>${esc(short(x))}</option>`).join('')}</optgroup>`;
   $('#optModel').innerHTML = Object.keys(m.providers || { claude: 1 }).map(group).join('');
   $('#optModel').title = sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model';
   $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude';

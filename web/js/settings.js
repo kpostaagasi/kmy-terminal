@@ -146,7 +146,7 @@ export function openSettings(section = 'genel') {
       const h = await health();
       if (stale()) return;
       el.innerHTML = card(
-        row('Varsayılan model', 'Yeni Claude oturumları bu modelle başlar', sel('sModel', state.meta.models.map((x) => [x.id, x.label]), s.model))
+        row('Varsayılan model', 'Yeni Claude oturumları bu modelle başlar', sel('sModel', state.meta.models.map((x) => [x.id, x.label]), s.model || String(state.meta.defaultModels?.claude || '').replace(/\[.*\]$/, '')))
         + row('Varsayılan effort', 'Yeni oturumların düşünme seviyesi', state.meta.efforts.length <= 4 ? seg('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort) : sel('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort))
         + row('İzin modu', 'Tool çalıştırma izin politikası', sel('sMode', Object.entries(state.meta.permissionModes), s.permissionMode))
         + row('Çalışma alanı', 'Ajanın kalıcı talimatları, beceri ve bilgi dosyaları: <span class="mono">CLAUDE.md · .claude/skills · knowledge/</span>', `<span class="stg-path mono">${esc(h.workspace)}</span>`, { wide: true }));
@@ -173,7 +173,7 @@ export function openSettings(section = 'genel') {
           rows += row('Codex modeli', 'Boş = ~/.codex/config.toml ayarı', `<input id="sCodexModel" class="stg-w" value="${esc(s.codexModel || '')}" placeholder="ör. gpt-5" list="sCodexList"><datalist id="sCodexList">${sug.map(([x, l]) => `<option value="${esc(x)}">${esc(l)}</option>`).join('')}</datalist>`);
         } else if (list) {
           const k = `${key}Model`;
-          rows += row('Varsayılan model', `${esc(name)} yeni oturumlarda bu modeli kullanır`, sel(`s${key[0].toUpperCase()}${key.slice(1)}Model`, modelOpts(list, s[k]), s[k] || ''));
+          rows += row('Varsayılan model', `${esc(name)} yeni oturumlarda bu modeli kullanır`, sel(`s${key[0].toUpperCase()}${key.slice(1)}Model`, modelOpts(list, s[k] || state.meta.defaultModels?.[key] || ''), s[k] || state.meta.defaultModels?.[key] || ''));
         }
         return `<div class="stg-card" data-prov="${esc(key)}"><div class="stg-card-h"><span class="stg-dot ${v ? 'ok' : 'bad'}"></span>${esc(name)}<span class="stg-badge" ${key === def ? '' : 'hidden'}>Varsayılan</span></div>${rows}</div>`;
       };
