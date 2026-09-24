@@ -1,5 +1,5 @@
 // Menü çubuğu simgesi: gateway çalıştığı sürece görünür (5 sn'de bir kontrol edilir).
-// Menüde gateway durumu, çalışma süresi, çalışan ajan işleri ve hızlı komutlar yer alır.
+// Menüde gateway durumu, çalışma süresi, çalışan asistan işleri ve hızlı komutlar yer alır.
 import AppKit
 
 final class StatusBar: NSObject, NSMenuDelegate {
@@ -22,7 +22,7 @@ final class StatusBar: NSObject, NSMenuDelegate {
       self.health = h
       self.gatewayUp = up
       if up && self.item == nil { self.show() } else if !up, let i = self.item { NSStatusBar.system.removeStatusItem(i); self.item = nil }
-      self.item?.button?.toolTip = up ? "kmy terminal · gateway çalışıyor" : nil
+      self.item?.button?.toolTip = up ? L("kmy terminal · gateway çalışıyor", "kmy terminal · gateway running") : nil
       self.app?.gatewayStateChanged(up)
     }
   }
@@ -66,26 +66,28 @@ final class StatusBar: NSObject, NSMenuDelegate {
     func info(_ t: String) -> NSMenuItem { let i = NSMenuItem(title: t, action: nil, keyEquivalent: ""); i.isEnabled = false; return i }
     func act(_ t: String, _ sel: Selector, _ key: String = "") -> NSMenuItem { let i = NSMenuItem(title: t, action: sel, keyEquivalent: key); i.target = self; return i }
 
-    menu.addItem(act("kmy terminal'i Aç", #selector(open)))
+    menu.addItem(act(L("kmy terminal'i Aç", "Open kmy terminal"), #selector(open)))
     menu.addItem(.separator())
     let version = health["version"] as? String
-    menu.addItem(info("● Gateway çalışıyor\(version.map { " · v\($0)" } ?? "")"))
-    menu.addItem(info(g.serviceInstalled ? "Mod: arka plan servisi (oturum açılışında başlar)" : "Mod: uygulamayla birlikte"))
-    if let up = health["uptimeSec"] as? Double { menu.addItem(info("Çalışma süresi: \(StatusBar.duration(Int(up)))")) }
-    if let s = gw["activeSessions"] as? Int { menu.addItem(info("Çalışan ajan işi: \(s) · bağlı ekran: \(gw["clients"] as? Int ?? 0)")) }
-    menu.addItem(info("Adres: \(g.baseURL.absoluteString)"))
+    menu.addItem(info(L("● Gateway çalışıyor", "● Gateway running") + (version.map { " · v\($0)" } ?? "")))
+    menu.addItem(info(g.serviceInstalled ? L("Mod: arka plan servisi (oturum açılışında başlar)", "Mode: background service (starts at login)") : L("Mod: uygulamayla birlikte", "Mode: runs with the app")))
+    if let up = health["uptimeSec"] as? Double { menu.addItem(info(L("Çalışma süresi: ", "Uptime: ") + StatusBar.duration(Int(up)))) }
+    if let s = gw["activeSessions"] as? Int { menu.addItem(info(L("Çalışan asistan işi: \(s) · bağlı ekran: \(gw["clients"] as? Int ?? 0)", "Running assistant tasks: \(s) · connected screens: \(gw["clients"] as? Int ?? 0)"))) }
+    menu.addItem(info(L("Adres: ", "Address: ") + g.baseURL.absoluteString))
     menu.addItem(.separator())
-    menu.addItem(act("Sembol Ara…", #selector(palette)))
-    menu.addItem(act("Yeni Ajan Oturumu", #selector(newSession)))
+    menu.addItem(act(L("Sembol Ara…", "Search Symbols…"), #selector(palette)))
+    menu.addItem(act(L("Yeni Sohbet", "New Chat"), #selector(newSession)))
     menu.addItem(.separator())
-    menu.addItem(act("Gateway'i Yeniden Başlat", #selector(restart)))
-    menu.addItem(act("Logları Aç", #selector(logs)))
+    menu.addItem(act(L("Gateway'i Yeniden Başlat", "Restart Gateway"), #selector(restart)))
+    menu.addItem(act(L("Logları Aç", "Open Logs"), #selector(logs)))
     menu.addItem(.separator())
-    menu.addItem(act(g.serviceInstalled ? "Gateway'i Durdur ve Çık" : "Çık", #selector(quit)))
+    menu.addItem(act(g.serviceInstalled ? L("Gateway'i Durdur ve Çık", "Stop Gateway and Quit") : L("Çık", "Quit"), #selector(quit)))
   }
 
   static func duration(_ x: Int) -> String {
-    x < 3600 ? "\(x / 60) dk" : x < 86400 ? "\(x / 3600) sa \((x % 3600) / 60) dk" : "\(x / 86400) gün \((x % 86400) / 3600) sa"
+    L10n.isTurkish
+      ? (x < 3600 ? "\(x / 60) dk" : x < 86400 ? "\(x / 3600) sa \((x % 3600) / 60) dk" : "\(x / 86400) gün \((x % 86400) / 3600) sa")
+      : (x < 3600 ? "\(x / 60)m" : x < 86400 ? "\(x / 3600)h \((x % 3600) / 60)m" : "\(x / 86400)d \((x % 86400) / 3600)h")
   }
 
   @objc private func open() { app?.showMain() }

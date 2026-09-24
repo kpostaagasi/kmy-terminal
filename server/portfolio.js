@@ -448,7 +448,7 @@ export async function summary() {
   if (L.cashTracking && negCash.length) warnings.push(`Eksi nakit: ${negCash.map((c) => `${c.platform} ${c.currency}`).join(', ')} — nakit girişi kaydı eksik olabilir`);
   if (L.shorts.length) warnings.push(`Eldekinden fazla satış: ${L.shorts.map((p) => `${p.symbol} (${p.platform})`).join(', ')}`);
   const unpriced = holdings.filter((h) => !h.priced).map((h) => h.symbol);
-  if (unpriced.length) warnings.push(`Canlı fiyatı olmayan varlıklar son işlem fiyatıyla değerlendi: ${unpriced.join(', ')}`);
+  if (unpriced.length) warnings.push(`Canlı fiyatı olmayan varlıklar son işlem fiyatıyla değerlendirildi: ${unpriced.join(', ')}`);
 
   const data = {
     asOf: new Date().toISOString(),

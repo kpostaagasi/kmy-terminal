@@ -270,7 +270,7 @@ route('POST', '/api/chat/upload', async ({ q, req }) => {
 route('GET', '/api/jobs', async () => agent.backgroundJobs());
 route('GET', '/api/changelog', async () => ({ text: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) ? fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8') : '' }));
 route('GET', '/api/agent/connections', async () => agent.lastInit || null);
-route('POST', '/api/agent/summarize', async ({ body }) => agent.summarize(body.text));
+route('POST', '/api/agent/summarize', async ({ body }) => agent.summarize(body.text, body.lang));
 route('POST', '/api/system/restart', async () => restartServer());
 route('GET', '/api/terminals', async () => term.list());
 
@@ -382,7 +382,7 @@ const server = http.createServer(async (req, res) => {
         if (out !== undefined && !res.headersSent) send(res, 200, out ?? null);
         return;
       }
-      return send(res, 404, { error: 'Uç nokta yok' });
+      return send(res, 404, { error: 'Uç nokta bulunamadı' });
     }
     if (pathname.startsWith('/vendor/')) {
       const rel = VENDOR[pathname.slice(8)];

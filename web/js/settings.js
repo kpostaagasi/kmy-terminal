@@ -1,5 +1,6 @@
 // Ayarlar penceresi: Bağlantı, Görünüm, Veri, Sistem, Hakkında (stil: settings.css, kök .stg)
 import { state, api, wsCall, emit, $, $$, esc, toast, modal, confirmBox, md, dateTR, connect, debounce } from './core.js';
+import { t, tx, locale, LANGS, systemLang } from './i18n.js';
 
 // Kenar çubuğu simgeleri (24×24, çizgi)
 const IC = {
@@ -13,41 +14,41 @@ const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
 
 // Bölüm → [anahtar, etiket, alt bloklar [anahtar, başlık], açıklama]; tek bloklu bölümde blok başlığı gösterilmez
 const SECTIONS = [
-  ['baglanti', 'Bağlantı', [['saglayici', 'Sağlayıcılar'], ['ajan', 'Agent Varsayılanları'], ['baglantilar', 'MCP Bağlantıları']], 'Ajan sağlayıcıları, varsayılan model ve MCP bağlantıları'],
-  ['gorunum', 'Görünüm', [['genel', 'Görünüm']], 'Tema, imza rengi, yazı boyutları ve arayüz modu'],
-  ['veri', 'Veri', [['veri', 'Veri']], 'Fiyat yenileme, kurum raporu izleme, önbellek ve veri kaynakları'],
-  ['sistem', 'Sistem', [['gateway', 'Gateway'], ['sistem', 'Sistem Sağlığı'], ['gorevler', 'Zamanlanmış Görevler'], ['log', 'Mesaj Logu']], 'Sunucu servisi, sağlık durumu, zamanlanmış görevler ve mesaj logu'],
-  ['hakkinda', 'Hakkında', [['surum', 'Sürüm Notları'], ['yardim', 'Kısayollar & Komutlar']], 'Sürüm notları, klavye kısayolları ve sohbet komutları'],
+  ['baglanti', t('Bağlantı'), [['saglayici', t('Sağlayıcılar')], ['ajan', t('Asistan varsayılanları')], ['baglantilar', t('MCP bağlantıları')]], t('Asistan sağlayıcıları, varsayılan model ve MCP bağlantıları')],
+  ['gorunum', t('Görünüm'), [['genel', t('Görünüm')]], t('Dil, tema, imza rengi ve yazı boyutları')],
+  ['veri', t('Veri'), [['veri', t('Veri')]], t('Fiyat yenileme, kurum raporu izleme, önbellek ve veri kaynakları')],
+  ['sistem', t('Sistem'), [['gateway', 'Gateway'], ['sistem', t('Sistem sağlığı')], ['gorevler', t('Zamanlanmış görevler')], ['log', t('Mesaj günlüğü')]], t('Sunucu servisi, sağlık durumu, zamanlanmış görevler ve mesaj günlüğü')],
+  ['hakkinda', t('Hakkında'), [['surum', t('Sürüm notları')], ['yardim', t('Kısayollar ve komutlar')]], t('Sürüm notları, klavye kısayolları ve sohbet komutları')],
 ];
 // Eski bölüm anahtarları (genel, ajan, gorevler…) → yeni bölüm
 const OLD = Object.fromEntries(SECTIONS.flatMap(([k, , bl]) => bl.map(([b]) => [b, k])));
 const isSec = (k) => SECTIONS.some(([x]) => x === k);
 
 // İmza rengi hazır tonları (ilk = varsayılan)
-const ACCENTS = [['#facc15', 'Sarı'], ['#f5a524', 'Turuncu'], ['#f59e0b', 'Kehribar'], ['#22c55e', 'Yeşil'], ['#2dd4bf', 'Turkuaz'], ['#3b82f6', 'Mavi'], ['#a78bfa', 'Mor'], ['#f472b6', 'Pembe'], ['#ef4444', 'Kırmızı']];
+const ACCENTS = [['#facc15', t('Sarı')], ['#f5a524', t('Turuncu')], ['#f59e0b', t('Kehribar')], ['#22c55e', t('Yeşil')], ['#2dd4bf', t('Turkuaz')], ['#3b82f6', t('Mavi')], ['#a78bfa', t('Mor')], ['#f472b6', t('Pembe')], ['#ef4444', t('Kırmızı')]];
 const ACCENT_DEF = ACCENTS[0][0];
 const hexOk = (x) => (/^#[0-9a-f]{6}$/i.test(x || '') ? x.toLowerCase() : null);
 
 // Bilinen sağlayıcılar: kurulum paketi, giriş akışı [id, düğme, komut, terminal başlığı, açıklama]; bilinmeyenler genel kalıpla çizilir
 const PROV = {
-  claude: { cli: 'Claude Code CLI', desc: 'Claude aboneliğinizle veya API anahtarınızla çalışır', pkg: '@anthropic-ai/claude-code', login: ['sLoginC', 'Claude ile giriş', 'claude /login', 'claude login', 'Tarayıcıda oturum açma akışı terminalde başlar'] },
-  codex: { cli: 'Codex CLI', desc: 'ChatGPT aboneliğinizle çalışır; terminal araçlarına stdio MCP köprüsüyle erişir', pkg: '@openai/codex', login: ['sLoginX', 'ChatGPT ile devam', 'codex login', 'codex login', 'ChatGPT hesabıyla oturum açma'] },
-  omp: { cli: 'oh-my-pi CLI (omp)', desc: 'omp komut satırı kodlama ajanı', pkg: '@oh-my-pi/pi-coding-agent', alt: 'brew install can1357/tap/omp' },
+  claude: { cli: 'Claude Code CLI', desc: t('Claude aboneliğinizle veya API anahtarınızla çalışır'), pkg: '@anthropic-ai/claude-code', login: ['sLoginC', t('Claude ile giriş'), 'claude /login', 'claude login', t('Giriş kabukta başlar, tarayıcıda tamamlanır')] },
+  codex: { cli: 'Codex CLI', desc: t('ChatGPT aboneliğinizle çalışır; terminal araçlarına MCP üzerinden erişir'), pkg: '@openai/codex', login: ['sLoginX', t('ChatGPT ile giriş'), 'codex login', 'codex login', t('ChatGPT hesabınızla giriş yapın')] },
+  omp: { cli: 'oh-my-pi CLI (omp)', desc: t('omp komut satırı kodlama asistanı'), pkg: '@oh-my-pi/pi-coding-agent', alt: 'brew install can1357/tap/omp' },
 };
 
 export function openSettings(section = 'genel') {
   const focus = isSec(section) ? null : section; // eski anahtar → ilgili bloğa kaydır
   if (!isSec(section)) section = OLD[section] || 'baglanti';
   const m = modal({
-    title: 'Ayarlar', wide: true,
+    title: t('Ayarlar'), wide: true,
     body: `<div class="stg">
       <aside class="stg-side">
-        <div class="stg-brand"><b>Ayarlar</b><span>kmy terminal</span></div>
-        <nav class="stg-nav" role="tablist" aria-label="Ayar bölümleri">${SECTIONS.map(([k, l]) => `<button type="button" role="tab" data-s="${k}">${svg(k)}<span>${l}</span></button>`).join('')}</nav>
-        <div class="stg-tip"><kbd>⌘</kbd><kbd>,</kbd> ile açılır · <kbd>Esc</kbd> kapatır</div>
+        <div class="stg-brand"><b>${t('Ayarlar')}</b><span>kmy terminal</span></div>
+        <nav class="stg-nav" role="tablist" aria-label="${t('Ayar bölümleri')}">${SECTIONS.map(([k, l]) => `<button type="button" role="tab" data-s="${k}">${svg(k)}<span>${l}</span></button>`).join('')}</nav>
+        <div class="stg-tip">${t('{open} ile açılır · {close} ile kapanır', { open: '<kbd>⌘</kbd><kbd>,</kbd>', close: '<kbd>Esc</kbd>' })}</div>
       </aside>
       <div class="stg-main">
-        <div class="stg-head"><div><h2 id="stgTitle"></h2><p id="stgDesc"></p></div><button class="icon-btn stg-x" data-close aria-label="Kapat">✕</button></div>
+        <div class="stg-head"><div><h2 id="stgTitle"></h2><p id="stgDesc"></p></div><button class="icon-btn stg-x" data-close aria-label="${t('Kapat')}">✕</button></div>
         <div id="setBody" class="stg-body"></div>
       </div>
     </div>`,
@@ -63,9 +64,9 @@ export function openSettings(section = 'genel') {
       const r = await api('/settings', { method: 'PUT', body: patch });
       Object.assign(s, r);
       // Sunucu tanımadığı anahtarları yok sayar (yeni ayar + eski sunucu süreci)
-      if (Object.keys(patch).some((k) => !(k in r))) toast('Sunucu bu ayarı henüz tanımıyor; sunucu yeniden başlatılınca kaydedilir', 'err', 7000);
-      else toast('Kaydedildi', 'ok');
-    } catch (e) { toast(e.message, 'err'); }
+      if (Object.keys(patch).some((k) => !(k in r))) toast(t('Sunucu bu ayarı henüz tanımıyor; sunucu yeniden başlatıldığında kaydedilir'), 'err', 7000);
+      else toast(t('Kaydedildi'), 'ok');
+    } catch (e) { toast(tx(e.message), 'err'); }
   };
 
   // ── Arayüz parçaları ──
@@ -85,14 +86,14 @@ export function openSettings(section = 'genel') {
   const toggle = (id, on) => `<label class="stg-switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span aria-hidden="true"></span></label>`;
   const pill = (kind, text, mono = false) => `<span class="stg-pill ${kind}${mono ? ' mono' : ''}">${esc(text)}</span>`;
   const kv = (pairs) => `<div class="stg-kv">${pairs.map(([k, v, wide]) => `<div${wide ? ' class="wide"' : ''}><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
-  const code = (text, id) => `<div class="stg-code"><code>${esc(text)}</code><button class="ghost" data-copy="${id}">Kopyala</button></div>`;
+  const code = (text, id) => `<div class="stg-code"><code>${esc(text)}</code><button class="ghost" data-copy="${id}">${t('Kopyala')}</button></div>`;
   const bindCopy = (el, map) => $$('[data-copy]', el).forEach((b) => b.onclick = async () => {
-    try { await navigator.clipboard.writeText(map[b.dataset.copy]); toast('Kopyalandı', 'ok'); } catch (e) { toast(`Kopyalanamadı: ${e.message}`, 'err'); }
+    try { await navigator.clipboard.writeText(map[b.dataset.copy]); toast(t('Kopyalandı'), 'ok'); } catch (e) { toast(t('Kopyalanamadı: {msg}', { msg: e.message }), 'err'); }
   });
   // Model listesi: [{id,label}] veya ['id'] kabul eder; boş seçenek = sağlayıcı varsayılanı
   const modelOpts = (list, cur) => {
-    const o = (list || []).map((x) => (typeof x === 'string' ? [x, x] : [x.id ?? '', x.label || x.name || x.id || 'Varsayılan']));
-    if (!o.some(([v]) => v === '')) o.unshift(['', 'Varsayılan']);
+    const o = (list || []).map((x) => (typeof x === 'string' ? [x, x] : [x.id ?? '', x.label || x.name || x.id || t('Varsayılan')]));
+    if (!o.some(([v]) => v === '')) o.unshift(['', t('Varsayılan')]);
     if (cur && !o.some(([v]) => v === cur)) o.push([cur, cur]);
     return o;
   };
@@ -102,17 +103,26 @@ export function openSettings(section = 'genel') {
     async genel(el) {
       const cur = hexOk(s.accent) || ACCENT_DEF;
       const custom = !ACCENTS.some(([x]) => x === cur);
+      const langOpts = [['auto', t('Sistem dili ({name})', { name: LANGS[systemLang()] })], ['tr', LANGS.tr], ['en', LANGS.en]];
       el.innerHTML = card(
-        row('Tema', 'Koyu veya açık arayüz', seg('sTheme', [['dark', 'Koyu'], ['light', 'Açık']], s.theme === 'light' ? 'light' : 'dark'))
-        + row('İmza rengi', `Vurgu, seçili sekme, düğme ve odak halkalarında kullanılır · <span class="mono" id="sAccentHex">${esc(cur)}</span> · <button type="button" class="stg-link" id="sAccentReset">Varsayılana dön</button>`,
-          `<div class="stg-accent" id="sAccent">${ACCENTS.map(([x, n]) => `<button type="button" class="stg-sw" data-hex="${x}" style="--sw:${x}" title="${n}${x === ACCENT_DEF ? ' (varsayılan)' : ''}" aria-label="${n}" aria-pressed="${x === cur}"></button>`).join('')}<label class="stg-sw stg-sw-custom" title="Özel renk" aria-pressed="${custom}" style="--sw:${cur}"><input type="color" id="sAccentCustom" value="${cur}" aria-label="Özel renk"></label></div>`),
-        'Tema')
+        row(t('Dil'), t('Arayüz dili. Varsayılan olarak sistem dilini izler.'), sel('sLang', langOpts, s.language || 'auto'))
+        + row(t('Tema'), t('Koyu ya da açık görünüm'), seg('sTheme', [['dark', t('[tema]Koyu')], ['light', t('[tema]Açık')]], s.theme === 'light' ? 'light' : 'dark'))
+        + row(t('İmza rengi'), t('Vurgular, seçili sekme, düğmeler ve odak halkalarında kullanılır · {hex} · {reset}', { hex: `<span class="mono" id="sAccentHex">${esc(cur)}</span>`, reset: `<button type="button" class="stg-link" id="sAccentReset">${t('Varsayılana dön')}</button>` }),
+          `<div class="stg-accent" id="sAccent">${ACCENTS.map(([x, n]) => `<button type="button" class="stg-sw" data-hex="${x}" style="--sw:${x}" title="${esc(x === ACCENT_DEF ? t('{name} (varsayılan)', { name: n }) : n)}" aria-label="${esc(n)}" aria-pressed="${x === cur}"></button>`).join('')}<label class="stg-sw stg-sw-custom" title="${t('Özel renk')}" aria-pressed="${custom}" style="--sw:${cur}"><input type="color" id="sAccentCustom" value="${cur}" aria-label="${t('Özel renk')}"></label></div>`),
+        t('Dil ve tema'))
         + card(
-          row('Chat yazı boyutu', 'Sohbet mesajları ve giriş alanı', seg('sChatFont', [[12, 'Küçük'], [14, 'Orta'], [16, 'Büyük'], [18, 'Çok büyük']], s.chatFontSize))
-          + row('Arayüz modu', 'TERMINAL sekmesi ajan sohbetiyle mi kabukla mı açılsın', seg('sUi', [['chat', 'Chat'], ['terminal', 'Terminal (xterm.js)']], s.uiMode === 'terminal' ? 'terminal' : 'chat'))
-          + row('Terminal yazı boyutu', 'Terminal (xterm.js) yazı boyutu; 8–24px', `<span class="stg-num"><input id="sTermFont" type="number" min="8" max="24" value="${esc(s.terminalFontSize)}"><i>px</i></span>`)
-          + row('Temel para birimi', 'Portföy değerleri TL olarak tutulur; USD karşılığı ayrıca gösterilir', sel('sBase', [['TRY', 'TL (₺)']], s.baseCurrency)),
-          'Yazı ve düzen');
+          row(t('Sohbet yazı boyutu'), t('Sohbet mesajları ve mesaj kutusu'), seg('sChatFont', [[12, t('Küçük')], [14, t('Orta')], [16, t('Büyük')], [18, t('Çok büyük')]], s.chatFontSize))
+          + row(t('Terminal sekmesi'), t('Asistan sohbetiyle mi, kabukla mı açılsın'), seg('sUi', [['chat', t('Sohbet')], ['terminal', t('Kabuk')]], s.uiMode === 'terminal' ? 'terminal' : 'chat'))
+          + row(t('Kabuk yazı boyutu'), t('8 ile 24 px arası'), `<span class="stg-num"><input id="sTermFont" type="number" min="8" max="24" value="${esc(s.terminalFontSize)}"><i>px</i></span>`)
+          + row(t('Temel para birimi'), t('Portföy değerleri TL olarak tutulur; USD karşılığı ayrıca gösterilir'), sel('sBase', [['TRY', t('TL (₺)')]], s.baseCurrency)),
+          t('Yazı ve düzen'));
+      // Dil: sunucuya kaydet, tarayıcı kopyasını güncelle ve sayfayı yeniden yükle (modüller açılışta bir kez çizilir)
+      $('#sLang').onchange = async (e) => {
+        const v = e.target.value;
+        await save({ language: v });
+        try { localStorage.setItem('bt.lang', JSON.stringify(v)); } catch { /* depolama kapalı */ }
+        location.reload();
+      };
       onSeg('sTheme', (v) => save({ theme: v }));
       onSeg('sUi', (v) => save({ uiMode: v }));
       onSeg('sChatFont', (v) => save({ chatFontSize: Number(v) }));
@@ -146,10 +156,10 @@ export function openSettings(section = 'genel') {
       const h = await health();
       if (stale()) return;
       el.innerHTML = card(
-        row('Varsayılan model', 'Yeni Claude oturumları bu modelle başlar', sel('sModel', state.meta.models.map((x) => [x.id, x.label]), s.model || String(state.meta.defaultModels?.claude || '').replace(/\[.*\]$/, '')))
-        + row('Varsayılan effort', 'Yeni oturumların düşünme seviyesi', state.meta.efforts.length <= 4 ? seg('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort) : sel('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort))
-        + row('İzin modu', 'Tool çalıştırma izin politikası', sel('sMode', Object.entries(state.meta.permissionModes), s.permissionMode))
-        + row('Çalışma alanı', 'Ajanın kalıcı talimatları, beceri ve bilgi dosyaları: <span class="mono">CLAUDE.md · .claude/skills · knowledge/</span>', `<span class="stg-path mono">${esc(h.workspace)}</span>`, { wide: true }));
+        row(t('Varsayılan model'), t('Yeni Claude oturumları bu modelle başlar'), sel('sModel', state.meta.models.map((x) => [x.id, x.label]), s.model || String(state.meta.defaultModels?.claude || '').replace(/\[.*\]$/, '')))
+        + row(t('Düşünme düzeyi'), t('Yeni oturumların varsayılan düşünme düzeyi'), state.meta.efforts.length <= 4 ? seg('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort) : sel('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort))
+        + row(t('İzin modu'), t('Asistanın bir aracı kullanmadan önce ne zaman onay isteyeceği'), sel('sMode', Object.entries(state.meta.permissionModes).map(([k, v]) => [k, tx(v)]), s.permissionMode))
+        + row(t('Çalışma alanı'), t('Asistanın kalıcı talimatları, becerileri ve bilgi dosyaları: {files}', { files: '<span class="mono">CLAUDE.md · .claude/skills · knowledge/</span>' }), `<span class="stg-path mono">${esc(h.workspace)}</span>`, { wide: true }));
       if ($('#sEffort').tagName === 'SELECT') $('#sEffort').onchange = (e) => save({ effort: e.target.value });
       else onSeg('sEffort', (v) => save({ effort: v }));
       $('#sModel').onchange = (e) => save({ model: e.target.value });
@@ -161,26 +171,26 @@ export function openSettings(section = 'genel') {
       const provs = Object.entries(state.meta.providers || {});
       const def = s.provider || 'claude';
       const cliCtl = (v, c) => (v ? pill('ok', v, true)
-        : `${pill('bad', 'Kurulu değil')}${c.pkg ? `<button class="btn sec" data-install="${esc(c.pkg)}">Kur</button><div class="stg-hint mono">npm i -g ${esc(c.pkg)}${c.alt ? `<br>veya ${esc(c.alt)}` : ''}</div>` : ''}`);
+        : `${pill('bad', t('Kurulu değil'))}${c.pkg ? `<button class="btn sec" data-install="${esc(c.pkg)}">${t('Kurulumu başlat')}</button><div class="stg-hint mono">npm i -g ${esc(c.pkg)}${c.alt ? `<br>${t('veya {cmd}', { cmd: esc(c.alt) })}` : ''}</div>` : ''}`);
       const provCard = ([key, name]) => {
         const c = PROV[key] || { cli: `${name} CLI` };
         const v = h[`${key}Cli`];
         const list = state.meta.providerModels?.[key];
-        let rows = row(c.cli, c.desc || 'Komut satırı aracı', cliCtl(v, c));
-        if (c.login) rows += row('Giriş', c.login[4], `<button class="btn sec" id="${c.login[0]}">${c.login[1]}</button>`);
+        let rows = row(c.cli, c.desc || t('Komut satırı aracı'), cliCtl(v, c));
+        if (c.login) rows += row(t('Hesap girişi'), c.login[4], `<button class="btn sec" id="${c.login[0]}">${c.login[1]}</button>`);
         if (key === 'codex') {
           const sug = modelOpts(list || state.meta.codexModels, '').filter(([x]) => x);
-          rows += row('Codex modeli', 'Boş = ~/.codex/config.toml ayarı', `<input id="sCodexModel" class="stg-w" value="${esc(s.codexModel || '')}" placeholder="ör. gpt-5" list="sCodexList"><datalist id="sCodexList">${sug.map(([x, l]) => `<option value="${esc(x)}">${esc(l)}</option>`).join('')}</datalist>`);
+          rows += row(t('Codex modeli'), t('Boş bırakılırsa ~/.codex/config.toml ayarı kullanılır'), `<input id="sCodexModel" class="stg-w" value="${esc(s.codexModel || '')}" placeholder="${t('ör. gpt-5')}" list="sCodexList"><datalist id="sCodexList">${sug.map(([x, l]) => `<option value="${esc(x)}">${esc(l)}</option>`).join('')}</datalist>`);
         } else if (list) {
           const k = `${key}Model`;
-          rows += row('Varsayılan model', `${esc(name)} yeni oturumlarda bu modeli kullanır`, sel(`s${key[0].toUpperCase()}${key.slice(1)}Model`, modelOpts(list, s[k] || state.meta.defaultModels?.[key] || ''), s[k] || state.meta.defaultModels?.[key] || ''));
+          rows += row(t('Varsayılan model'), t('{name} yeni oturumlarda bu modeli kullanır', { name: esc(name) }), sel(`s${key[0].toUpperCase()}${key.slice(1)}Model`, modelOpts(list, s[k] || state.meta.defaultModels?.[key] || ''), s[k] || state.meta.defaultModels?.[key] || ''));
         }
-        return `<div class="stg-card" data-prov="${esc(key)}"><div class="stg-card-h"><span class="stg-dot ${v ? 'ok' : 'bad'}"></span>${esc(name)}<span class="stg-badge" ${key === def ? '' : 'hidden'}>Varsayılan</span></div>${rows}</div>`;
+        return `<div class="stg-card" data-prov="${esc(key)}"><div class="stg-card-h"><span class="stg-dot ${v ? 'ok' : 'bad'}"></span>${esc(name)}<span class="stg-badge" ${key === def ? '' : 'hidden'}>${t('Varsayılan')}</span></div>${rows}</div>`;
       };
       const mcpCmd = `claude mcp add borsa -- node ${h.workspace.replace(/workspace$/, 'server/mcp-stdio.js')}`;
-      el.innerHTML = card(row('Varsayılan sağlayıcı', 'Yeni oturumlar bu sağlayıcıyla başlar (sohbet panelinden de seçilebilir)', sel('sProv', provs, def)))
+      el.innerHTML = card(row(t('Varsayılan sağlayıcı'), t('Yeni oturumlar bu sağlayıcıyla başlar; sohbet panelinden de değiştirebilirsiniz'), sel('sProv', provs, def)))
         + provs.map(provCard).join('')
-        + card(row('Harici MCP erişimi', 'Terminal araçlarını başka Claude Code / Codex oturumlarına ekler', `<div class="stg-code sm" title="${esc(mcpCmd)}"><code>${esc(mcpCmd)}</code><button class="ghost xs" data-copy="mcp">Kopyala</button></div>`));
+        + card(row(t('Harici MCP erişimi'), t('Terminal araçlarını başka Claude Code veya Codex oturumlarına ekler'), `<div class="stg-code sm" title="${esc(mcpCmd)}"><code>${esc(mcpCmd)}</code><button class="ghost xs" data-copy="mcp">${t('Kopyala')}</button></div>`));
       $('#sProv').onchange = (e) => {
         save({ provider: e.target.value });
         $$('[data-prov]', el).forEach((c) => { $('.stg-badge', c).hidden = c.dataset.prov !== e.target.value; });
@@ -192,90 +202,92 @@ export function openSettings(section = 'genel') {
       }
       $('#sLoginC')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'claude /login', title: 'claude login' }); });
       $('#sLoginX')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'codex login', title: 'codex login' }); });
-      $$('[data-install]', el).forEach((b) => b.onclick = () => { m.close(); emit('term:open', { command: `npm install -g ${b.dataset.install}`, title: 'kurulum' }); });
+      $$('[data-install]', el).forEach((b) => b.onclick = () => { m.close(); emit('term:open', { command: `npm install -g ${b.dataset.install}`, title: t('kurulum') }); });
       bindCopy(el, { mcp: mcpCmd });
     },
     async baglantilar(el, stale) {
       const c = await api('/agent/connections').catch(() => null);
       if (stale()) return;
-      const st = (x) => ({ connected: pill('ok', 'bağlı'), failed: pill('bad', 'hata'), 'needs-auth': pill('warn', 'giriş gerekli'), pending: pill('off', 'bağlanıyor'), disabled: pill('off', 'kapalı') }[x] || pill('off', x));
-      el.innerHTML = c ? card(`<p class="stg-note">Son Claude oturumunun (${dateTR(c.at, true)}) gördüğü araçlar ve MCP bağlantıları. Değişiklikler yeni oturumda yansır.</p>`
-        + kv([['Claude Code', esc(c.version || '—')], ['Model', esc(c.model || '—')], ['Kimlik doğrulama', esc(c.apiKeySource || '—')], ['Araç sayısı', c.tools.length], ['Alt ajanlar', esc((c.agents || []).join(', ') || '—'), true]])
-        + `<div class="stg-scroll"><table class="t"><thead><tr><th>MCP sunucusu</th><th>Durum</th><th>Kaynak</th><th class="r">Araç</th></tr></thead><tbody>${c.mcp.map((x) => `<tr><td>${esc(x.name)}</td><td>${st(x.status)}</td><td class="muted">${esc(x.source || '')}</td><td class="r num">${c.tools.filter((t) => t.startsWith(`mcp__${x.name.replace(/[^\w-]/g, '_')}__`) || (x.name === 'borsa' && t.startsWith('mcp__borsa__'))).length || ''}</td></tr>`).join('')}</tbody></table></div>`
-        + '<p class="stg-note">Bağlayıcılar Claude Code ayarlarından (claude.ai bağlayıcıları, <span class="mono">claude mcp add</span>) gelir.</p>')
-        : card('<div class="empty">Henüz bir ajan oturumu çalışmadı. Sohbette bir mesaj gönderdikten sonra bağlantılar burada görünür.</div>');
+      const st = (x) => ({ connected: pill('ok', t('Bağlı')), failed: pill('bad', t('Hata')), 'needs-auth': pill('warn', t('Giriş gerekli')), pending: pill('off', t('Bağlanıyor')), disabled: pill('off', t('Devre dışı')) }[x] || pill('off', x));
+      el.innerHTML = c ? card(`<p class="stg-note">${t('Son Claude oturumunun ({date}) gördüğü araçlar ve MCP bağlantıları. Değişiklikler bir sonraki oturumda geçerli olur.', { date: dateTR(c.at, true) })}</p>`
+        + kv([['Claude Code', esc(c.version || '—')], [t('Model'), esc(c.model || '—')], [t('Kimlik doğrulama'), esc(c.apiKeySource || '—')], [t('Araç sayısı'), c.tools.length], [t('Alt asistanlar'), esc((c.agents || []).join(', ') || '—'), true]])
+        + `<div class="stg-scroll"><table class="t"><thead><tr><th>${t('MCP sunucusu')}</th><th>${t('Durum')}</th><th>${t('Kaynak')}</th><th class="r">${t('Araç')}</th></tr></thead><tbody>${c.mcp.map((x) => `<tr><td>${esc(x.name)}</td><td>${st(x.status)}</td><td class="muted">${esc(x.source || '')}</td><td class="r num">${c.tools.filter((tool) => tool.startsWith(`mcp__${x.name.replace(/[^\w-]/g, '_')}__`) || (x.name === 'borsa' && tool.startsWith('mcp__borsa__'))).length || ''}</td></tr>`).join('')}</tbody></table></div>`
+        + `<p class="stg-note">${t('Bağlayıcılar Claude Code ayarlarından gelir (claude.ai bağlayıcıları, {cmd}).', { cmd: '<span class="mono">claude mcp add</span>' })}</p>`)
+        : card(`<div class="empty">${t('Henüz bir asistan oturumu yok. Sohbette bir mesaj gönderdiğinizde bağlantılar burada görünür.')}</div>`);
     },
     async veri(el) {
+      const sec = (n) => t('{n} saniye', { n });
+      const min = (n) => t('{n} dakika', { n });
       const SRC = [
-        ['BIST hisse ve endeksleri', 'Yahoo Finance', '<b class="accent">~15 dk gecikmeli</b>'],
-        ['Döviz, gram/çeyrek/ata altın, gümüş', 'Truncgil', '~1 dk'],
-        ['Ons altın (spot)', 'gold-api.com', 'anlık'],
-        ['ABD hisseleri, emtia, kripto', 'Yahoo Finance', ''],
-        ['Temel oranlar, sektör, temettü/sermaye artırımı, BIST 100/30 üyeliği', 'İş Yatırım', 'günlük'],
-        ['Bildirimler', 'KAP', ''],
-        ['Haberler', 'Google Haberler ve 7 ekonomi RSS kaynağı', ''],
-        ['Mali tablolar', 'İş Yatırım', ''],
-        ['Kurum raporları', '12 kurumun açık yayınları', ''],
-        ['Kurlar · Risksiz faiz', 'TCMB · TLREF', ''],
-        ['TEFAS yatırım ve emeklilik fonları', 'TEFAS', 'günlük (akşam)'],
+        [t('BIST hisse ve endeksleri'), 'Yahoo Finance', `<b class="accent">${t('~15 dk gecikmeli')}</b>`],
+        [t('Döviz, gram/çeyrek/ata altın, gümüş'), 'Truncgil', t('~1 dk')],
+        [t('Ons altın (spot)'), 'gold-api.com', t('Anlık')],
+        [t('ABD hisseleri, emtia, kripto'), 'Yahoo Finance', ''],
+        [t('Temel oranlar, sektör, temettü/sermaye artırımı, BIST 100/30 üyeliği'), 'İş Yatırım', t('Günde bir')],
+        [t('Bildirimler'), 'KAP', ''],
+        [t('Haberler'), t('Google Haberler ve 7 ekonomi RSS kaynağı'), ''],
+        [t('Mali tablolar'), 'İş Yatırım', ''],
+        [t('Kurum raporları'), t('12 kurumun açık yayınları'), ''],
+        [t('Kurlar · Risksiz faiz'), 'TCMB · TLREF', ''],
+        [t('TEFAS yatırım ve emeklilik fonları'), 'TEFAS', t('Günde bir (akşam)')],
       ];
       el.innerHTML = card(
-        row('Fiyat yenileme aralığı', 'İzleme listesi ve piyasa şeridi', sel('sQuote', [[5, '5 saniye'], [15, '15 saniye'], [30, '30 saniye'], [60, '1 dakika'], [300, '5 dakika']], s.quoteRefreshSec))
-        + row('KAP / rapor yenileme aralığı', 'KAP hız sınırı uyguladığı için en az 1 dakika', sel('sKap', [[60, '1 dakika'], [120, '2 dakika'], [300, '5 dakika'], [900, '15 dakika'], [1800, '30 dakika']], s.kapRefreshSec)),
-        'Yenileme')
+        row(t('Fiyat yenileme aralığı'), t('İzleme listesi ve piyasa şeridi'), sel('sQuote', [[5, sec(5)], [15, sec(15)], [30, sec(30)], [60, min(1)], [300, min(5)]], s.quoteRefreshSec))
+        + row(t('KAP ve rapor yenileme aralığı'), t('KAP istek sınırı uyguladığı için en az 1 dakika'), sel('sKap', [[60, min(1)], [120, min(2)], [300, min(5)], [900, min(15)], [1800, min(30)]], s.kapRefreshSec)),
+        t('Yenileme'))
         + card(
-          row('Klasör izleme', 'Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım şirket raporları, Deniz, Alnus, e-posta ekleri) bu klasörden dakikada bir otomatik olarak arşive alır. Yalnız ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen, son 30 günde inen PDF\'ler kopyalanır; asıl dosyaya dokunulmaz.', toggle('sInbox', !!s.inboxEnabled))
-          + row('İzlenecek klasör', 'Boş bırakılırsa ~/Downloads kullanılır', `<input id="sInboxDir" class="stg-w" placeholder="~/Downloads (varsayılan)" value="${esc(s.inboxDir || '')}">`, { id: 'sInboxRow' }),
-          'Kurum raporu klasör izleme')
-        + card(row('Yerel önbellek', 'Geçmiş fiyat, temettü ve KAP önbelleği', '<button class="btn sec" id="sCache">Önbelleği Temizle</button>'), 'Önbellek')
-        + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>Veri</th><th>Kaynak</th><th class="r">Gecikme</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
-          <p class="stg-note">Gecikme ve kaynak her fiyatın yanında da gösterilir.</p>`, 'Veri kaynakları');
+          row(t('Klasör izleme'), t('Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım, Deniz, Alnus raporları, e-posta ekleri) bu klasörden dakikada bir arşive alır. Yalnızca ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen ve son 30 günde inen PDF’ler kopyalanır; asıl dosyaya dokunulmaz.'), toggle('sInbox', !!s.inboxEnabled))
+          + row(t('İzlenecek klasör'), t('Boş bırakılırsa ~/Downloads kullanılır'), `<input id="sInboxDir" class="stg-w" placeholder="${t('~/Downloads (varsayılan)')}" value="${esc(s.inboxDir || '')}">`, { id: 'sInboxRow' }),
+          t('Kurum raporları için klasör izleme'))
+        + card(row(t('Yerel önbellek'), t('Geçmiş fiyat, temettü ve KAP önbelleği'), `<button class="btn sec" id="sCache">${t('Önbelleği temizle')}</button>`), t('Önbellek'))
+        + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>${t('Veri')}</th><th>${t('Kaynak')}</th><th class="r">${t('Gecikme')}</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
+          <p class="stg-note">${t('Gecikme ve kaynak her fiyatın yanında da gösterilir.')}</p>`, t('Veri kaynakları'));
       const dimInbox = () => $('#sInboxRow').classList.toggle('off', !$('#sInbox').checked);
       dimInbox();
       $('#sQuote').onchange = (e) => save({ quoteRefreshSec: Number(e.target.value) });
       $('#sKap').onchange = (e) => save({ kapRefreshSec: Number(e.target.value) });
       $('#sInbox').onchange = (e) => { dimInbox(); save({ inboxEnabled: e.target.checked }); };
       $('#sInboxDir').onchange = (e) => save({ inboxDir: e.target.value.trim() });
-      $('#sCache').onclick = async () => { await api('/cache/clear', { method: 'POST', body: {} }); toast('Önbellek temizlendi', 'ok'); };
+      $('#sCache').onclick = async () => { await api('/cache/clear', { method: 'POST', body: {} }); toast(t('Önbellek temizlendi'), 'ok'); };
     },
     // Gateway: sunucunun servis durumu ve yerel API erişim anahtarı
     async gateway(el, stale) {
       const g = await api('/gateway');
       if (stale()) return;
-      const dur = (x) => (x < 3600 ? `${Math.floor(x / 60)} dk ${x % 60} sn` : x < 86400 ? `${Math.floor(x / 3600)} sa ${Math.floor((x % 3600) / 60)} dk` : `${Math.floor(x / 86400)} gün ${Math.floor((x % 86400) / 3600)} sa`);
-      const svc = g.service.manager ? (g.service.installed ? `Kurulu (${g.service.manager})` : 'Kurulu değil') : 'Bu işletim sisteminde desteklenmiyor';
+      const dur = (x) => (x < 3600 ? t('{m} dk {s} sn', { m: Math.floor(x / 60), s: x % 60 }) : x < 86400 ? t('{h} sa {m} dk', { h: Math.floor(x / 3600), m: Math.floor((x % 3600) / 60) }) : t('{d} gün {h} sa', { d: Math.floor(x / 86400), h: Math.floor((x % 86400) / 3600) }));
+      const svc = g.service.manager ? (g.service.installed ? t('Kurulu ({manager})', { manager: g.service.manager }) : t('Kurulu değil')) : t('Bu işletim sisteminde desteklenmiyor');
       el.innerHTML = card(kv([
-        ['Mod', g.daemon ? 'Servis (daemon)' : 'Elle başlatıldı'], ['PID', esc(g.pid)], ['Başlangıç', esc(dateTR(g.startedAt, true))],
-        ['Çalışma süresi', esc(dur(g.uptimeSec))], ['Port', `UI ${esc(g.port)} · rapor ${esc(g.reportPort)}`], ['Aktif oturumlar', esc(g.activeSessions)],
-        ['Bağlı istemciler', esc(g.clients)], ['Servis', esc(svc)], ...(g.service.installed ? [['Servis dosyası', esc(g.service.file), true]] : []),
-      ]), `Gateway ${pill('ok', 'Çalışıyor')}`)
-        + card(row('Erişim anahtarı', `Yerel API (<span class="mono">/api</span>, WebSocket) bu anahtarı ister. Tarayıcı çerezle otomatik kullanır; betikler için <span class="mono">Authorization: Bearer …</span>. Dosya: <span class="mono">${esc(g.tokenFile)}</span>`,
-          `<div class="stg-code"><code id="gwTok">${esc(g.token)}</code></div><div class="stg-btns"><button class="btn sec" id="gwShow">Göster</button><button class="btn sec" id="gwCopy">Kopyala</button><button class="btn sec" id="gwRotate">Yenile</button></div>`, { wide: true }))
-        + card(row('Servis denetimi', g.service.installed ? 'Servis komutları: <span class="mono">./bin/kmy gateway status · logs -f · restart</span>' : 'Servis olarak kurmak için: <span class="mono">./bin/kmy gateway install</span>',
-          `<button class="btn danger" id="gwRestart">Yeniden Başlat</button>${g.daemon ? '<button class="btn danger" id="gwStop">Durdur</button>' : ''}`));
+        [t('Çalışma şekli'), g.daemon ? t('Servis (daemon)') : t('Elle başlatıldı')], ['PID', esc(g.pid)], [t('Başlangıç'), esc(dateTR(g.startedAt, true))],
+        [t('Çalışma süresi'), esc(dur(g.uptimeSec))], [t('Port'), t('Arayüz {ui} · rapor {rep}', { ui: esc(g.port), rep: esc(g.reportPort) })], [t('Etkin oturumlar'), esc(g.activeSessions)],
+        [t('Bağlı istemciler'), esc(g.clients)], [t('Servis'), esc(svc)], ...(g.service.installed ? [[t('Servis dosyası'), esc(g.service.file), true]] : []),
+      ]), `Gateway ${pill('ok', t('Çalışır durumda'))}`)
+        + card(row(t('Erişim anahtarı'), t('Yerel API ({api}, WebSocket) bu anahtarı ister. Tarayıcı anahtarı çerezle kendiliğinden gönderir; betiklerde {header} başlığını kullanın. Dosya: {file}', { api: '<span class="mono">/api</span>', header: '<span class="mono">Authorization: Bearer …</span>', file: `<span class="mono">${esc(g.tokenFile)}</span>` }),
+          `<div class="stg-code"><code id="gwTok">${esc(g.token)}</code></div><div class="stg-btns"><button class="btn sec" id="gwShow">${t('Göster')}</button><button class="btn sec" id="gwCopy">${t('Kopyala')}</button><button class="btn sec" id="gwRotate">${t('Yeni anahtar')}</button></div>`, { wide: true }))
+        + card(row(t('Servis denetimi'), g.service.installed ? t('Servis komutları: {cmd}', { cmd: '<span class="mono">./bin/kmy gateway status · logs -f · restart</span>' }) : t('Servis olarak kurmak için: {cmd}', { cmd: '<span class="mono">./bin/kmy gateway install</span>' }),
+          `<button class="btn danger" id="gwRestart">${t('Yeniden başlat')}</button>${g.daemon ? `<button class="btn danger" id="gwStop">${t('Durdur')}</button>` : ''}`));
       const full = () => api('/gateway/token').then((r) => r.token);
       let shown = false;
       $('#gwShow').onclick = async () => {
-        try { shown = !shown; $('#gwTok').textContent = shown ? await full() : g.token; $('#gwShow').textContent = shown ? 'Gizle' : 'Göster'; } catch (e) { toast(e.message, 'err'); }
+        try { shown = !shown; $('#gwTok').textContent = shown ? await full() : g.token; $('#gwShow').textContent = shown ? t('Gizle') : t('Göster'); } catch (e) { toast(tx(e.message), 'err'); }
       };
       $('#gwCopy').onclick = async () => {
-        try { await navigator.clipboard.writeText(await full()); toast('Erişim anahtarı kopyalandı', 'ok'); } catch (e) { toast(`Kopyalanamadı: ${e.message}`, 'err'); }
+        try { await navigator.clipboard.writeText(await full()); toast(t('Erişim anahtarı kopyalandı'), 'ok'); } catch (e) { toast(t('Kopyalanamadı: {msg}', { msg: tx(e.message) }), 'err'); }
       };
       $('#gwRotate').onclick = async () => {
-        if (!(await confirmBox('Erişim anahtarı yenilensin mi? Eski anahtarı kullanan betikler ve harici istemciler bağlantıyı kaybeder; bu tarayıcı çalışmaya devam eder.', { danger: true, ok: 'Yenile' }))) return;
-        try { await api('/gateway/token/rotate', { method: 'POST', body: {} }); toast('Erişim anahtarı yenilendi', 'ok'); if (!stale()) BLOCKS.gateway(el, stale); } catch (e) { toast(e.message, 'err'); }
+        if (!(await confirmBox(t('Yeni bir erişim anahtarı üretilsin mi? Eski anahtarı kullanan betikler ve harici istemciler bağlantıyı kaybeder; bu tarayıcı çalışmaya devam eder.'), { danger: true, ok: t('Yeni anahtar üret') }))) return;
+        try { await api('/gateway/token/rotate', { method: 'POST', body: {} }); toast(t('Yeni erişim anahtarı üretildi'), 'ok'); if (!stale()) BLOCKS.gateway(el, stale); } catch (e) { toast(tx(e.message), 'err'); }
       };
       $('#gwRestart').onclick = async () => {
-        if (!(await confirmBox('Gateway yeniden başlatılsın mı? Açık terminaller ve çalışan ajan işleri kapanır.', { danger: true, ok: 'Yeniden başlat' }))) return;
+        if (!(await confirmBox(t('Gateway yeniden başlatılsın mı? Açık kabuklar ve çalışan asistan işleri kapanır.'), { danger: true, ok: t('Yeniden başlat') }))) return;
         try {
           const r = await api('/gateway/restart', { method: 'POST', body: {} });
-          toast(r.message || 'Yeniden başlatılıyor…', '', 8000);
+          toast(r.message ? tx(r.message) : t('Yeniden başlatılıyor…'), '', 8000);
           setTimeout(() => location.reload(), r.mode === 'daemon' ? 7000 : 4000);
-        } catch (e) { toast(e.message, 'err'); }
+        } catch (e) { toast(tx(e.message), 'err'); }
       };
       $('#gwStop')?.addEventListener('click', async () => {
-        if (!(await confirmBox('Gateway servisi durdurulsun mu? Arayüz bağlantısı kesilir. Yeniden başlatmak için: ./bin/kmy gateway start', { danger: true, ok: 'Durdur' }))) return;
-        try { const r = await api('/gateway/stop', { method: 'POST', body: {} }); toast(r.message, '', 10000); } catch (e) { toast(e.message, 'err'); }
+        if (!(await confirmBox(t('Gateway servisi durdurulsun mu? Arayüzün bağlantısı kesilir. Yeniden başlatmak için: {cmd}', { cmd: './bin/kmy gateway start' }), { danger: true, ok: t('Durdur') }))) return;
+        try { const r = await api('/gateway/stop', { method: 'POST', body: {} }); toast(tx(r.message), '', 10000); } catch (e) { toast(tx(e.message), 'err'); }
       });
     },
     async sistem(el, stale, health) {
@@ -283,50 +295,50 @@ export function openSettings(section = 'genel') {
       if (stale()) return;
       const up = h.uptimeSec;
       // CLI durumları: meta.providers'taki her sağlayıcı için health[`${anahtar}Cli`]
-      const clis = Object.entries(state.meta.providers || { claude: 'Claude', codex: 'Codex' }).map(([k]) => [`${(PROV[k]?.cli || `${k} CLI`).replace(/ \(.*\)$/, '')}`, h[`${k}Cli`] ? pill('ok', h[`${k}Cli`], true) : pill('bad', 'Bulunamadı')]);
+      const clis = Object.entries(state.meta.providers || { claude: 'Claude', codex: 'Codex' }).map(([k]) => [`${(PROV[k]?.cli || `${k} CLI`).replace(/ \(.*\)$/, '')}`, h[`${k}Cli`] ? pill('ok', h[`${k}Cli`], true) : pill('bad', t('Bulunamadı'))]);
       el.innerHTML = card(kv([
-        ['Sürüm', esc(h.version)], ['Node', esc(h.node)], ['Platform', esc(h.platform)], ['PID', esc(h.pid)],
-        ['Uptime', `${Math.floor(up / 3600)} sa ${Math.floor((up % 3600) / 60)} dk`], ['Bağlı istemci', esc(h.clients)], ['Çalışan ajan', esc(h.runningSessions)], ['BIST', esc(h.market.label)],
-        ['Terminal (node-pty)', h.terminal ? pill('ok', 'Hazır') : pill('bad', 'Kullanılamıyor')], ...clis,
-        ['Veri klasörü', esc(h.dataDir), true], ['Çalışma alanı', esc(h.workspace), true],
-      ]), `Sunucu ${h.ok ? pill('ok', 'Çalışıyor') : pill('bad', 'Sorun var')}`)
-        + card(row('Bağlantı', 'WebSocket bağlantısını yeniden kur', '<button class="btn sec" id="sReconnect">Yeniden Bağlan</button>')
-          + row('Sunucuyu yeniden başlat', 'Açık terminal oturumlarını ve çalışan ajan işlerini sonlandırır', '<button class="btn danger" id="sRestart">Sunucuyu Yeniden Başlat</button>'));
-      $('#sReconnect').onclick = () => { connect(); toast('Yeniden bağlanılıyor…'); };
+        [t('Sürüm'), esc(h.version)], ['Node', esc(h.node)], [t('Platform'), esc(h.platform)], ['PID', esc(h.pid)],
+        [t('Çalışma süresi'), t('{h} sa {m} dk', { h: Math.floor(up / 3600), m: Math.floor((up % 3600) / 60) })], [t('Bağlı istemciler'), esc(h.clients)], [t('Çalışan oturumlar'), esc(h.runningSessions)], ['BIST', esc(tx(h.market.label))],
+        [t('Kabuk (node-pty)'), h.terminal ? pill('ok', t('Hazır')) : pill('bad', t('Kullanılamıyor'))], ...clis,
+        [t('Veri klasörü'), esc(h.dataDir), true], [t('Çalışma alanı'), esc(h.workspace), true],
+      ]), `${t('Sunucu')} ${h.ok ? pill('ok', t('Çalışır durumda')) : pill('bad', t('Sorun var'))}`)
+        + card(row(t('Bağlantı'), t('WebSocket bağlantısını yeniden kurar'), `<button class="btn sec" id="sReconnect">${t('Yeniden bağlan')}</button>`)
+          + row(t('Sunucuyu yeniden başlat'), t('Açık kabukları ve çalışan asistan işlerini kapatır'), `<button class="btn danger" id="sRestart">${t('Yeniden başlat')}</button>`));
+      $('#sReconnect').onclick = () => { connect(); toast(t('Yeniden bağlanılıyor…')); };
       $('#sRestart').onclick = async () => {
-        if (!(await confirmBox('Sunucu yeniden başlatılsın mı? Açık terminaller ve çalışan ajan işleri kapanır.', { danger: true, ok: 'Yeniden başlat' }))) return;
+        if (!(await confirmBox(t('Sunucu yeniden başlatılsın mı? Açık kabuklar ve çalışan asistan işleri kapanır.'), { danger: true, ok: t('Yeniden başlat') }))) return;
         const r = await api('/system/restart', { method: 'POST', body: {} }).catch(() => ({}));
-        toast('Sunucu yeniden başlatılıyor…', '', 6000);
+        toast(t('Sunucu yeniden başlatılıyor…'), '', 6000);
         setTimeout(() => location.reload(), r.mode === 'daemon' ? 7000 : 4000); // servis modunda launchd/systemd yeniden açar
       };
     },
     async gorevler(el, stale) {
-      const DAYS = [['1', 'Pzt'], ['2', 'Sal'], ['3', 'Çar'], ['4', 'Per'], ['5', 'Cum'], ['6', 'Cmt'], ['0', 'Paz']];
+      const DAYS = [['1', t('Pzt')], ['2', t('Sal')], ['3', t('Çar')], ['4', t('Per')], ['5', t('Cum')], ['6', t('Cmt')], ['0', t('Paz')]];
       const provName = (p) => ({ claude: 'Claude', codex: 'Codex' }[p] || state.meta.providers?.[p] || p);
       const draw = async (edit = null) => {
         const { items, templates } = await api('/schedules');
         if (stale()) return;
         const e = edit || { name: '', prompt: '', time: '18:20', days: '1,2,3,4,5', provider: s.provider || 'claude', enabled: 1 };
-        el.innerHTML = card(`<p class="stg-note">Görevler İstanbul saatiyle arka planda çalışır; sonuçlar sohbet oturumu olarak kaydedilir, raporlar Raporlar sekmesine düşer. Uygulama (sunucu) açık olmalıdır. Onay gerektiren araçlar otomatik reddedilir.</p>
-          <div class="stg-scroll"><table class="t"><thead><tr><th>Görev</th><th>Zaman</th><th>Sağlayıcı</th><th>Son çalışma</th><th></th></tr></thead><tbody>${items.map((x) => `<tr class="${x.enabled ? '' : 'dim'}">
+        el.innerHTML = card(`<p class="stg-note">${t('Görevler İstanbul saatiyle arka planda çalışır. Sonuçlar sohbet oturumu olarak kaydedilir, raporlar Raporlar sekmesinde görünür. Bunun için uygulamanın açık olması gerekir; onay isteyen araçlar kendiliğinden reddedilir.')}</p>
+          <div class="stg-scroll"><table class="t"><thead><tr><th>${t('Görev')}</th><th>${t('Çalışma zamanı')}</th><th>${t('Sağlayıcı')}</th><th>${t('Son çalışma')}</th><th></th></tr></thead><tbody>${items.map((x) => `<tr class="${x.enabled ? '' : 'dim'}">
             <td><b>${esc(x.name)}</b><div class="dim" style="font-size:11px;max-width:320px;white-space:normal">${esc(x.prompt.slice(0, 120))}…</div></td>
             <td class="mono">${esc(x.time)} · ${x.days.split(',').map((d) => DAYS.find((z) => z[0] === d)?.[1]).join(' ')}</td><td>${esc(provName(x.provider))}</td>
-            <td>${x.last_run ? dateTR(new Date(x.last_run.replace(' ', 'T') + 'Z'), true) : '—'}${x.last_session ? ` <button class="ghost" data-open="${x.last_session}">Aç</button>` : ''}</td>
-            <td class="r"><button class="ghost" data-run="${x.id}">Şimdi çalıştır</button> <button class="ghost" data-edit="${x.id}">Düzenle</button> <button class="ghost" data-del="${x.id}">Sil</button></td></tr>`).join('') || '<tr><td colspan="5" class="dim">Henüz görev yok. Aşağıdaki şablonlardan birini seçin.</td></tr>'}</tbody></table></div>`)
-          + card(`<div class="stg-pad"><div class="stg-tpl">${templates.map((t, i) => `<button class="ghost" data-tpl="${i}">＋ ${esc(t.name)}</button>`).join('')}</div>
+            <td>${x.last_run ? dateTR(new Date(x.last_run.replace(' ', 'T') + 'Z'), true) : '—'}${x.last_session ? ` <button class="ghost" data-open="${x.last_session}">${t('Aç')}</button>` : ''}</td>
+            <td class="r"><button class="ghost" data-run="${x.id}">${t('Şimdi çalıştır')}</button> <button class="ghost" data-edit="${x.id}">${t('Düzenle')}</button> <button class="ghost" data-del="${x.id}">${t('Sil')}</button></td></tr>`).join('') || `<tr><td colspan="5" class="dim">${t('Henüz görev yok. Aşağıdaki şablonlardan birini seçin.')}</td></tr>`}</tbody></table></div>`)
+          + card(`<div class="stg-pad"><div class="stg-tpl">${templates.map((tp, i) => `<button class="ghost" data-tpl="${i}">＋ ${esc(tx(tp.name))}</button>`).join('')}</div>
           <form id="schForm" class="form-grid">
-            <div class="field"><label>AD</label><input name="name" value="${esc(e.name)}" required></div>
-            <div class="field"><label>SAAT</label><input name="time" type="time" value="${esc(e.time)}" required></div>
-            <div class="field"><label>SAĞLAYICI</label>${sel('schProv', Object.entries(state.meta.providers), e.provider)}</div>
-            <div class="field"><label>DURUM</label>${sel('schEn', [[1, 'Etkin'], [0, 'Duraklatıldı']], e.enabled)}</div>
-            <div class="field" style="grid-column:1/-1"><label>GÜNLER</label><div class="stg-chips">${DAYS.map(([v, l]) => `<label class="stg-chip"><input type="checkbox" name="d" value="${v}" ${e.days.split(',').includes(v) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
-            <div class="field" style="grid-column:1/-1"><label>İSTEM</label><textarea name="prompt" rows="4" required>${esc(e.prompt)}</textarea></div>
-            <div style="grid-column:1/-1" class="row"><button class="btn">${e.id ? 'Güncelle' : 'Görev ekle'}</button>${e.id ? '<button type="button" class="btn sec" id="schCancel">Vazgeç</button>' : ''}</div>
-          </form></div>`, e.id ? `Görevi düzenle · ${esc(e.name)}` : 'Yeni görev');
+            <div class="field"><label>${t('Ad')}</label><input name="name" value="${esc(e.name)}" required></div>
+            <div class="field"><label>${t('Saat')}</label><input name="time" type="time" value="${esc(e.time)}" required></div>
+            <div class="field"><label>${t('Sağlayıcı')}</label>${sel('schProv', Object.entries(state.meta.providers), e.provider)}</div>
+            <div class="field"><label>${t('Durum')}</label>${sel('schEn', [[1, t('Etkin')], [0, t('Duraklatıldı')]], e.enabled)}</div>
+            <div class="field" style="grid-column:1/-1"><label>${t('Günler')}</label><div class="stg-chips">${DAYS.map(([v, l]) => `<label class="stg-chip"><input type="checkbox" name="d" value="${v}" ${e.days.split(',').includes(v) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
+            <div class="field" style="grid-column:1/-1"><label>${t('İstem')}</label><textarea name="prompt" rows="4" required>${esc(e.prompt)}</textarea></div>
+            <div style="grid-column:1/-1" class="row"><button class="btn">${e.id ? t('Güncelle') : t('Görev ekle')}</button>${e.id ? `<button type="button" class="btn sec" id="schCancel">${t('Vazgeç')}</button>` : ''}</div>
+          </form></div>`, e.id ? t('Görevi düzenle · {name}', { name: esc(e.name) }) : t('Yeni görev'));
         $$('[data-tpl]', el).forEach((b) => b.onclick = () => draw({ ...templates[b.dataset.tpl], provider: s.provider || 'claude', enabled: 1 }));
         $$('[data-edit]', el).forEach((b) => b.onclick = () => draw(items.find((x) => String(x.id) === b.dataset.edit)));
-        $$('[data-del]', el).forEach((b) => b.onclick = async () => { if (await confirmBox('Görev silinsin mi?', { danger: true, ok: 'Sil' })) { await api(`/schedules/${b.dataset.del}`, { method: 'DELETE' }); draw(); } });
-        $$('[data-run]', el).forEach((b) => b.onclick = async () => { try { const r = await api(`/schedules/${b.dataset.run}/run`, { method: 'POST', body: {} }); toast('Görev başlatıldı', 'ok'); m.close(); emit('agent:open', r.sessionId); } catch (x) { toast(x.message, 'err'); } });
+        $$('[data-del]', el).forEach((b) => b.onclick = async () => { if (await confirmBox(t('Görev silinsin mi?'), { danger: true, ok: t('Sil') })) { await api(`/schedules/${b.dataset.del}`, { method: 'DELETE' }); draw(); } });
+        $$('[data-run]', el).forEach((b) => b.onclick = async () => { try { const r = await api(`/schedules/${b.dataset.run}/run`, { method: 'POST', body: {} }); toast(t('Görev başlatıldı'), 'ok'); m.close(); emit('agent:open', r.sessionId); } catch (x) { toast(tx(x.message), 'err'); } });
         $$('[data-open]', el).forEach((b) => b.onclick = () => { m.close(); emit('agent:open', b.dataset.open); });
         $('#schCancel')?.addEventListener('click', () => draw());
         $('#schForm').onsubmit = async (ev) => {
@@ -335,8 +347,8 @@ export function openSettings(section = 'genel') {
           const days = $$('input[name=d]:checked', f).map((x) => x.value).join(',');
           try {
             await api('/schedules', { method: 'POST', body: { id: e.id, name: f.name.value, time: f.time.value, prompt: f.prompt.value, days, provider: $('#schProv').value, enabled: Number($('#schEn').value) } });
-            toast('Kaydedildi', 'ok'); draw();
-          } catch (x) { toast(x.message, 'err'); }
+            toast(t('Kaydedildi'), 'ok'); draw();
+          } catch (x) { toast(tx(x.message), 'err'); }
         };
       };
       await draw();
@@ -345,8 +357,8 @@ export function openSettings(section = 'genel') {
       const draw = async () => {
         const r = await wsCall({ t: 'log.get' }).catch(() => ({ entries: [] }));
         if (stale()) return;
-        el.innerHTML = card(`<div class="log">${r.entries.slice().reverse().map((e) => `<div><span class="dim">${new Date(e.at).toLocaleTimeString('tr-TR')}</span> <span class="${e.dir === 'in' ? 'accent' : 'muted'}">${e.dir === 'in' ? '→' : '←'} ${esc(e.t)}</span> ${esc(e.summary)}</div>`).join('') || '<div class="dim">Log boş</div>'}</div>`,
-          'Son 50 WS mesajı <span class="stg-live">canlı</span><button class="ghost" id="lRef">Yenile</button>');
+        el.innerHTML = card(`<div class="log">${r.entries.slice().reverse().map((e) => `<div><span class="dim">${new Date(e.at).toLocaleTimeString(locale)}</span> <span class="${e.dir === 'in' ? 'accent' : 'muted'}">${e.dir === 'in' ? '→' : '←'} ${esc(e.t)}</span> ${esc(e.summary)}</div>`).join('') || `<div class="dim">${t('Günlük boş')}</div>`}</div>`,
+          `${t('Son 50 WebSocket mesajı')} <span class="stg-live">${t('Canlı')}</span><button class="ghost" id="lRef">${t('Yenile')}</button>`);
         $('#lRef').onclick = draw;
       };
       await draw();
@@ -354,23 +366,23 @@ export function openSettings(section = 'genel') {
     async surum(el, stale) {
       const r = await api('/changelog').catch(() => ({ text: '' }));
       if (stale()) return;
-      el.innerHTML = card(`<div class="msg assistant stg-prose">${md(r.text || 'Sürüm notu yok')}</div>`);
+      el.innerHTML = card(`<div class="msg assistant stg-prose">${md(r.text || t('Sürüm notu yok'))}</div>`);
     },
     async yardim(el) {
       const keys = (list) => list.map(([k, d]) => row(esc(d), '', k.map((x) => `<kbd>${esc(x)}</kbd>`).join(''), { sm: true })).join('');
       const cmds = (list) => `<div class="stg-cmds">${list.map(([c, d]) => `<code>${esc(c)}</code><span>${esc(d)}</span>`).join('')}</div>`;
       el.innerHTML = card(keys([
-        [['⌘K', 'Ctrl+K'], 'Sembol ara'], [['⌘1–4'], 'Piyasa · Portföy · Terminal · Raporlar'], [['⌘,'], 'Ayarlar'],
-        [['Enter'], 'Mesaj gönder'], [['Shift+Enter'], 'Yeni satır'], [['/'], 'Komut menüsü (sohbette)'], [['Esc'], 'Pencereyi kapat'],
-        [['Sağ tık (Watchlist)'], 'Grafik · ajan özeti · KAP · işlem ekle'],
-      ]), 'Klavye kısayolları')
+        [['⌘K', 'Ctrl+K'], t('Sembol ara')], [['⌘1–4'], t('Piyasa · Portföy · Terminal · Raporlar')], [['⌘,'], t('Ayarlar')],
+        [['Enter'], t('Mesaj gönder')], [['Shift+Enter'], t('Yeni satır')], [['/'], t('Komut menüsü (sohbette)')], [['Esc'], t('Pencereyi kapat')],
+        [[t('Sağ tık (izleme listesi)')], t('Grafik · asistan özeti · KAP · işlem ekle')],
+      ]), t('Klavye kısayolları'))
         + card(cmds([
-          ['/analiz SEMBOL', 'Kapsamlı analiz + rapor'], ['/teknik SEMBOL', 'Teknik analiz'], ['/karsilastir A B', 'Karşılaştırma'], ['/piyasa', 'Günlük özet'],
-          ['/portfoy', 'Portföy değerlendirmesi'], ['/kap [SEMBOL]', 'Son KAP sinyalleri (sembolle: ajan taraması)'], ['/rapor KONU', 'HTML rapor'], ['/temettu', 'Temettü analizi'],
-          ['/tarama KOŞUL', 'Hisse tarayıcı'], ['/model · /think', 'Model, düşünme seviyesi'],
-          ['/yeni [İSİM] · /durdur · /status · /doctor', 'Oturum yönetimi ve sağlık'], ['/help', 'Tüm komutlar'],
-        ]), 'Sohbet komutları')
-        + '<p class="stg-foot">BIST fiyatları ~15 dk gecikmelidir; kaynak ve gecikme her fiyatın yanında gösterilir. Terminal ve ajan çıktıları yatırım tavsiyesi değildir.</p>';
+          [t('/analiz SEMBOL'), t('Kapsamlı analiz ve rapor')], [t('/teknik SEMBOL'), t('Teknik analiz')], ['/karsilastir A B', t('Karşılaştırma')], ['/piyasa', t('Günlük özet')],
+          ['/portfoy', t('Portföy değerlendirmesi')], [t('/kap [SEMBOL]'), t('Son KAP sinyalleri (sembolle: asistan taraması)')], [t('/rapor KONU'), t('HTML rapor')], ['/temettu', t('Temettü analizi')],
+          [t('/tarama KOŞUL'), t('Hisse tarayıcı')], ['/model · /think', t('Model ve düşünme düzeyi')],
+          [t('/yeni [İSİM] · /durdur · /status · /doctor'), t('Oturum yönetimi ve durum')], ['/help', t('Tüm komutlar')],
+        ]), t('Sohbet komutları'))
+        + `<p class="stg-foot">${t('BIST fiyatları ~15 dk gecikmelidir; kaynak ve gecikme her fiyatın yanında gösterilir. Terminal ve asistan çıktıları yatırım tavsiyesi değildir.')}</p>`;
     },
   };
 
@@ -387,10 +399,10 @@ export function openSettings(section = 'genel') {
     $('#stgDesc', m.body).textContent = desc;
     main.scrollTop = 0;
     const multi = blocks.length > 1;
-    body.innerHTML = blocks.map(([k, t]) => `<section class="stg-group" data-b="${k}">${multi ? `<h3 class="stg-gt">${esc(t)}</h3>` : ''}<div class="set-blk"><div class="stg-card"><div class="skeleton" style="height:${multi ? 70 : 140}px"></div></div></div></section>`).join('');
+    body.innerHTML = blocks.map(([k, ttl]) => `<section class="stg-group" data-b="${k}">${multi ? `<h3 class="stg-gt">${esc(ttl)}</h3>` : ''}<div class="set-blk"><div class="stg-card"><div class="skeleton" style="height:${multi ? 70 : 140}px"></div></div></div></section>`).join('');
     await Promise.all(blocks.map(async ([k]) => {
       const el = $(`[data-b="${k}"] .set-blk`, body);
-      try { await BLOCKS[k](el, stale, health); } catch (e) { if (!stale()) el.innerHTML = card(`<div class="empty">Yüklenemedi: ${esc(e.message)}</div>`); }
+      try { await BLOCKS[k](el, stale, health); } catch (e) { if (!stale()) el.innerHTML = card(`<div class="empty">${esc(t('Yüklenemedi: {msg}', { msg: tx(e.message) }))}</div>`); }
     }));
     if (focusBlock && !stale() && multi) $(`[data-b="${focusBlock}"]`, body)?.scrollIntoView({ block: 'start' });
   }

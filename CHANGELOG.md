@@ -1,5 +1,17 @@
 # Sürüm Notları
 
+## 0.11.0 — 24 Eylül 2026 (sade arayüz, İngilizce)
+
+### Yeni
+- **İngilizce arayüz:** Ayarlar › Görünüm › Dil ile Türkçe ya da İngilizce seçilir; varsayılan "Sistem dili" (macOS dili Türkçe değilse İngilizce açılır). Sunucudan gelen iletiler, seans durumu, sektör adları, macOS menüleri ve menü çubuğu simgesi de seçili dili izler; asistan da yanıtlarını arayüz dilinde verir.
+- Eğik çizgi komutlarının İngilizce karşılıkları (/new, /analyze, /market…); Türkçe komutlar her iki dilde de çalışır.
+
+### Değişen
+- **Sade, yumuşak görünüm:** sekmeler üst çubuğa taşındı (tek satır), büyük harfli ve harf aralıklı başlıklar yerine normal yazım, daha az çizgi ve kenarlık, yumuşatılmış renkler, yuvarlatılmış kartlar ve pencereler, çizgi simgeler, ortalanmış sohbet sütunu, sağa hizalı kullanıcı mesajları, sade bildirimler.
+- Garip duran metinler düzeltildi: WATCHLIST → İzleme listesi, DASHBOARD → Piyasa, AGENT CHAT kaldırıldı, CHAT / TERMINAL → Sohbet / Kabuk, "ajan" → "asistan"; kısaltmalar açıldı (52H → 52 hafta, 1A/3A → 1 ay / 3 ay), terimler tutarlı hâle getirildi, "..." → "…".
+- KAP sinyal etiketleri: TEZ / YAP / FİN / KUR / DİĞER → Tez / Yapı / Finans / Kurumsal / Diğer.
+- Veri kaynakları notu izleme listesinin altında katlanabilir.
+
 ## 0.10.0 — 23 Eylül 2026 (macOS görünümü, kuruluma hazırlık)
 
 ### Yeni

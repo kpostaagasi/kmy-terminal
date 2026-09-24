@@ -46,12 +46,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     if UserDefaults.standard.bool(forKey: "skipMoveOffer") { return false }
     NSApp.activate(ignoringOtherApps: true)
     let a = NSAlert()
-    a.messageText = "kmy terminal Uygulamalar klasörüne taşınsın mı?"
-    a.informativeText = "Uygulama şu an \(here.contains("/AppTranslocation/") || here.hasPrefix("/Volumes/") ? "disk görüntüsünden ya da İndirilenler klasöründen" : "Uygulamalar klasörü dışından") çalışıyor. Arka plan servisi ve menü çubuğu simgesinin düzgün çalışması için Uygulamalar klasörüne taşınması önerilir."
-    a.addButton(withTitle: "Uygulamalar'a Taşı")
-    a.addButton(withTitle: "Şimdi Değil")
+    a.messageText = L("kmy terminal Uygulamalar klasörüne taşınsın mı?", "Move kmy terminal to the Applications folder?")
+    let fromImage = here.contains("/AppTranslocation/") || here.hasPrefix("/Volumes/")
+    a.informativeText = L(
+      "Uygulama şu an \(fromImage ? "disk görüntüsünden ya da İndirilenler klasöründen" : "Uygulamalar klasörü dışından") çalışıyor. Arka plan servisi ve menü çubuğu simgesinin düzgün çalışması için Uygulamalar klasörüne taşınması önerilir.",
+      "The app is running \(fromImage ? "from the disk image or the Downloads folder" : "outside the Applications folder"). Move it to Applications so the background service and the menu bar icon work reliably.")
+    a.addButton(withTitle: L("Uygulamalar'a Taşı", "Move to Applications"))
+    a.addButton(withTitle: L("Şimdi Değil", "Not Now"))
     a.showsSuppressionButton = true
-    a.suppressionButton?.title = "Bir daha sorma"
+    a.suppressionButton?.title = L("Bir daha sorma", "Don't ask again")
     let r = a.runModal()
     if a.suppressionButton?.state == .on { UserDefaults.standard.set(true, forKey: "skipMoveOffer") }
     guard r == .alertFirstButtonReturn else { return false }
@@ -70,8 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       } catch { continue }
     }
     let e = NSAlert()
-    e.messageText = "Taşınamadı"
-    e.informativeText = "kmy terminal'i Finder'da Uygulamalar klasörüne sürükleyip oradan açın."
+    e.messageText = L("Taşınamadı", "Couldn't move the app")
+    e.informativeText = L("kmy terminal'i Finder'da Uygulamalar klasörüne sürükleyip oradan açın.", "Drag kmy terminal to the Applications folder in Finder and open it from there.")
     e.runModal()
     return false
   }
@@ -105,17 +108,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   func connect() {
     guard !connecting else { return }
     connecting = true
-    main.showStatus(title: "Gateway'e bağlanılıyor…", detail: "Terminal sunucusu hazırlanıyor.", retry: false)
+    main.showStatus(title: L("Gateway'e bağlanılıyor…", "Connecting to the gateway…"), detail: L("Terminal sunucusu hazırlanıyor.", "Getting the terminal server ready."), retry: false)
     Task { @MainActor in
       let ok = await Gateway.shared.ensureRunning()
       connecting = false
       if ok { main.loadApp() } else {
-        main.showStatus(title: "Gateway'e ulaşılamadı",
+        main.showStatus(title: L("Gateway'e ulaşılamadı", "Couldn't reach the gateway"),
           detail: Gateway.shared.bundled
-            ? "Sunucu başlatılamadı. Ayrıntılar için logları açın. 7420 portunu başka bir uygulama kullanıyor olabilir."
+            ? L("Sunucu başlatılamadı. Ayrıntılar için logları açın. 7420 portunu başka bir uygulama kullanıyor olabilir.", "The server couldn't start. Open the logs for details. Another app may be using port 7420.")
             : Gateway.shared.serviceInstalled
-              ? "Arka plan servisi başlatılamadı. Ayrıntılar için logları açın veya Terminal'de <code>./bin/kmy gateway status</code> çalıştırın."
-              : "Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminal'de <code>./bin/kmy gateway status</code> ile kontrol edin.",
+              ? L("Arka plan servisi başlatılamadı. Ayrıntılar için logları açın veya Terminal'de <code>./bin/kmy gateway status</code> çalıştırın.", "The background service couldn't start. Open the logs for details or run <code>./bin/kmy gateway status</code> in Terminal.")
+              : L("Sunucu \(Gateway.shared.projectRoot.path) klasöründen başlatılamadı. Node kurulu mu? Terminal'de <code>./bin/kmy gateway status</code> ile kontrol edin.", "The server couldn't start from \(Gateway.shared.projectRoot.path). Is Node installed? Check with <code>./bin/kmy gateway status</code> in Terminal."),
           retry: true)
       }
     }
@@ -166,6 +169,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     return i
   }
 
+  /// Sayfa arayüz dilini değiştirdi: menüler yeni dille yeniden kurulur
+  func languageChanged() { buildMenu() }
+
   private func buildMenu() {
     let bar = NSMenu()
     func menu(_ title: String, _ items: [NSMenuItem]) -> NSMenu {
@@ -178,61 +184,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     let name = "kmy terminal"
     _ = menu(name, [
-      item("\(name) Hakkında", #selector(about)),
+      item(L("\(name) Hakkında", "About \(name)"), #selector(about)),
       .separator(),
-      item("Ayarlar…", #selector(openSettings), ","),
+      item(L("Ayarlar…", "Settings…"), #selector(openSettings), ","),
       .separator(),
-      { let i = NSMenuItem(title: "Servisler", action: nil, keyEquivalent: ""); let s = NSMenu(); i.submenu = s; NSApp.servicesMenu = s; return i }(),
+      { let i = NSMenuItem(title: L("Servisler", "Services"), action: nil, keyEquivalent: ""); let s = NSMenu(); i.submenu = s; NSApp.servicesMenu = s; return i }(),
       .separator(),
-      item("\(name) Gizle", #selector(NSApplication.hide(_:)), "h", target: NSApp),
-      item("Diğerlerini Gizle", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option], target: NSApp),
-      item("Tümünü Göster", #selector(NSApplication.unhideAllApplications(_:)), target: NSApp),
+      item(L("\(name) Gizle", "Hide \(name)"), #selector(NSApplication.hide(_:)), "h", target: NSApp),
+      item(L("Diğerlerini Gizle", "Hide Others"), #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option], target: NSApp),
+      item(L("Tümünü Göster", "Show All"), #selector(NSApplication.unhideAllApplications(_:)), target: NSApp),
       .separator(),
-      item("\(name) Uygulamasından Çık", #selector(NSApplication.terminate(_:)), "q", target: NSApp),
+      item(L("\(name) Uygulamasından Çık", "Quit \(name)"), #selector(NSApplication.terminate(_:)), "q", target: NSApp),
     ])
-    _ = menu("Dosya", [
-      item("Yeni Ajan Oturumu", #selector(newSession), "n"),
-      item("Sembol Ara…", #selector(palette), "k"),
+    _ = menu(L("Dosya", "File"), [
+      item(L("Yeni Sohbet", "New Chat"), #selector(newSession), "n"),
+      item(L("Sembol Ara…", "Search Symbols…"), #selector(palette), "k"),
       .separator(),
-      fr("Pencereyi Kapat", #selector(NSWindow.performClose(_:)), "w"),
+      fr(L("Pencereyi Kapat", "Close Window"), #selector(NSWindow.performClose(_:)), "w"),
     ])
     // Düzen menüsü: WKWebView'de kopyala / yapıştır / geri al bu seçicilerle çalışır
-    _ = menu("Düzen", [
-      NSMenuItem(title: "Geri Al", action: Selector(("undo:")), keyEquivalent: "z"),
-      { let i = NSMenuItem(title: "Yinele", action: Selector(("redo:")), keyEquivalent: "z"); i.keyEquivalentModifierMask = [.command, .shift]; return i }(),
+    _ = menu(L("Düzen", "Edit"), [
+      NSMenuItem(title: L("Geri Al", "Undo"), action: Selector(("undo:")), keyEquivalent: "z"),
+      { let i = NSMenuItem(title: L("Yinele", "Redo"), action: Selector(("redo:")), keyEquivalent: "z"); i.keyEquivalentModifierMask = [.command, .shift]; return i }(),
       .separator(),
-      NSMenuItem(title: "Kes", action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
-      NSMenuItem(title: "Kopyala", action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
-      NSMenuItem(title: "Yapıştır", action: #selector(NSText.paste(_:)), keyEquivalent: "v"),
-      NSMenuItem(title: "Tümünü Seç", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
+      NSMenuItem(title: L("Kes", "Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
+      NSMenuItem(title: L("Kopyala", "Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
+      NSMenuItem(title: L("Yapıştır", "Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"),
+      NSMenuItem(title: L("Tümünü Seç", "Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
     ])
-    _ = menu("Görünüm", [
+    _ = menu(L("Görünüm", "View"), [
       item("Terminal", #selector(viewAgent), "1"),
-      item("Dashboard", #selector(viewMarket), "2"),
-      item("Portföy", #selector(viewPortfolio), "3"),
-      item("Sağ Paneli Göster/Gizle", #selector(toggleRight), "\\"),
+      item(L("Piyasa", "Markets"), #selector(viewMarket), "2"),
+      item(L("Portföy", "Portfolio"), #selector(viewPortfolio), "3"),
+      item(L("Sağ Paneli Göster/Gizle", "Show/Hide Side Panel"), #selector(toggleRight), "\\"),
       .separator(),
-      item("Yakınlaştır", #selector(zoomIn), "+"),
-      item("Uzaklaştır", #selector(zoomOut), "-"),
-      item("Gerçek Boyut", #selector(zoomReset), "0"),
+      item(L("Yakınlaştır", "Zoom In"), #selector(zoomIn), "+"),
+      item(L("Uzaklaştır", "Zoom Out"), #selector(zoomOut), "-"),
+      item(L("Gerçek Boyut", "Actual Size"), #selector(zoomReset), "0"),
       .separator(),
-      item("Yeniden Yükle", #selector(reload), "r"),
-      fr("Tam Ekran", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
+      item(L("Yeniden Yükle", "Reload"), #selector(reload), "r"),
+      fr(L("Tam Ekran", "Enter Full Screen"), #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
     ])
     _ = menu("Gateway", [
-      item("Durum", #selector(gatewayStatus)),
-      item("Yeniden Başlat", #selector(gatewayRestart)),
-      item("Logları Aç", #selector(gatewayLogs)),
+      item(L("Durum", "Status"), #selector(gatewayStatus)),
+      item(L("Yeniden Başlat", "Restart"), #selector(gatewayRestart)),
+      item(L("Logları Aç", "Open Logs"), #selector(gatewayLogs)),
       .separator(),
-      item("Arka Planda Çalıştır (servis)", #selector(toggleService)),
-      item("Çalışma Klasörünü Göster", #selector(showProject)),
+      item(L("Arka Planda Çalıştır (Servis)", "Run in Background (Service)"), #selector(toggleService)),
+      item(L("Çalışma Klasörünü Göster", "Show Working Folder"), #selector(showProject)),
     ])
-    let win = menu("Pencere", [
-      fr("Küçült", #selector(NSWindow.performMiniaturize(_:)), "m"),
-      fr("Büyüt", #selector(NSWindow.performZoom(_:))),
+    let win = menu(L("Pencere", "Window"), [
+      fr(L("Küçült", "Minimize"), #selector(NSWindow.performMiniaturize(_:)), "m"),
+      fr(L("Büyüt", "Zoom"), #selector(NSWindow.performZoom(_:))),
     ])
     NSApp.windowsMenu = win
-    _ = menu("Yardım", [item("Kısayollar ve Komutlar", #selector(help))])
+    _ = menu(L("Yardım", "Help"), [item(L("Kısayollar ve Komutlar", "Shortcuts and Commands"), #selector(help))])
     NSApp.mainMenu = bar
   }
 
@@ -240,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   @objc private func about() {
     NSApp.orderFrontStandardAboutPanel(options: [
       .applicationName: "kmy terminal",
-      .credits: NSAttributedString(string: "Yapay zekâ destekli borsa terminali\nGateway: \(Gateway.shared.baseURL.absoluteString)"),
+      .credits: NSAttributedString(string: L("Yapay zekâ destekli borsa terminali", "AI-powered stock market terminal") + "\nGateway: \(Gateway.shared.baseURL.absoluteString)"),
     ])
   }
   @objc private func openSettings() { focus(); main.js("window.borsaApp?.settings()") }
@@ -261,14 +267,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       let up = await Gateway.shared.isUp()
       let g = Gateway.shared
       let a = NSAlert()
-      a.messageText = up ? "Gateway çalışıyor" : "Gateway çalışmıyor"
-      a.informativeText = "Adres: \(g.baseURL.absoluteString)\nMod: \(g.serviceInstalled ? "launchd servisi" : g.ownsServer ? "uygulamayla birlikte" : "harici")\nProje: \(g.projectRoot.path)"
-      a.addButton(withTitle: "Tamam")
+      a.messageText = up ? L("Gateway çalışıyor", "Gateway is running") : L("Gateway çalışmıyor", "Gateway is not running")
+      let mode = g.serviceInstalled ? L("launchd servisi", "launchd service") : g.ownsServer ? L("uygulamayla birlikte", "runs with the app") : L("harici", "external")
+      a.informativeText = L("Adres", "Address") + ": \(g.baseURL.absoluteString)\n" + L("Mod", "Mode") + ": \(mode)\n" + L("Proje", "Project") + ": \(g.projectRoot.path)"
+      a.addButton(withTitle: L("Tamam", "OK"))
       a.beginSheetModal(for: main.window!, completionHandler: nil)
     }
   }
   @objc private func gatewayRestart() {
-    main.showStatus(title: "Gateway yeniden başlatılıyor…", detail: "Birkaç saniye sürer.", retry: false)
+    main.showStatus(title: L("Gateway yeniden başlatılıyor…", "Restarting the gateway…"), detail: L("Birkaç saniye sürer.", "This takes a few seconds."), retry: false)
     Task { @MainActor in
       if await Gateway.shared.restart() { main.loadApp() } else { connect() }
     }
@@ -276,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   // Servis: uygulama kapalıyken de sunucu (zamanlanmış görevler, KAP takibi) çalışır; oturum açılışında başlar
   @objc private func toggleService() {
     let on = !Gateway.shared.serviceInstalled
-    main.showStatus(title: on ? "Arka plan servisi kuruluyor…" : "Arka plan servisi kaldırılıyor…", detail: "Birkaç saniye sürer.", retry: false)
+    main.showStatus(title: on ? L("Arka plan servisi kuruluyor…", "Installing the background service…") : L("Arka plan servisi kaldırılıyor…", "Removing the background service…"), detail: L("Birkaç saniye sürer.", "This takes a few seconds."), retry: false)
     Task { @MainActor in
       _ = await Gateway.shared.setService(on)
       Gateway.shared.syncMenubarAgent()

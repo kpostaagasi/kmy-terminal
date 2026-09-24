@@ -20,11 +20,11 @@ export const CLASS_LABELS = { FR: 'Finansal Rapor', ODA: 'Özel Durum', DG: 'Di�
 
 // Sinyal sınıfları (terminalin kendi kuralları; konu + özet metnine göre)
 export const SIGNALS = {
-  TEZ: { label: 'TEZ', title: 'Tezi değiştirebilecek gelişme (sözleşme, ihale, satın alma, dava, pay alım teklifi…)' },
-  YAPISAL: { label: 'YAP', title: 'Sermaye / ortaklık yapısı (sermaye artırımı, geri alım, içeriden alım-satım, devre kesici…)' },
-  FINANSAL: { label: 'FİN', title: 'Finansal rapor, temettü, borçlanma aracı, kredi derecelendirmesi' },
-  KURUMSAL: { label: 'KUR', title: 'Genel kurul, yönetim, denetim, kurumsal yönetim formları' },
-  DIGER: { label: 'DİĞER', title: 'Diğer bildirimler ve kurum duyuruları' },
+  TEZ: { label: 'Tez', title: 'Tezi değiştirebilecek gelişme (sözleşme, ihale, satın alma, dava, pay alım teklifi…)' },
+  YAPISAL: { label: 'Yapı', title: 'Sermaye / ortaklık yapısı (sermaye artırımı, geri alım, içeriden alım-satım, devre kesici…)' },
+  FINANSAL: { label: 'Finans', title: 'Finansal rapor, temettü, borçlanma aracı, kredi derecelendirmesi' },
+  KURUMSAL: { label: 'Kurumsal', title: 'Genel kurul, yönetim, denetim, kurumsal yönetim formları' },
+  DIGER: { label: 'Diğer', title: 'Diğer bildirimler ve kurum duyuruları' },
 };
 
 const R = {
@@ -94,7 +94,7 @@ async function kapFetch(url, init = {}) {
   if (res.status === 429) {
     backoffUntil = Date.now() + backoffMs;
     backoffMs = Math.min(backoffMs * 2, 30 * 60_000);
-    throw new Error('KAP hız sınırı (429); bir süre sonra tekrar denenecek');
+    throw new Error('KAP hız sınırına takıldı; bir süre sonra yeniden denenecek');
   }
   if (!res.ok) throw new Error(`KAP HTTP ${res.status}`);
   backoffMs = 60_000;
@@ -108,7 +108,7 @@ const WINDOW_DAYS = 4;
 async function postCriteria(criteria) {
   const res = await kapFetch(LIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(criteria) });
   const data = await res.json();
-  if (!Array.isArray(data)) throw new Error('KAP beklenmeyen yanıt');
+  if (!Array.isArray(data)) throw new Error('KAP beklenmeyen bir yanıt döndürdü');
   return data;
 }
 

@@ -1,6 +1,7 @@
 // AGENT CHAT: Claude / Codex oturumları, akışlı yanıt, katlanan araç grupları, KOMİTE (alt ajan) kartları,
 // izin ve soru kartları, dosya ekleri, eğik çizgi komutları, maliyet / tur / bağlam göstergesi
 import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR } from './core.js';
+import { t, tx, lang } from './i18n.js';
 
 // Çizgi simgeler (currentColor): ataç, gönder, durdur
 const ICON = {
@@ -16,26 +17,26 @@ root.innerHTML = `
     <div class="slash" id="slash" hidden></div>
     <div class="attach-list" id="attachList" hidden></div>
     <div class="composer">
-      <textarea id="chatIn" rows="1" placeholder="Mesaj yaz..." aria-label="Mesaj"></textarea>
+      <textarea id="chatIn" rows="1" placeholder="${t('Mesaj yazın…')}" aria-label="${t('Mesaj')}"></textarea>
       <div class="cm-bar">
-        <button class="cm-ico" id="attachBtn" title="Dosya veya görsel ekle (en fazla 10 MB)" aria-label="Dosya ekle">${ICON.clip}</button>
+        <button class="cm-ico" id="attachBtn" title="${t('Dosya veya görsel ekle (en fazla 10 MB)')}" aria-label="${t('Dosya ekle')}">${ICON.clip}</button>
         <input type="file" id="attachFile" hidden multiple accept="image/*,.pdf,.txt,.csv,.md,.json,.xlsx,.html">
-        <label class="cm-chip" title="Model"><select id="optModel" aria-label="Model"></select></label>
-        <label class="cm-chip" title="Efor seviyesi (/think)"><select id="optEffort" aria-label="Efor"></select></label>
+        <label class="cm-chip" title="${t('Model')}"><select id="optModel" aria-label="${t('Model')}"></select></label>
+        <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
         <span class="spacer"></span>
-        <span class="cm-hint" id="cmHint">↵ gönder · / komutlar</span>
-        <button class="cm-send" id="chatSend" title="Gönder (Enter)" aria-label="Gönder">${ICON.send}</button>
+        <span class="cm-hint" id="cmHint">${t('↵ gönder · / komutlar')}</span>
+        <button class="cm-send" id="chatSend" title="${t('Gönder (Enter)')}" aria-label="${t('Gönder')}">${ICON.send}</button>
       </div>
     </div>
     <div class="cm-status">
-      <button class="cm-jobs" id="chipJobs" title="Arka planda süren ajan işleri"><i></i><span id="chipJobsText">0 arka plan işi</span></button>
+      <button class="cm-jobs" id="chipJobs" title="${t('Arka planda süren asistan işleri')}"><i></i><span id="chipJobsText">${t('{n} arka plan işi', { n: 0 })}</span></button>
       <span class="spacer"></span>
-      <span class="cm-stat">MALİYET <b id="stCost">$0,00</b></span>
-      <span class="cm-stat">TUR <b id="stTurns">0</b></span>
-      <span class="cm-stat" title="Model bağlam kullanımı">CTX <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
+      <span class="cm-stat">${t('Maliyet')} <b id="stCost">$0,00</b></span>
+      <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
+      <span class="cm-stat" title="${t('Model bağlam kullanımı')}">${t('Bağlam')} <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
     </div>
   </div>`;
-$('#agentActions').innerHTML = `<label class="sess-chip" title="Oturum"><select id="sessSel" aria-label="Oturum"></select></label><button class="icon-btn sm" id="sessMenu" title="Tüm oturumlar">☰</button><button class="icon-btn sm" id="sessNew" title="Yeni oturum (/yeni)">＋</button><button class="icon-btn sm" id="sessExport" title="Sohbeti JSON olarak indir (/export)">⤓</button>`;
+$('#agentActions').innerHTML = `<label class="sess-chip" title="${t('Oturum')}"><select id="sessSel" aria-label="${t('Oturum')}"></select></label><button class="icon-btn sm" id="sessMenu" title="${t('Tüm oturumlar')}">☰</button><button class="icon-btn sm" id="sessNew" title="${t('Yeni oturum (/yeni)')}">＋</button><button class="icon-btn sm" id="sessExport" title="${t('Sohbeti JSON olarak indir (/export)')}">⤓</button>`;
 
 const log = $('#chatLog'), input = $('#chatIn');
 const foot = $('#chatFoot');
@@ -62,7 +63,7 @@ const OLD_EVENTS_PAGE = 150;
 const TOOL_LABELS = {
   Read: 'Dosya okunuyor', Write: 'Dosya yazılıyor', Edit: 'Dosya düzenleniyor', MultiEdit: 'Dosya düzenleniyor', NotebookEdit: 'Not defteri düzenleniyor',
   Glob: 'Dosya aranıyor', Grep: 'İçerik aranıyor', Bash: 'Komut çalıştırılıyor', shell: 'Komut çalıştırılıyor', WebSearch: 'Web araması', WebFetch: 'Web sayfası alınıyor',
-  Task: 'Alt ajan başlatılıyor', Agent: 'Alt ajan başlatılıyor', TodoWrite: 'Görev listesi güncelleniyor', Skill: 'Beceri yükleniyor', ToolSearch: 'Araç aranıyor',
+  Task: 'Alt asistan başlatılıyor', Agent: 'Alt asistan başlatılıyor', TodoWrite: 'Görev listesi güncelleniyor', Skill: 'Beceri yükleniyor', ToolSearch: 'Araç aranıyor',
   AskUserQuestion: 'Soru soruluyor', ExitPlanMode: 'Plan hazırlandı',
   get_quotes: 'Fiyatlar', get_history: 'Fiyat geçmişi', technical_analysis: 'Teknik analiz', signal_scan: 'Sinyal taraması', get_fundamentals: 'Temel veriler',
   screen_stocks: 'Hisse tarama', get_corporate_actions: 'Temettü / sermaye takvimi', search_symbol: 'Sembol arama', market_overview: 'Piyasa özeti',
@@ -79,7 +80,7 @@ function toolName(n) {
   if (n.startsWith('mcp__')) return n.split('__').slice(1).join(' › ');
   return n;
 }
-function toolLabel(n) { const k = toolName(n); return TOOL_LABELS[k] || TOOL_LABELS[n] || k; }
+function toolLabel(n) { const k = toolName(n); const l = TOOL_LABELS[k] || TOOL_LABELS[n]; return l ? t(l) : k; }
 function toolSummary(i) {
   if (!i) return '';
   return i.command || i.symbol || i.symbols?.join(', ') || i.query || i.url || i.file_path || i.pattern || i.title || i.description || i.skill || i.id || i.prompt?.slice(0, 80) || '';
@@ -89,12 +90,14 @@ function toolSummary(i) {
 const provName = (p) => state.meta?.providers?.[p] || ({ codex: 'Codex', omp: 'oh-my-pi' }[p] || 'Claude');
 const provTag = (p) => (p === 'codex' ? '[Codex] ' : p === 'omp' ? '[omp] ' : '');
 const paid = (p) => !p || p === 'claude';
+// Oturum adı: zamanlanmış görevlerin adları (⏰ …) sunucudan gelir ve çevrilir
+const sessTitle = (x) => (!x?.title ? t('Oturum') : x.title.startsWith('⏰') ? tx(x.title) : x.title);
 
 // ── Oturum listesi ─────────────────────────────────
 async function loadSessions() {
   sessions = await api('/sessions').catch(() => []);
   const sel = $('#sessSel');
-  sel.innerHTML = `<option value="">Yeni oturum</option>` + sessions.map((s) => `<option value="${s.id}" ${s.id === current ? 'selected' : ''}>${s.running ? '● ' : ''}${provTag(s.provider)}${esc((s.title || 'Oturum').slice(0, 40))}</option>`).join('');
+  sel.innerHTML = `<option value="">${t('Yeni oturum')}</option>` + sessions.map((s) => `<option value="${s.id}" ${s.id === current ? 'selected' : ''}>${s.running ? '● ' : ''}${provTag(s.provider)}${esc(sessTitle(s).slice(0, 40))}</option>`).join('');
   if (current && !sessions.find((s) => s.id === current)) { current = null; localSet('session', null); }
   requestAnimationFrame(() => fitSelect(sel));
 }
@@ -120,7 +123,7 @@ async function openSession(id) {
   const evs = s.events.map((e) => ({ type: e.kind, ...e.data, replay: true, ts: e.ts }));
   if (evs.length > OLD_EVENTS_PAGE) {
     pendingEvents = evs.slice(0, evs.length - OLD_EVENTS_PAGE);
-    const more = h(`<button class="ghost load-older">Eski mesajları yükle (${pendingEvents.length} olay)</button>`);
+    const more = h(`<button class="ghost load-older">${t('Önceki mesajları yükle ({n})', { n: pendingEvents.length })}</button>`);
     more.onclick = loadOlder;
     log.append(more);
   }
@@ -136,7 +139,7 @@ async function openSession(id) {
   scrollEnd(true);
 }
 on('agent:open', (id) => { emit('view', 'chat'); openSession(id); });
-on('chat:new', () => { if (!running) openSession(null); else toast('Ajan çalışıyor; önce durdurun (Esc)', 'err'); });
+on('chat:new', () => { if (!running) openSession(null); else toast(t('Asistan çalışıyor; önce durdurun (Esc)'), 'err'); });
 
 // Eski olayları başa ekle (kaydırma konumu korunur)
 function loadOlder() {
@@ -150,26 +153,26 @@ function loadOlder() {
   stream = null; toolRun = null; turnHead = null; turnTodo = null;
   try { for (const e of chunk) renderEvent(e); } finally { add = realAdd; [stream, toolRun, turnHead, turnTodo] = saved; }
   btn.after(holder);
-  if (pendingEvents.length) btn.textContent = `Eski mesajları yükle (${pendingEvents.length} olay)`; else btn.remove();
+  if (pendingEvents.length) btn.textContent = t('Önceki mesajları yükle ({n})', { n: pendingEvents.length }); else btn.remove();
   log.scrollTop += log.scrollHeight - before;
 }
 
 // Oturumlar penceresi: tarihe göre gruplu liste; satıra tıklayınca açılır, işlemler satır sonunda simge düğmeler
 function sessionsModal() {
-  const m = modal({ title: 'Oturumlar', wide: true, body: `<div class="ss">
-    <div class="ss-top"><input id="sessQ" class="ss-q" placeholder="Oturum ara…" aria-label="Oturum ara"><button class="btn" id="sessNew2">＋ Yeni oturum</button></div>
+  const m = modal({ title: t('Oturumlar'), wide: true, body: `<div class="ss">
+    <div class="ss-top"><input id="sessQ" class="ss-q" placeholder="${t('Oturum ara…')}" aria-label="${t('Oturum ara')}"><button class="btn" id="sessNew2">＋ ${t('Yeni oturum')}</button></div>
     <div class="ss-list" id="sessT"></div><div class="ss-foot dim" id="sessF"></div></div>` });
   const qIn = $('#sessQ', m.body);
   qIn.addEventListener('input', () => draw());
   $('#sessNew2', m.body).onclick = () => { openSession(null); m.close(); };
   setTimeout(() => qIn.focus(), 30);
   const dayKey = (d) => {
-    if (!d) return 'Daha eski';
+    if (!d) return t('Daha eski');
     const t0 = new Date(); t0.setHours(0, 0, 0, 0);
     const diff = (t0 - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400_000;
-    return diff <= 0 ? 'Bugün' : diff === 1 ? 'Dün' : diff < 7 ? 'Bu hafta' : diff < 31 ? 'Bu ay' : 'Daha eski';
+    return t(diff <= 0 ? 'Bugün' : diff === 1 ? 'Dün' : diff < 7 ? 'Bu hafta' : diff < 31 ? 'Bu ay' : 'Daha eski');
   };
-  const cost = (x) => (paid(x.provider) || x.cost_usd ? `$${num(x.cost_usd || 0, 2)}` : 'abonelik');
+  const cost = (x) => (paid(x.provider) || x.cost_usd ? `$${num(x.cost_usd || 0, 2)}` : t('abonelik'));
   const draw = () => {
     const q = qIn.value.toLocaleLowerCase('tr').trim();
     const list = sessions.filter((x) => !q || (x.title || '').toLocaleLowerCase('tr').includes(q));
@@ -181,13 +184,13 @@ function sessionsModal() {
     $('#sessT', m.body).innerHTML = list.length ? groups.map(([k, xs]) => `<div class="ss-grp">${k}</div>${xs.map((x) => `
       <div class="ss-row ${x.id === current ? 'cur' : ''}" data-o="${x.id}" tabindex="0">
         <span class="ss-st ${x.running ? 'run' : ''}">${x.running ? '<span class="spinner"></span>' : ''}</span>
-        <div class="ss-main"><div class="ss-title">${esc(x.title || 'Oturum')}</div>
+        <div class="ss-main"><div class="ss-title">${esc(sessTitle(x))}</div>
           <div class="ss-meta"><span class="ss-prov">${esc(provName(x.provider))}</span>${x.model ? ` · ${esc(x.model)}` : ''} · ${dateTR(sqlDate(x.updated_at), true)} · <span class="${paid(x.provider) ? 'up' : ''}">${cost(x)}</span></div></div>
-        <div class="ss-acts"><button class="icon-btn sm" data-r="${x.id}" title="Yeniden adlandır" aria-label="Yeniden adlandır">✎</button><button class="icon-btn sm" data-x="${x.id}" title="JSON olarak indir" aria-label="İndir">⤓</button><button class="icon-btn sm ss-del" data-d="${x.id}" title="Sil" aria-label="Sil">🗑</button></div>
+        <div class="ss-acts"><button class="icon-btn sm" data-r="${x.id}" title="${t('Yeniden adlandır')}" aria-label="${t('Yeniden adlandır')}">✎</button><button class="icon-btn sm" data-x="${x.id}" title="${t('JSON olarak indir')}" aria-label="${t('İndir')}">⤓</button><button class="icon-btn sm ss-del" data-d="${x.id}" title="${t('Sil')}" aria-label="${t('Sil')}">🗑</button></div>
       </div>`).join('')}`).join('')
-      : `<div class="empty">${sessions.length ? 'Sonuç bulunamadı' : 'Henüz oturum yok'}</div>`;
+      : `<div class="empty">${t(sessions.length ? 'Sonuç bulunamadı' : 'Henüz oturum yok')}</div>`;
     const claude = sessions.reduce((a, x) => a + (paid(x.provider) ? x.cost_usd || 0 : 0), 0);
-    $('#sessF', m.body).textContent = `${sessions.length} oturum · Claude toplam maliyet $${num(claude, 2)} · Codex ve oh-my-pi oturumları abonelikten düşer`;
+    $('#sessF', m.body).textContent = t('{n} oturum · Claude toplam maliyeti {cost} · Codex ve oh-my-pi oturumları aboneliğe dahil', { n: sessions.length, cost: `$${num(claude, 2)}` });
     $$('.ss-row', m.body).forEach((r) => {
       r.onclick = (e) => { if (e.target.closest('.ss-acts')) return; openSession(r.dataset.o); m.close(); };
       r.onkeydown = (e) => { if (e.key === 'Enter') { openSession(r.dataset.o); m.close(); } };
@@ -196,8 +199,8 @@ function sessionsModal() {
     $$('[data-r]', m.body).forEach((b) => b.onclick = () => renameSession(b.dataset.r, draw));
     $$('[data-d]', m.body).forEach((b) => b.onclick = async () => {
       const x = sessions.find((y) => y.id === b.dataset.d);
-      if (x?.running) { toast('Çalışan oturum silinemez; önce durdurun', 'err'); return; }
-      if (!(await confirmBox(`"${(x?.title || 'Oturum').slice(0, 60)}" silinsin mi? Geri alınamaz.`, { danger: true, ok: 'Sil' }))) return;
+      if (x?.running) { toast(t('Çalışan oturum silinemez; önce durdurun'), 'err'); return; }
+      if (!(await confirmBox(t('"{title}" silinsin mi? Bu işlem geri alınamaz.', { title: sessTitle(x).slice(0, 60) }), { danger: true, ok: t('Sil') }))) return;
       await api(`/sessions/${b.dataset.d}`, { method: 'DELETE' });
       if (current === b.dataset.d) openSession(null);
       await loadSessions(); draw();
@@ -210,7 +213,7 @@ async function renameSession(id, after, title) {
   const s = sessions.find((x) => x.id === id);
   if (!s) return;
   if (title == null) {
-    const m = modal({ title: 'Oturumu yeniden adlandır', body: `<input id="rnIn" style="width:100%" value="${esc(s.title || '')}">`, footer: '<button class="btn sec" data-close>İptal</button><button class="btn" id="rnOk">Kaydet</button>' });
+    const m = modal({ title: t('Oturumu yeniden adlandır'), body: `<input id="rnIn" style="width:100%" value="${esc(s.title || '')}">`, footer: `<button class="btn sec" data-close>${t('İptal')}</button><button class="btn" id="rnOk">${t('Kaydet')}</button>` });
     const inp = $('#rnIn', m.el); inp.focus(); inp.select();
     const ok = async () => { await renameSession(id, after, inp.value.trim()); m.close(); };
     $('#rnOk', m.el).onclick = ok;
@@ -223,24 +226,25 @@ async function renameSession(id, after, title) {
 }
 
 function exportChat(id = current) {
-  if (!id) { toast('Önce bir oturum açın', 'err'); return; }
+  if (!id) { toast(t('Önce bir oturum açın'), 'err'); return; }
   const a = h('<a download></a>'); a.href = `/api/sessions/${id}/export`; a.click();
-  toast('Sohbet JSON olarak indiriliyor');
+  toast(t('Sohbet JSON olarak indiriliyor'));
 }
 
 // ── Karşılama ve bağlama göre hızlı istemler ─────────────
 const COMMON_QUICK = [
   ['Piyasa özeti', 'Bugünün piyasa özetini çıkar.'],
-  ['Portföyümü özetle', 'Portföyümü özetle: değer, K/Z, en güçlü/zayıf pozisyonlar ve dikkat etmem gerekenler.'],
-  ['KAP tez sinyalleri', 'Bugünkü KAP tez sinyallerini özetle: watchlist ve portföyümdeki şirketlerin TEZ ve YAPISAL bildirimlerini oku ve önem sırasıyla yorumla.'],
+  ['Portföyümü özetle', 'Portföyümü özetle: değer, kâr/zarar, en güçlü ve en zayıf pozisyonlar, dikkat etmem gerekenler.'],
+  ['KAP tez sinyalleri', 'Bugünkü KAP tez sinyallerini özetle: izleme listemdeki ve portföyümdeki şirketlerin TEZ ve YAPISAL bildirimlerini oku, önem sırasıyla yorumla.'],
   ['Tezlerim ne durumda?', 'Kayıtlı tezlerimin tetikleyicilerini güncel verilerle tara (tetikleyici-radar becerisi).'],
-];
+].map(([l, p]) => [t(l), t(p)]);
+const quickPrompt = (s) => t('{s} hissesini hızlı analiz et: fiyat, teknik görünüm, temel oranlar ve son KAP; 5 maddelik özet.', { s: s || '' });
 function quickItems() {
   const s = state.selected;
   const out = [];
-  if (state.openKap?.id) out.push(['Bu bildirimi yorumla', `Açık olan KAP bildirimini (id ${state.openKap.id}${state.openKap.stocks?.length ? `, ${state.openKap.stocks.join(', ')}` : ''}) get_kap_detail ile oku; şirket için ne anlama geldiğini, tez etkisini ve izlenecekleri özetle.`]);
-  if (state.openReport) out.push(['Açık raporu özetle', `Açık olan raporu (workspace/reports/${state.openReport}) oku ve özetle; güçlü ve zayıf yönlerini kendi bağımsız görüşünle değerlendir.`]);
-  if (s) out.push([`${s} hızlı analiz`, `${s} hissesini hızlı analiz et: fiyat, teknik görünüm, temel oranlar ve son KAP; 5 maddelik özet.`]);
+  if (state.openKap?.id) out.push([t('Bu bildirimi yorumla'), t('Açık olan KAP bildirimini (id {id}{stocks}) get_kap_detail ile oku; şirket için ne anlama geldiğini, tez etkisini ve izlenecekleri özetle.', { id: state.openKap.id, stocks: state.openKap.stocks?.length ? `, ${state.openKap.stocks.join(', ')}` : '' })]);
+  if (state.openReport) out.push([t('Açık raporu özetle'), t('Açık olan raporu (workspace/reports/{file}) oku ve özetle; güçlü ve zayıf yönlerini kendi bağımsız görüşünle değerlendir.', { file: state.openReport })]);
+  if (s) out.push([t('{s} hızlı analiz', { s }), quickPrompt(s)]);
   out.push(...COMMON_QUICK);
   return out.slice(0, 6);
 }
@@ -252,7 +256,7 @@ function drawQuick() {
   $$('button', q).forEach((b) => b.onclick = () => send(items[b.dataset.i][1]));
 }
 function welcome() {
-  log.innerHTML = `<div class="welcome"><div class="w-title">AJAN HAZIR</div><div class="dim">Bir hisse kodu veya soru yazın. Komutlar için <span class="mono">/</span></div><div class="quick" id="quick"></div></div>`;
+  log.innerHTML = `<div class="welcome"><div class="w-title">${t('Asistan hazır')}</div><div class="dim">${t('Bir hisse kodu veya soru yazın. Komutlar için {slash} yazın.', { slash: '<span class="mono">/</span>' })}</div><div class="quick" id="quick"></div></div>`;
   drawQuick();
   setupCheck();
 }
@@ -263,10 +267,10 @@ async function setupCheck() {
   const h = await setupChecked;
   const w = $('.welcome', log);
   if (!h || !w || h.claudeCli || $('.w-setup', w)) return;
-  w.insertAdjacentHTML('beforeend', `<div class="w-setup"><b>Claude Code bulunamadı.</b> Yapay zekâ ajanı için bu Mac'e Claude Code kurun ve Claude hesabınızla giriş yapın:
-    <ol><li><a href="https://claude.com/download" target="_blank" rel="noopener">claude.com/download</a> adresinden kurun (veya Terminal'de <span class="mono">curl -fsSL https://claude.ai/install.sh | bash</span>).</li>
-    <li>Terminal'de <span class="mono">claude</span> yazıp giriş yapın.</li><li>kmy terminal'i kapatıp yeniden açın.</li></ol>
-    <span class="dim">Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.</span></div>`);
+  w.insertAdjacentHTML('beforeend', `<div class="w-setup"><b>${t('Claude Code bulunamadı.')}</b> ${t("Yapay zekâ asistanı için bu Mac'e Claude Code kurun ve Claude hesabınızla giriş yapın:")}
+    <ol><li>${t("{link} adresinden kurun (veya Terminal'de {cmd} çalıştırın).", { link: '<a href="https://claude.com/download" target="_blank" rel="noopener">claude.com/download</a>', cmd: '<span class="mono">curl -fsSL https://claude.ai/install.sh | bash</span>' })}</li>
+    <li>${t("Terminal'de {cmd} yazıp giriş yapın.", { cmd: '<span class="mono">claude</span>' })}</li><li>${t("kmy terminal'i kapatıp yeniden açın.")}</li></ol>
+    <span class="dim">${t('Piyasa verisi, KAP, kurum raporları, portföy ve izleme listesi asistan olmadan da çalışır.')}</span></div>`);
 }
 
 // ── Olay çizimi ───────────────────────────────────
@@ -286,9 +290,9 @@ function renderStream() {
 }
 
 function endThinking() {
-  const t = stream?.thinkEl;
-  if (!t) return;
-  if (!stream.thinkText?.trim()) t.remove(); else $('summary', t).textContent = 'Düşünce';
+  const te = stream?.thinkEl;
+  if (!te) return;
+  if (!stream.thinkText?.trim()) te.remove(); else $('summary', te).textContent = t('Düşünce');
   stream.thinkEl = null;
 }
 
@@ -297,10 +301,10 @@ const SUB_TOOLS = new Set(['Task', 'Agent']);
 
 // Asistan mesajı: turun ilkinde AJAN etiketi + saat (sonuçta maliyet eklenir); kopyala, daralt/genişlet
 function assistantBox(e) {
-  const el = h('<div class="msg assistant"><div class="md"></div><div class="msg-actions"><button class="ghost xs" data-copy title="Mesajı kopyala">Kopyala</button><button class="ghost xs" data-fold hidden>Genişlet</button></div></div>');
+  const el = h(`<div class="msg assistant"><div class="md"></div><div class="msg-actions"><button class="ghost xs" data-copy title="${t('Mesajı kopyala')}">${t('Kopyala')}</button><button class="ghost xs" data-fold hidden>${t('Genişlet')}</button></div></div>`);
   if (!turnHead) {
     turnHead = el;
-    el.prepend(h(`<div class="who"><b class="ai">AJAN</b><span class="meta">${timeTR(tsOf(e))}</span></div>`));
+    el.prepend(h(`<div class="who"><b class="ai">${t('Asistan')}</b><span class="meta">${timeTR(tsOf(e))}</span></div>`));
   }
   return el;
 }
@@ -315,11 +319,11 @@ log.addEventListener('click', async (e) => {
   const cp = e.target.closest('[data-copy]');
   if (cp) {
     const raw = cp.closest('.msg')?.dataset.raw || cp.closest('.msg')?.querySelector('.md')?.innerText || '';
-    try { await navigator.clipboard.writeText(raw); toast('Kopyalandı', 'ok', 1500); } catch { toast('Panoya erişilemedi', 'err'); }
+    try { await navigator.clipboard.writeText(raw); toast(t('Kopyalandı'), 'ok', 1500); } catch { toast(t('Panoya erişilemedi'), 'err'); }
     return;
   }
   const fd = e.target.closest('[data-fold]');
-  if (fd) { const m = fd.closest('.msg'); m.classList.toggle('folded'); fd.textContent = m.classList.contains('folded') ? 'Genişlet' : 'Daralt'; }
+  if (fd) { const m = fd.closest('.msg'); m.classList.toggle('folded'); fd.textContent = t(m.classList.contains('folded') ? 'Genişlet' : 'Daralt'); }
 });
 
 // Art arda gelen araç çağrıları tek satırda katlanır: "N sn çalıştı ▸ · N araç"
@@ -338,23 +342,24 @@ function addTool(el, e) {
 function drawRun(run) {
   if (!run) return;
   const tools = $$('.tool', run);
-  const busy = tools.some((t) => t.querySelector('.st .spinner'));
-  const errs = tools.filter((t) => t.classList.contains('err')).length;
+  const busy = tools.some((x) => x.querySelector('.st .spinner'));
+  const errs = tools.filter((x) => x.classList.contains('err')).length;
   const sec = Math.max(1, Math.round((Number(run.dataset.end) - Number(run.dataset.start)) / 1000));
-  $('.tr-t', run).innerHTML = `${busy && running ? '<span class="spinner"></span> çalışıyor' : `${sec} sn çalıştı`} <span class="caret">▸</span> · ${tools.length} araç${errs ? ` · <span class="down">${errs} hata</span>` : ''}`;
+  $('.tr-t', run).innerHTML = `${busy && running ? `<span class="spinner"></span> ${t('çalışıyor')}` : t('{n} sn çalıştı', { n: sec })} <span class="caret">▸</span> · ${t('{n} araç', { n: tools.length })}${errs ? ` · <span class="down">${t('{n} hata', { n: errs })}</span>` : ''}`;
 }
 
 function todoCard(inp) {
   const todos = inp?.todos || [];
-  const done = todos.filter((t) => t.status === 'completed').length;
-  return `<div class="todo-head">Görevler (${done}/${todos.length})</div>${todos.map((t) => `<div class="todo ${esc(t.status)}">${t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '◐' : '☐'} ${esc(t.content || t.activeForm || '')}</div>`).join('')}`;
+  const done = todos.filter((x) => x.status === 'completed').length;
+  return `<div class="todo-head">${t('Görevler ({done}/{total})', { done, total: todos.length })}</div>${todos.map((x) => `<div class="todo ${esc(x.status)}">${x.status === 'completed' ? '☑' : x.status === 'in_progress' ? '◐' : '☐'} ${esc(x.content || x.activeForm || '')}</div>`).join('')}`;
 }
 
 // KOMİTE üyesi (alt ajan) mesaj kartı: "➤ main → denetci" / "➤ denetci → main"
 function subCard(from, to, body, meta, id) {
-  const el = h(`<div class="sub-card"${id ? ` data-sa="${esc(id)}"` : ''}><div class="sc-head">➤ ${esc(from)} → ${esc(to)}</div><div class="sc-body note-body clamp"></div><div class="sc-meta">${meta}</div></div>`);
+  const who = (n) => (n === 'main' ? t('Ana asistan') : n);
+  const el = h(`<div class="sub-card"${id ? ` data-sa="${esc(id)}"` : ''}><div class="sc-head">➤ ${esc(who(from))} → ${esc(who(to))}</div><div class="sc-body note-body clamp"></div><div class="sc-meta">${meta}</div></div>`);
   $('.sc-body', el).innerHTML = md(body || '');
-  requestAnimationFrame(() => { const b = $('.sc-body', el); if (b.scrollHeight <= b.clientHeight + 4) b.classList.remove('clamp'); else b.title = 'Tamamını görmek için tıklayın'; });
+  requestAnimationFrame(() => { const b = $('.sc-body', el); if (b.scrollHeight <= b.clientHeight + 4) b.classList.remove('clamp'); else b.title = t('Tamamını görmek için tıklayın'); });
   $('.sc-body', el).onclick = (ev) => { if (!ev.target.closest('a')) ev.currentTarget.classList.remove('clamp'); };
   return el;
 }
@@ -365,9 +370,9 @@ function renderEvent(e) {
     case 'user': {
       turnFiles = new Map(); turnHead = null; turnTodo = null; toolRun = null;
       $('.welcome', log)?.remove();
-      const el = h(`<div class="msg user"><div class="who"><b>SEN</b><span class="meta">${timeTR(tsOf(e))}</span></div><div class="body"></div></div>`);
+      const el = h(`<div class="msg user"><div class="who"><b>${t('Sen')}</b><span class="meta">${timeTR(tsOf(e))}</span></div><div class="body"></div></div>`);
       $('.body', el).textContent = e.text;
-      if (e.context) el.append(h(`<div class="ctx">＋ bağlam: ${esc(e.context.split('\n')[0].slice(0, 90))}</div>`));
+      if (e.context) el.append(h(`<div class="ctx">＋ ${esc(t('Bağlam: {text}', { text: e.context.split('\n')[0].slice(0, 90) }))}</div>`));
       if (e.attachments?.length) el.append(h(`<div class="ctx">📎 ${e.attachments.map((a) => esc(a.name || a.path)).join(', ')}</div>`));
       add(el);
       stick = true; scrollEnd(true);
@@ -379,7 +384,7 @@ function renderEvent(e) {
       stream.text += e.text; renderStream();
       break;
     case 'thinking.delta':
-      if (!stream?.thinkEl) stream = { ...(stream || {}), thinkEl: add(h('<details class="thinking"><summary>Düşünüyor…</summary><div></div></details>')), thinkText: '' };
+      if (!stream?.thinkEl) stream = { ...(stream || {}), thinkEl: add(h(`<details class="thinking"><summary>${t('Düşünüyor…')}</summary><div></div></details>`)), thinkText: '' };
       stream.thinkText += e.text; renderStream();
       break;
     case 'text':
@@ -387,8 +392,8 @@ function renderEvent(e) {
       else finalizeAssistant(add(assistantBox(e)), e.text);
       break;
     case 'thinking':
-      if (stream?.thinkEl) { $('div', stream.thinkEl).textContent = e.text; $('summary', stream.thinkEl).textContent = 'Düşünce'; stream.thinkEl = null; }
-      else add(h('<details class="thinking"><summary>Düşünce</summary><div></div></details>')).querySelector('div').textContent = e.text;
+      if (stream?.thinkEl) { $('div', stream.thinkEl).textContent = e.text; $('summary', stream.thinkEl).textContent = t('Düşünce'); stream.thinkEl = null; }
+      else add(h(`<details class="thinking"><summary>${t('Düşünce')}</summary><div></div></details>`)).querySelector('div').textContent = e.text;
       break;
     case 'local': {
       const el = add(h('<div class="msg local"><pre></pre></div>'));
@@ -407,7 +412,7 @@ function renderEvent(e) {
         const kind = e.input?.subagent_type || 'general-purpose';
         subKinds.set(e.id, { kind, start: tsOf(e) });
         toolRun = null;
-        add(subCard('main', kind, `**${e.input?.description || 'Görev'}**\n\n${e.input?.prompt || ''}`, `${timeTR(tsOf(e))} · ${esc(e.name)} <span class="sc-live"><span class="spinner"></span></span>`, e.id));
+        add(subCard('main', kind, `**${e.input?.description || t('Görev')}**\n\n${e.input?.prompt || ''}`, `${timeTR(tsOf(e))} · ${esc(e.name)} <span class="sc-live"><span class="spinner"></span></span>`, e.id));
         break;
       }
       const el = h('<details class="tool"><summary><span class="tl"></span><span class="tn"></span><span class="ti"></span><span class="st"><span class="spinner"></span></span></summary><pre class="in"></pre></details>');
@@ -428,10 +433,10 @@ function renderEvent(e) {
       const sa = subKinds.get(e.id);
       if (sa) {
         const live = $(`.sub-card[data-sa="${CSS.escape(e.id)}"] .sc-live`, log);
-        if (live) live.textContent = '· tamamlandı';
+        if (live) live.textContent = `· ${t('tamamlandı')}`;
         const sec = Math.max(1, Math.round((tsOf(e) - sa.start) / 1000));
         toolRun = null;
-        add(subCard(sa.kind, 'main', e.text, `${timeTR(tsOf(e))} · ${sec} sn${e.isError ? ' · <span class="down">hata</span>' : ''}`));
+        add(subCard(sa.kind, 'main', e.text, `${timeTR(tsOf(e))} · ${t('{n} sn', { n: sec })}${e.isError ? ` · <span class="down">${t('hata')}</span>` : ''}`));
         break;
       }
       const el = toolEls.get(e.id);
@@ -445,43 +450,43 @@ function renderEvent(e) {
     }
     case 'team.update': {
       const live = $(`.sub-card[data-sa="${CSS.escape(e.id)}"] .sc-live`, log);
-      if (live) live.innerHTML = `<span class="spinner"></span> ${e.tools} araç${e.last ? ` · ${esc(toolLabel(e.last))}` : ''}`;
+      if (live) live.innerHTML = `<span class="spinner"></span> ${t('{n} araç', { n: e.tools })}${e.last ? ` · ${esc(toolLabel(e.last))}` : ''}`;
       break;
     }
     case 'permission.request': {
       if (e.replay) break;
       stream = null;
-      const el = h(`<div class="perm" data-req="${esc(e.reqId)}"><b>İzin isteniyor:</b> <span class="mono">${esc(toolLabel(e.tool))}</span> <span class="dim mono">${esc(toolName(e.tool))}</span><pre></pre>
-        <div class="row" style="margin-top:6px"><button class="btn" data-d="allow">İzin ver</button>${e.canAlways ? '<button class="btn sec" data-d="always">Hep izin ver</button>' : ''}<button class="btn danger" data-d="deny">Reddet</button></div></div>`);
+      const el = h(`<div class="perm" data-req="${esc(e.reqId)}"><b>${t('İzin isteniyor:')}</b> <span class="mono">${esc(toolLabel(e.tool))}</span> <span class="dim mono">${esc(toolName(e.tool))}</span><pre></pre>
+        <div class="row" style="margin-top:6px"><button class="btn" data-d="allow">${t('İzin ver')}</button>${e.canAlways ? `<button class="btn sec" data-d="always">${t('Hep izin ver')}</button>` : ''}<button class="btn danger" data-d="deny">${t('Reddet')}</button></div></div>`);
       $('pre', el).textContent = JSON.stringify(e.input, null, 2);
       $$('[data-d]', el).forEach((b) => b.onclick = async () => {
-        await wsCall({ t: 'perm.reply', sessionId: current, reqId: e.reqId, decision: b.dataset.d }).catch((x) => toast(x.message, 'err'));
-        el.innerHTML = `<span class="dim">${b.dataset.d === 'deny' ? 'Reddedildi' : 'İzin verildi'}: ${esc(toolLabel(e.tool))}</span>`;
+        await wsCall({ t: 'perm.reply', sessionId: current, reqId: e.reqId, decision: b.dataset.d }).catch((x) => toast(tx(x.message), 'err'));
+        el.innerHTML = `<span class="dim">${esc(t(b.dataset.d === 'deny' ? 'Reddedildi: {tool}' : 'İzin verildi: {tool}', { tool: toolLabel(e.tool) }))}</span>`;
       });
       add(el);
-      notify(`Ajan izin istiyor: ${toolLabel(e.tool)}`);
+      notify(t('Asistan izin istiyor: {tool}', { tool: toolLabel(e.tool) }));
       break;
     }
     case 'question': {
       if (e.replay) break;
       stream = null;
       add(questionCard(e));
-      notify('Ajan bir soru soruyor');
+      notify(t('Asistan bir soru soruyor'));
       break;
     }
     case 'permission.resolved': {
       const el = $(`[data-req="${CSS.escape(e.reqId)}"]`, log);
-      if (el && el.querySelector('button')) el.innerHTML = `<span class="dim">${e.behavior === 'allow' ? 'Yanıtlandı ✓' : 'Reddedildi / atlandı'}</span>`;
+      if (el && el.querySelector('button')) el.innerHTML = `<span class="dim">${t(e.behavior === 'allow' ? 'Yanıtlandı ✓' : 'Reddedildi veya atlandı')}</span>`;
       break;
     }
     case 'result': {
       stream = null;
       sessCost += e.replay ? 0 : e.cost || 0; sessTurns += e.turns || 0;
       if (e.contextWindow) ctxWindow = e.contextWindow;
-      if (e.isError && e.subtype !== 'success') add(h('<div class="msg error"></div>')).textContent = `Tamamlanamadı: ${resultReason(e.subtype)}${e.errors?.length ? ' — ' + e.errors.join('; ') : ''}`;
+      if (e.isError && e.subtype !== 'success') add(h('<div class="msg error"></div>')).textContent = t('Tamamlanamadı: {reason}', { reason: `${resultReason(e.subtype)}${e.errors?.length ? ' — ' + e.errors.map((x) => tx(x)).join('; ') : ''}` });
       if (turnFiles.size) {
         const rel = (f) => f.replace(/^.*\/workspace\//, '');
-        const card = add(h(`<details class="tool files"><summary>▸ Değişen dosyalar (${turnFiles.size})</summary><div class="files-list">${[...turnFiles].map(([f, how]) => `<div><span class="mono">${esc(rel(f))}</span> <span class="dim">${how}</span>${rel(f).startsWith('reports/') ? ` <button class="ghost" data-rep="${esc(rel(f).slice(8))}">aç</button>` : ''}</div>`).join('')}</div></details>`));
+        const card = add(h(`<details class="tool files"><summary>▸ ${t('Değişen dosyalar ({n})', { n: turnFiles.size })}</summary><div class="files-list">${[...turnFiles].map(([f, how]) => `<div><span class="mono">${esc(rel(f))}</span> <span class="dim">${t(how)}</span>${rel(f).startsWith('reports/') ? ` <button class="ghost" data-rep="${esc(rel(f).slice(8))}">${t('aç')}</button>` : ''}</div>`).join('')}</div></details>`));
         $$('[data-rep]', card).forEach((b) => b.onclick = () => emit('report:show', b.dataset.rep));
         turnFiles = new Map();
       }
@@ -496,26 +501,26 @@ function renderEvent(e) {
     case 'usage': lastCtx = e.ctx; if (e.window) ctxWindow = e.window; updateStats(); break;
     case 'ratelimit': {
       const el = add(h('<div class="msg notice"></div>'));
-      el.textContent = `${e.status === 'rejected' ? '⛔ Kullanım limitine ulaşıldı' : '⚠ Kullanım limitine yaklaşılıyor'}${e.kind ? ` (${e.kind})` : ''}${e.utilization != null ? ` · %${num(e.utilization * (e.utilization <= 1 ? 100 : 1), 0)}` : ''}${e.resetsAt ? ` · sıfırlanma ${dateTR(e.resetsAt, true)}` : ''}`;
+      el.textContent = `${e.status === 'rejected' ? `⛔ ${t('Kullanım sınırına ulaşıldı')}` : `⚠ ${t('Kullanım sınırına yaklaşılıyor')}`}${e.kind ? ` (${tx(e.kind)})` : ''}${e.utilization != null ? ` · ${t('%{n}', { n: num(e.utilization * (e.utilization <= 1 ? 100 : 1), 0) })}` : ''}${e.resetsAt ? ` · ${t('sıfırlanma: {date}', { date: dateTR(e.resetsAt, true) })}` : ''}`;
       if (!e.replay) toast(el.textContent, e.status === 'rejected' ? 'err' : '', 9000);
       break;
     }
-    case 'error': add(h('<div class="msg error"></div>')).textContent = e.message; break;
-    case 'stopped': add(h('<div class="msg system">■ Durduruldu</div>')); break;
-    case 'notice': add(h('<div class="msg system"></div>')).textContent = e.message; break;
+    case 'error': add(h('<div class="msg error"></div>')).textContent = tx(e.message); break;
+    case 'stopped': add(h('<div class="msg system"></div>')).textContent = `■ ${e.message ? tx(e.message) : t('Durduruldu')}`; break;
+    case 'notice': add(h('<div class="msg system"></div>')).textContent = tx(e.message); break;
     default: break;
   }
 }
-const resultReason = (s) => ({ error_max_turns: 'tur sınırına ulaşıldı', error_during_execution: 'çalışma sırasında hata', error_max_budget_usd: 'bütçe sınırı' }[s] || s);
+const resultReason = (s) => ({ error_max_turns: t('tur sınırına ulaşıldı'), error_during_execution: t('çalışma sırasında hata oluştu'), error_max_budget_usd: t('bütçe sınırına ulaşıldı') }[s] || s);
 
 // AskUserQuestion kartı: seçenekler + kendi cevabını yaz
 function questionCard(e) {
   const el = h(`<div class="perm question" data-req="${esc(e.reqId)}"></div>`);
   const qs = e.questions || [];
-  el.innerHTML = qs.map((q, i) => `<div class="q" data-i="${i}"><div class="q-head">${esc(q.header || 'Soru')}</div><div class="q-text">${esc(q.question)}</div>
+  el.innerHTML = qs.map((q, i) => `<div class="q" data-i="${i}"><div class="q-head">${esc(q.header || t('Soru'))}</div><div class="q-text">${esc(q.question)}</div>
     <div class="q-opts">${(q.options || []).map((o) => `<label class="q-opt"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span><b>${esc(o.label)}</b>${o.description ? `<br><span class="dim">${esc(o.description)}</span>` : ''}</span></label>`).join('')}</div>
-    <input class="q-free" placeholder="Veya kendi cevabını yaz (seçimin yerine geçer)"></div>`).join('')
-    + '<div class="row" style="margin-top:8px"><button class="btn" data-a="send">Yanıtla</button><button class="btn sec" data-a="skip">Atla</button></div>';
+    <input class="q-free" placeholder="${t('Veya kendi cevabınızı yazın (seçimin yerine geçer)')}"></div>`).join('')
+    + `<div class="row" style="margin-top:8px"><button class="btn" data-a="send">${t('Yanıtla')}</button><button class="btn sec" data-a="skip">${t('Atla')}</button></div>`;
   $('[data-a=send]', el).onclick = async () => {
     const answers = {};
     qs.forEach((q, i) => {
@@ -524,13 +529,13 @@ function questionCard(e) {
       const picked = $$('input:checked', box).map((x) => x.value);
       answers[q.question] = free || picked.join(', ');
     });
-    if (Object.values(answers).some((v) => !v)) { toast('Her soru için bir seçim yapın veya cevap yazın', 'err'); return; }
-    await wsCall({ t: 'question.reply', sessionId: current, reqId: e.reqId, answers }).catch((x) => toast(x.message, 'err'));
-    el.innerHTML = `<span class="dim">Cevaplandı ✓ ${esc(Object.values(answers).join(' · '))}</span>`;
+    if (Object.values(answers).some((v) => !v)) { toast(t('Her soru için bir seçim yapın veya cevap yazın'), 'err'); return; }
+    await wsCall({ t: 'question.reply', sessionId: current, reqId: e.reqId, answers }).catch((x) => toast(tx(x.message), 'err'));
+    el.innerHTML = `<span class="dim">${t('Yanıtlandı ✓')} ${esc(Object.values(answers).join(' · '))}</span>`;
   };
   $('[data-a=skip]', el).onclick = async () => {
     await wsCall({ t: 'question.reply', sessionId: current, reqId: e.reqId, skip: true }).catch(() => {});
-    el.innerHTML = '<span class="dim">Atlandı</span>';
+    el.innerHTML = `<span class="dim">${t('Atlandı')}</span>`;
   };
   return el;
 }
@@ -544,40 +549,40 @@ function notify(text) {
 let workingEl = null;
 function showWorking() {
   hideWorking();
-  workingEl = h('<div class="working"><span class="spinner"></span><span class="wt">Çalışıyor…</span><kbd>Esc</kbd><span class="dim">durdur</span></div>');
+  workingEl = h(`<div class="working"><span class="spinner"></span><span class="wt">${t('Çalışıyor…')}</span><kbd>Esc</kbd><span class="dim">${t('durdur')}</span></div>`);
   log.append(workingEl);
   $('#chatSend').innerHTML = ICON.stop;
-  $('#chatSend').title = 'Durdur (Esc)';
-  $('#cmHint').textContent = 'Esc ile durdur';
+  $('#chatSend').title = t('Durdur (Esc)');
+  $('#cmHint').textContent = t('Esc ile durdur');
   $('#chatSend').classList.add('stop');
   scrollEnd();
 }
 function hideWorking() {
   workingEl?.remove(); workingEl = null;
   $('#chatSend').innerHTML = ICON.send;
-  $('#chatSend').title = 'Gönder (Enter)';
-  $('#cmHint').textContent = '↵ gönder · / komutlar';
+  $('#chatSend').title = t('Gönder (Enter)');
+  $('#cmHint').textContent = t('↵ gönder · / komutlar');
   $('#chatSend').classList.remove('stop');
 }
 setInterval(() => {
   if (!workingEl) return;
   const j = state.jobs.find((x) => x.id === current);
-  $('.wt', workingEl).textContent = `${j?.activity || 'Çalışıyor'} · ${ago(runStart)}`;
+  $('.wt', workingEl).textContent = `${j?.activity ? tx(j.activity) : t('Çalışıyor')} · ${ago(runStart)}`;
   log.append(workingEl);
 }, 1000);
 
 let ctxWarned = 0;
 const kTok = (n) => `${num(n / 1000, 0)}k`;
 function updateStats() {
-  $('#stCost').textContent = !paid(sessionProvider) && !sessCost ? 'abonelik' : `$${num(sessCost, 2)}`;
+  $('#stCost').textContent = !paid(sessionProvider) && !sessCost ? t('abonelik') : `$${num(sessCost, 2)}`;
   $('#stTurns').textContent = sessTurns;
   const p = lastCtx && ctxWindow ? (lastCtx / ctxWindow) * 100 : null;
   $('#stCtx').textContent = lastCtx ? `${kTok(lastCtx)}${ctxWindow ? `/${kTok(ctxWindow)} (${num(p, 0)}%)` : ''}` : '–';
   const bar = $('#stCtxBar');
   bar.style.width = `${Math.min(p || 0, 100)}%`;
   bar.className = p >= 90 ? 'hi' : p >= 50 ? 'mid' : '';
-  if (p >= 95 && ctxWarned < 95) { ctxWarned = 95; toast('Bağlam penceresi %95 dolu. /compact ile sıkıştırın veya /yeni ile yeni oturum açın.', 'err', 9000); }
-  else if (p >= 80 && ctxWarned < 80) { ctxWarned = 80; toast('Bağlam penceresi %80 dolu. /compact ile sıkıştırabilirsiniz.', '', 7000); }
+  if (p >= 95 && ctxWarned < 95) { ctxWarned = 95; toast(t('Bağlam penceresi %95 dolu. /compact ile sıkıştırın veya /yeni ile yeni oturum açın.'), 'err', 9000); }
+  else if (p >= 80 && ctxWarned < 80) { ctxWarned = 80; toast(t('Bağlam penceresi %80 dolu. /compact ile sıkıştırabilirsiniz.'), '', 7000); }
 }
 
 // ── Canlı olaylar ─────────────────────────────────
@@ -586,7 +591,7 @@ on('ws:agent', (e) => {
   if (e.type === 'session.created' && awaitingNew && !current) { awaitingNew = false; current = e.sessionId; localSet('session', current); }
   if (e.type === 'session.created' || e.type === 'run.end') loadSessions();
   if (e.sessionId !== current) {
-    if (e.type === 'permission.request' || e.type === 'question') toast(`Başka bir oturum yanıt bekliyor: ${e.tool ? toolLabel(e.tool) : 'soru'}`);
+    if (e.type === 'permission.request' || e.type === 'question') toast(t('Başka bir oturum yanıt bekliyor: {what}', { what: e.tool ? toolLabel(e.tool) : t('soru') }));
     return;
   }
   if (e.type === 'run.start') { running = true; runStart = e.startedAt; showWorking(); return; }
@@ -600,17 +605,17 @@ on('ws:agent', (e) => {
 function drawAttachments() {
   const el = $('#attachList');
   el.hidden = !attachments.length;
-  el.innerHTML = attachments.map((a, i) => `<span class="attach">${a.type?.startsWith('image/') ? '🖼' : '📄'} ${esc(a.name)} <span class="dim">${a.size < 1024 ? `${a.size} B` : `${num(a.size / 1024, 0)} KB`}</span><button class="x" data-rm="${i}" title="Kaldır" aria-label="Eki kaldır">✕</button></span>`).join('');
+  el.innerHTML = attachments.map((a, i) => `<span class="attach">${a.type?.startsWith('image/') ? '🖼' : '📄'} ${esc(a.name)} <span class="dim">${a.size < 1024 ? `${a.size} B` : `${num(a.size / 1024, 0)} KB`}</span><button class="x" data-rm="${i}" title="${t('Kaldır')}" aria-label="${t('Eki kaldır')}">✕</button></span>`).join('');
   $$('[data-rm]', el).forEach((b) => b.onclick = () => { attachments.splice(Number(b.dataset.rm), 1); drawAttachments(); });
 }
 async function uploadFiles(files) {
   for (const f of files) {
-    if (f.size > 10 * 1024 * 1024) { toast(`${f.name}: dosya çok büyük (en fazla 10 MB)`, 'err'); continue; }
+    if (f.size > 10 * 1024 * 1024) { toast(t('{name}: dosya çok büyük (en fazla 10 MB)', { name: f.name }), 'err'); continue; }
     try {
       const r = await api(`/chat/upload?name=${encodeURIComponent(f.name || 'gorsel.png')}`, { method: 'POST', body: f, raw: true });
       attachments.push({ path: r.path, name: r.name, size: r.size, type: f.type });
       drawAttachments();
-    } catch (e) { toast(`${f.name}: ${e.message}`, 'err'); }
+    } catch (e) { toast(`${f.name}: ${tx(e.message)}`, 'err'); }
   }
 }
 $('#attachBtn').onclick = () => $('#attachFile').click();
@@ -626,16 +631,18 @@ input.addEventListener('paste', (e) => {
 // ── Gönderme ──────────────────────────────────────
 function screenContext() {
   const parts = [];
-  if (state.selected) parts.push(`seçili sembol ${state.selected}`);
-  if (state.openReport) parts.push(`açık rapor: workspace/reports/${state.openReport}`);
-  if (state.openKap) parts.push(`açık KAP bildirimi: id ${state.openKap.id} — ${state.openKap.title || ''} (${(state.openKap.stocks || []).join(', ')})`);
+  if (state.selected) parts.push(t('seçili sembol {s}', { s: state.selected }));
+  if (state.openReport) parts.push(t('açık rapor: workspace/reports/{file}', { file: state.openReport }));
+  if (state.openKap) parts.push(t('açık KAP bildirimi: id {id} — {title} ({stocks})', { id: state.openKap.id, title: state.openKap.title || '', stocks: (state.openKap.stocks || []).join(', ') }));
   return parts.join('; ');
 }
 function buildContext() {
   const parts = [];
   if (ctxSym && state.selected) {
     const q = state.quotes[state.selected];
-    parts.push(`Ekranda seçili sembol: ${state.selected}${q ? ` (${q.name}) fiyat ${q.price} ${q.currency}${q.delayed ? ' (~15 dk gecikmeli)' : ''}, günlük %${q.changePct?.toFixed(2)}` : ''}`);
+    parts.push(q
+      ? t('Ekranda seçili sembol: {s} ({name}), fiyat {price} {currency}{delayed}, günlük %{pct}', { s: state.selected, name: q.name, price: q.price, currency: q.currency, delayed: q.delayed ? ` ${t('(~15 dk gecikmeli)')}` : '', pct: q.changePct?.toFixed(2) })
+      : t('Ekranda seçili sembol: {s}', { s: state.selected }));
   }
   if (ctxScreen) parts.push(screenContext());
   return parts.join('\n') || null;
@@ -646,9 +653,9 @@ async function send(text, { context } = {}) {
   if (!text && !attachments.length) return;
   // Yerel komutlar (/durdur, /status, /help…) ajan çalışırken de kullanılabilir; istem gönderen komutlar beklemeli
   const cmd = text.startsWith('/') ? findCmd(text.split(/\s+/)[0].toLowerCase()) : null;
-  if (cmd && !(running && cmd[2]) && (await handleSlash(text))) { input.value = ''; autosize(); slash.hidden = true; drawQuick(); return; }
-  if (running) { toast('Ajan hâlâ çalışıyor. Durdurun veya yeni oturum açın.', 'err'); return; }
-  if (!text) text = 'Eklediğim dosyaları incele ve özetle.';
+  if (cmd && !(running && cmd.fn) && (await handleSlash(text))) { input.value = ''; autosize(); slash.hidden = true; drawQuick(); return; }
+  if (running) { toast(t('Asistan hâlâ çalışıyor. Durdurun veya yeni oturum açın.'), 'err'); return; }
+  if (!text) text = t('Eklediğim dosyaları incele ve özetle.');
   input.value = ''; autosize();
   // /compact ve /context Claude Code'a olduğu gibi iletilir (bağlam eklenmez)
   const passthrough = /^\/(compact|context)\b/.test(text);
@@ -679,34 +686,40 @@ $('#chatSend').onclick = () => {
 
 // ── Eğik çizgi komutları ─────────────────────────
 function systemCard(html) { const el = add(h('<div class="msg local"></div>')); el.innerHTML = html; return el; }
+// c: komut · arg: argüman ipucu · d: açıklama · fn: asistana giden istem · tr / en: diğer adlar (en[0] İngilizce arayüzde gösterilen ad)
+const sym = (a) => a || state.selected || '';
 const SLASH = [
-  ['/yeni', 'İSİM? — yeni oturum başlat (ör. /yeni Bankalar)', null, ['/new']],
-  ['/temizle', 'Sohbeti ve model bağlamını temizle (yeni oturum)', null, ['/clear']],
-  ['/durdur', 'Çalışan yanıtı durdur (Esc)', null, ['/stop']],
-  ['/analiz', 'SEMBOL — kapsamlı hisse analizi + rapor', (a) => `${a || state.selected} için kapsamlı analiz yap: iş modeli, son finansal sonuçlar, değerleme (get_fundamentals), teknik görünüm, son KAP bildirimleri, riskler. Sonucu HTML rapor olarak kaydet ve bana kısa özet ver.`, ['/analyze']],
-  ['/hizli', 'SEMBOL — hızlı analiz', (a) => `${a || state.selected} hissesini hızlı analiz et: fiyat, teknik görünüm, temel oranlar ve son KAP; 5 maddelik özet.`, ['/quick']],
-  ['/teknik', 'SEMBOL — teknik analiz', (a) => `${a || state.selected} için teknik analiz: trend, destek/direnç seviyeleri, RSI, MACD, hareketli ortalamalar, hacim. Maddeli özetle.`],
-  ['/karsilastir', 'A B … — hisse karşılaştırma', (a) => `Şu hisseleri karşılaştır: ${a}. Fiyat performansı, temel oranlar (get_fundamentals), teknik görünüm, temettü ve son KAP bildirimleri açısından tablo halinde göster.`],
-  ['/piyasa', 'Günlük piyasa özeti', () => 'Bugünkü piyasa özetini çıkar: BIST endeksleri, döviz/altın, en çok yükselen/düşen hisseler, sektör performansı ve izleme listemdeki dikkat çeken hareketler.'],
-  ['/portfoy', 'Portföy değerlendirmesi', () => 'Portföyümü değerlendir: performans (TWR, XIRR), risk metrikleri, yoğunlaşma, temettü geliri, kur farkı ve pozisyonlarımla ilgili son KAP bildirimleri.'],
-  ['/kap', 'SEMBOL? — son KAP sinyalleri (sembolle: ajan taraması)', (a) => `${a} için son 30 günün KAP bildirimlerini incele; önemli olanların içeriğini get_kap_detail ile oku ve özetle.`],
-  ['/tarama', 'KOŞUL — hisse tarayıcı', (a) => `screen_stocks aracıyla şu kritere göre BIST hisselerini tara: ${a || 'BIST 100, F/K ≤ 8, PD/DD ≤ 1,5'}. Sonuçları tablo halinde göster ve öne çıkanları kısaca yorumla.`, ['/screen']],
-  ['/temettu', 'Temettü analizi', () => 'Portföyümün temettü gelirini ve ilan edilmiş yaklaşan temettüleri analiz et; temettü verimi yüksek BIST hisselerinden izleme listeme eklenebilecek adayları gerekçeleriyle listele.'],
-  ['/rapor', 'KONU — HTML rapor üret', (a) => `"${a}" konusunda ayrıntılı bir HTML rapor hazırla (tablolar ve gerekiyorsa SVG grafiklerle) ve mcp__borsa__save_report ile kaydet.`],
-  ['/ekran', 'Ekranda açık olanı bağlam olarak ekle', null],
-  ['/model', 'MODEL — model değiştir', null],
-  ['/think', 'low|medium|high|xhigh|max — düşünme seviyesi', null, ['/efor']],
-  ['/compact', 'Bağlamı özetleyerek küçült (Claude)', null],
-  ['/context', 'Model bağlam kullanımını göster (Claude)', null],
-  ['/cost', 'Oturum maliyet özeti', null, ['/maliyet']],
-  ['/status', 'Oturum durumu ve istatistik', null, ['/durum']],
-  ['/rename', 'YENİ İSİM — oturumu yeniden adlandır', null, ['/adlandir']],
-  ['/export', 'Sohbeti JSON olarak indir', null, ['/indir']],
-  ['/doctor', 'Sunucu ve sağlayıcı sağlık kontrolü', null, ['/health', '/saglik']],
-  ['/settings', 'Ayarları aç', null, ['/ayarlar']],
-  ['/help', 'Komut listesi', null, ['/yardim']],
+  { c: '/yeni', arg: '[ad]', d: 'Yeni oturum başlat (ör. /yeni Bankalar)', en: ['/new'] },
+  { c: '/temizle', d: 'Sohbeti ve bağlamı temizle (yeni oturum)', en: ['/clear'] },
+  { c: '/durdur', d: 'Yanıtı durdur (Esc)', en: ['/stop'] },
+  { c: '/analiz', arg: 'sembol', d: 'Kapsamlı hisse analizi ve rapor', fn: (a) => t('{s} için kapsamlı analiz yap: iş modeli, son finansal sonuçlar, değerleme (get_fundamentals), teknik görünüm, son KAP bildirimleri, riskler. Sonucu HTML rapor olarak kaydet ve bana kısa özet ver.', { s: sym(a) }), en: ['/analyze'] },
+  { c: '/hizli', arg: 'sembol', d: 'Hızlı analiz', fn: (a) => quickPrompt(sym(a)), en: ['/quick'] },
+  { c: '/teknik', arg: 'sembol', d: 'Teknik analiz', fn: (a) => t('{s} için teknik analiz: trend, destek/direnç seviyeleri, RSI, MACD, hareketli ortalamalar, hacim. Maddeler halinde özetle.', { s: sym(a) }), en: ['/technical'] },
+  { c: '/karsilastir', arg: 'semboller…', d: 'Hisseleri karşılaştır', fn: (a) => t('Şu hisseleri karşılaştır: {list}. Fiyat performansı, temel oranlar (get_fundamentals), teknik görünüm, temettü ve son KAP bildirimleri açısından tablo halinde göster.', { list: a }), en: ['/compare'] },
+  { c: '/piyasa', d: 'Günlük piyasa özeti', fn: () => t('Bugünkü piyasa özetini çıkar: BIST endeksleri, döviz/altın, en çok yükselen/düşen hisseler, sektör performansı ve izleme listemdeki dikkat çeken hareketler.'), en: ['/market'] },
+  { c: '/portfoy', d: 'Portföy değerlendirmesi', fn: () => t('Portföyümü değerlendir: performans (TWR, XIRR), risk metrikleri, yoğunlaşma, temettü geliri, kur farkı ve pozisyonlarımla ilgili son KAP bildirimleri.'), en: ['/portfolio'] },
+  { c: '/kap', arg: '[sembol]', d: 'Son KAP sinyalleri (sembolle: asistan incelemesi)', fn: (a) => t('{s} için son 30 günün KAP bildirimlerini incele; önemli olanların içeriğini get_kap_detail ile oku ve özetle.', { s: a }) },
+  { c: '/tarama', arg: 'koşul', d: 'Hisse tara', fn: (a) => t('screen_stocks aracıyla şu kritere göre BIST hisselerini tara: {criteria}. Sonuçları tablo halinde göster ve öne çıkanları kısaca yorumla.', { criteria: a || t('BIST 100, F/K ≤ 8, PD/DD ≤ 1,5') }), en: ['/screen'] },
+  { c: '/temettu', d: 'Temettü analizi', fn: () => t('Portföyümün temettü gelirini ve ilan edilmiş yaklaşan temettüleri analiz et; temettü verimi yüksek BIST hisselerinden izleme listeme eklenebilecek adayları gerekçeleriyle listele.'), en: ['/dividends'] },
+  { c: '/rapor', arg: 'konu', d: 'HTML rapor hazırla', fn: (a) => t('"{topic}" konusunda ayrıntılı bir HTML rapor hazırla (tablolar ve gerekiyorsa SVG grafiklerle) ve mcp__borsa__save_report ile kaydet.', { topic: a }), en: ['/report'] },
+  { c: '/ekran', d: 'Ekranda açık olanı bağlam olarak ekle', en: ['/onscreen'] },
+  { c: '/model', arg: 'model', d: 'Modeli değiştir' },
+  { c: '/think', arg: 'low|medium|high|xhigh|max', d: 'Düşünme seviyesi', tr: ['/efor'] },
+  { c: '/compact', d: 'Bağlamı özetleyerek küçült (Claude)' },
+  { c: '/context', d: 'Bağlam kullanımını göster (Claude)' },
+  { c: '/cost', d: 'Oturum maliyeti', tr: ['/maliyet'] },
+  { c: '/status', d: 'Oturum durumu ve istatistikler', tr: ['/durum'] },
+  { c: '/rename', arg: 'yeni ad', d: 'Oturumu yeniden adlandır', tr: ['/adlandir'] },
+  { c: '/export', d: 'Sohbeti JSON olarak indir', tr: ['/indir'] },
+  { c: '/doctor', d: 'Sunucu ve sağlayıcıları kontrol et', tr: ['/saglik'], en: ['/doctor', '/health'] },
+  { c: '/settings', d: 'Ayarları aç', tr: ['/ayarlar'] },
+  { c: '/help', d: 'Komut listesi', tr: ['/yardim'] },
 ];
-const findCmd = (cmd) => SLASH.find((x) => x[0] === cmd || x[3]?.includes(cmd));
+const cmdNames = (x) => [x.c, ...(x.tr || []), ...(x.en || [])];
+// Arayüz İngilizceyse İngilizce ad öne çıkar; Türkçe adlar her iki dilde de çalışır
+const cmdName = (x) => (lang === 'en' && x.en?.[0]) || x.c;
+const cmdAliases = (x) => (lang === 'en' ? x.en || [] : [...(x.tr || []), ...(x.en || [])]).filter((a) => a !== cmdName(x));
+const findCmd = (cmd) => SLASH.find((x) => cmdNames(x).includes(cmd));
 
 async function handleSlash(text) {
   const [raw, ...rest] = text.split(/\s+/);
@@ -714,66 +727,70 @@ async function handleSlash(text) {
   const arg = rest.join(' ').trim();
   const c = findCmd(cmd);
   if (!c) return false;
-  switch (c[0]) {
+  const found = (v) => (v ? `✓ ${esc(v)}` : t('✗ bulunamadı'));
+  switch (c.c) {
     case '/yeni': case '/temizle':
       openSession(null);
-      pendingTitle = c[0] === '/yeni' && arg ? arg.slice(0, 80) : null;
-      toast(c[0] === '/temizle' ? 'Yeni oturum açıldı; model bağlamı temiz' : pendingTitle ? `Yeni oturum: ${pendingTitle}` : 'Yeni oturum');
+      pendingTitle = c.c === '/yeni' && arg ? arg.slice(0, 80) : null;
+      toast(c.c === '/temizle' ? t('Yeni oturum açıldı; bağlam temizlendi') : pendingTitle ? t('Yeni oturum: {title}', { title: pendingTitle }) : t('Yeni oturum'));
       return true;
     case '/durdur': if (current) wsCall({ t: 'chat.stop', sessionId: current }).catch(() => {}); return true;
-    case '/ekran': ctxScreen = !ctxScreen; localSet('ctxScreen', ctxScreen); if (arg) { ctxScreen = true; send(arg); } else toast(ctxScreen ? 'Ekran bağlamı (seçili sembol, açık rapor / KAP) mesajlara eklenecek' : 'Ekran bağlamı kapatıldı'); return true;
+    case '/ekran': ctxScreen = !ctxScreen; localSet('ctxScreen', ctxScreen); if (arg) { ctxScreen = true; send(arg); } else toast(t(ctxScreen ? 'Ekran bağlamı (seçili sembol, açık rapor veya KAP bildirimi) mesajlara eklenecek' : 'Ekran bağlamı kapatıldı')); return true;
     case '/model': {
       const opts = [...$('#optModel').options];
       const hit = arg && opts.find((o) => o.value.toLowerCase().includes(arg.toLowerCase()) || o.textContent.toLowerCase().includes(arg.toLowerCase()));
-      if (hit && !hit.disabled) { $('#optModel').value = hit.value; toast(`Model: ${hit.textContent}`); }
-      else systemCard(`<b>Modeller</b><br>${opts.map((o) => `${esc(o.textContent)} <span class="dim mono">${esc(o.value || 'varsayılan')}</span>`).join('<br>')}<br><span class="dim">Kullanım: /model sonnet</span>`);
+      if (hit && !hit.disabled) { $('#optModel').value = hit.value; toast(`${t('Model')}: ${hit.textContent}`); }
+      else systemCard(`<b>${t('Modeller')}</b><br>${opts.map((o) => `${esc(o.textContent)} <span class="dim mono">${esc(o.value || t('varsayılan'))}</span>`).join('<br>')}<br><span class="dim">${t('Kullanım: {usage}', { usage: '/model sonnet' })}</span>`);
       return true;
     }
     case '/think': {
       const lv = arg.toLowerCase();
-      if ((state.meta?.efforts || []).includes(lv)) { $('#optEffort').value = lv; toast(`Düşünme seviyesi: ${lv}`); }
-      else systemCard(`Kullanım: /think ${esc((state.meta?.efforts || []).join('|'))}`);
+      if ((state.meta?.efforts || []).includes(lv)) { $('#optEffort').value = lv; fitSelects(); toast(t('Düşünme seviyesi: {level}', { level: effortName(lv) })); }
+      else systemCard(esc(t('Kullanım: {usage}', { usage: `${cmdName(c)} ${(state.meta?.efforts || []).join('|')}` })));
       return true;
     }
     case '/compact': case '/context':
-      if (!current) { toast('Önce bir oturum başlatın', 'err'); return true; }
-      if (!paid(sessionProvider)) { toast('Bu komut yalnızca Claude oturumlarında çalışır', 'err'); return true; }
+      if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; }
+      if (!paid(sessionProvider)) { toast(t('Bu komut yalnızca Claude oturumlarında çalışır'), 'err'); return true; }
       return false; // send() olduğu gibi iletir
     case '/cost': {
       const s = sessions.find((x) => x.id === current);
-      systemCard(`<b>Oturum maliyeti</b><br>Sağlayıcı: ${esc(provName(sessionProvider))}<br>Bu oturum: ${paid(sessionProvider) || sessCost ? '$' + num(s?.cost_usd ?? sessCost, 4) : 'abonelikten / kendi hesabından düşer'}<br>Tüm oturumlar (Claude): $${num(sessions.reduce((a, x) => a + (x.cost_usd || 0), 0), 3)}`);
+      systemCard(`<b>${t('Oturum maliyeti')}</b><br>${esc(t('Sağlayıcı: {name}', { name: provName(sessionProvider) }))}<br>${esc(t('Bu oturum: {cost}', { cost: paid(sessionProvider) || sessCost ? '$' + num(s?.cost_usd ?? sessCost, 4) : t('aboneliğe veya kendi hesabınıza dahil') }))}<br>${t('Tüm oturumlar (Claude): {cost}', { cost: `$${num(sessions.reduce((a, x) => a + (x.cost_usd || 0), 0), 3)}` })}`);
       return true;
     }
     case '/status': {
       const s = sessions.find((x) => x.id === current);
-      systemCard(`<b>Oturum durumu</b><br>${s ? `Başlık: ${esc(s.title)}<br>Kimlik: <span class="mono">${esc(s.id)}</span><br>Sağlayıcı: ${esc(provName(s.provider))} · model: ${esc(s.model || 'varsayılan')}<br>Oluşturma: ${dateTR(sqlDate(s.created_at), true)} · son: ${dateTR(sqlDate(s.updated_at), true)}<br>` : 'Yeni oturum (henüz mesaj yok)<br>'}Durum: ${running ? 'çalışıyor' : 'boşta'}<br>Bağlam: ${lastCtx ? `${num(lastCtx / 1000, 1)}b token${ctxWindow ? ` / ${num(ctxWindow / 1000, 0)}b (%${num((lastCtx / ctxWindow) * 100, 0)})` : ''}` : '—'}<br>İzin modu: ${esc(state.meta?.permissionModes?.[permMode] || permMode)}`);
+      const ctxTxt = !lastCtx ? '—' : ctxWindow
+        ? t('{used} / {total} bin token (%{pct})', { used: num(lastCtx / 1000, 1), total: num(ctxWindow / 1000, 0), pct: num((lastCtx / ctxWindow) * 100, 0) })
+        : t('{used} bin token', { used: num(lastCtx / 1000, 1) });
+      systemCard(`<b>${t('Oturum durumu')}</b><br>${s ? `${esc(t('Başlık: {title}', { title: sessTitle(s) }))}<br>${t('Kimlik: {id}', { id: `<span class="mono">${esc(s.id)}</span>` })}<br>${esc(t('Sağlayıcı: {name} · model: {model}', { name: provName(s.provider), model: s.model || t('varsayılan') }))}<br>${esc(t('Oluşturuldu: {created} · son etkinlik: {updated}', { created: dateTR(sqlDate(s.created_at), true), updated: dateTR(sqlDate(s.updated_at), true) }))}<br>` : `${t('Yeni oturum (henüz mesaj yok)')}<br>`}${t('Durum: {state}', { state: t(running ? 'çalışıyor' : 'boşta') })}<br>${esc(t('Bağlam: {text}', { text: ctxTxt }))}<br>${esc(t('İzin modu: {mode}', { mode: state.meta?.permissionModes?.[permMode] ? tx(state.meta.permissionModes[permMode]) : permMode }))}`);
       return true;
     }
-    case '/rename': if (!current) { toast('Önce bir oturum başlatın', 'err'); return true; } await renameSession(current, null, arg || null); return true;
+    case '/rename': if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; } await renameSession(current, null, arg || null); return true;
     case '/export': exportChat(); return true;
     case '/doctor': {
       const hl = await api('/health').catch(() => null);
       const conn = await api('/agent/connections').catch(() => null);
-      systemCard(hl ? `<b>Sağlık kontrolü</b><br>Sunucu: ✓ v${esc(hl.version)} · Node ${esc(hl.node)} · çalışma ${Math.round(hl.uptimeSec / 60)} dk<br>Claude CLI: ${hl.claudeCli ? '✓ ' + esc(hl.claudeCli) : '✗ bulunamadı'}<br>Codex CLI: ${hl.codexCli ? '✓ ' + esc(hl.codexCli) : '✗ bulunamadı'}<br>omp CLI: ${hl.ompCli ? '✓ ' + esc(hl.ompCli) : '✗ bulunamadı'}<br>Terminal: ${hl.terminal ? '✓' : '✗'} · BIST: ${esc(hl.market.label)}${conn?.mcp?.length ? `<br>MCP: ${conn.mcp.map((m) => `${esc(m.name)} ${m.status === 'connected' ? '✓' : m.status === 'failed' ? '✗' : '…'}`).join(' · ')}` : '<br><span class="dim">MCP bağlantıları ilk Claude yanıtından sonra listelenir (Ayarlar › Bağlantılar).</span>'}` : '<span class="down">Sunucuya ulaşılamadı</span>');
+      systemCard(hl ? `<b>${t('Sağlık kontrolü')}</b><br>${esc(t('Sunucu: ✓ v{version} · Node {node} · {min} dakikadır çalışıyor', { version: hl.version, node: hl.node, min: Math.round(hl.uptimeSec / 60) }))}<br>Claude CLI: ${found(hl.claudeCli)}<br>Codex CLI: ${found(hl.codexCli)}<br>omp CLI: ${found(hl.ompCli)}<br>Terminal: ${hl.terminal ? '✓' : '✗'} · BIST: ${esc(tx(hl.market.label))}${conn?.mcp?.length ? `<br>MCP: ${conn.mcp.map((m) => `${esc(m.name)} ${m.status === 'connected' ? '✓' : m.status === 'failed' ? '✗' : '…'}`).join(' · ')}` : `<br><span class="dim">${t('MCP bağlantıları ilk Claude yanıtından sonra listelenir (Ayarlar › Bağlantılar).')}</span>`}` : `<span class="down">${t('Sunucuya ulaşılamadı')}</span>`);
       return true;
     }
     case '/kap': {
-      if (arg) { send(SLASH.find((x) => x[0] === '/kap')[2](arg)); return true; }
+      if (arg) { send(c.fn(arg)); return true; }
       // Argümansız: izleme listesi + portföy için son 3 günün önemli sinyalleri, ajan maliyeti olmadan
       const [w, p] = await Promise.all(['watchlist', 'portfolio'].map((sc) => api(`/kap?scope=${sc}&days=3&limit=60`).catch(() => ({ items: [] }))));
       const seen = new Set();
       const items = [...(w.items || []), ...(p.items || [])].filter((x) => (seen.has(x.id) ? false : seen.add(x.id)) && ['TEZ', 'YAPISAL', 'FINANSAL'].includes(x.signal))
         .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 12);
       const lbl = state.meta?.kapSignals || {};
-      const el = systemCard(items.length ? `<b>Son 3 günün KAP sinyalleri</b> <span class="dim">(izleme listesi + portföy)</span><br>${items.map((x) => `<span class="dim">${esc(x.publishDate.slice(0, 16))}</span> <span class="pill sig-${esc(x.signal)}">${esc(lbl[x.signal]?.label || x.signal)}</span> <b class="mono">${esc(x.stocks.slice(0, 2).join(', '))}</b> ${esc(x.subject || '')} <button class="ghost" data-kap="${x.id}">aç</button>`).join('<br>')}<br><span class="dim">Yorum için: /kap SEMBOL</span>`
-        : 'Son 3 günde izleme listesi ve portföy şirketlerinde TEZ, YAP veya FİN sinyali yok.');
+      const el = systemCard(items.length ? `<b>${t('Son 3 günün KAP sinyalleri')}</b> <span class="dim">${t('(izleme listesi ve portföy)')}</span><br>${items.map((x) => `<span class="dim">${esc(x.publishDate.slice(0, 16))}</span> <span class="pill sig-${esc(x.signal)}">${esc(lbl[x.signal]?.label ? tx(lbl[x.signal].label) : x.signal)}</span> <b class="mono">${esc(x.stocks.slice(0, 2).join(', '))}</b> ${esc(x.subject || '')} <button class="ghost" data-kap="${x.id}">${t('aç')}</button>`).join('<br>')}<br><span class="dim">${esc(t('Asistanın yorumu için: /kap sembol'))}</span>`
+        : t('Son 3 günde izleme listesi ve portföydeki şirketler için önemli KAP sinyali yok.'));
       $$('[data-kap]', el).forEach((b) => b.onclick = () => emit('kap:open', Number(b.dataset.kap)));
       return true;
     }
     case '/settings': emit('settings:open'); return true;
-    case '/help': systemCard(`<b>Komutlar</b><br>${SLASH.map((x) => `<span class="mono accent">${x[0]}</span>${x[3] ? ` <span class="dim mono">(${x[3].join(', ')})</span>` : ''} — ${esc(x[1])}`).join('<br>')}`); return true;
+    case '/help': systemCard(`<b>${t('Komutlar')}</b><br>${SLASH.map((x) => `<span class="mono accent">${cmdName(x)}</span>${x.arg ? ` <span class="dim mono">${esc(t(x.arg))}</span>` : ''} — ${esc(t(x.d))}${cmdAliases(x).length ? ` <span class="dim mono">(${cmdAliases(x).join(', ')})</span>` : ''}`).join('<br>')}`); return true;
     default:
-      if (c[2]) { send(c[2](arg)); return true; }
+      if (c.fn) { send(c.fn(arg)); return true; }
       return false;
   }
 }
@@ -782,34 +799,33 @@ const slash = $('#slash');
 let slashSel = 0, slashItems = [];
 // Komut grupları (popup'ta başlık altında listelenir)
 const SLASH_GROUPS = [
-  ['ANALİZ', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/rapor', '/ekran']],
-  ['OTURUM', ['/yeni', '/temizle', '/durdur', '/rename', '/export', '/compact', '/context']],
-  ['AJAN', ['/model', '/think']],
-  ['BİLGİ', ['/cost', '/status', '/doctor', '/settings', '/help']],
+  ['Analiz', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/rapor', '/ekran']],
+  ['Oturum', ['/yeni', '/temizle', '/durdur', '/rename', '/export', '/compact', '/context']],
+  ['Asistan', ['/model', '/think']],
+  ['Bilgi', ['/cost', '/status', '/doctor', '/settings', '/help']],
 ];
-const splitDesc = (d) => { const k = d.indexOf(' — '); return k > 0 ? [d.slice(0, k), d.slice(k + 3)] : ['', d]; };
 function drawSlash() {
   const v = input.value;
   if (!v.startsWith('/') || v.includes(' ')) { slash.hidden = true; return; }
   const q = v.toLowerCase();
-  const hit = (x) => x[0].startsWith(q) || x[3]?.some((a) => a.startsWith(q));
-  const groups = SLASH_GROUPS.map(([t, cmds]) => [t, cmds.map((c) => SLASH.find((x) => x[0] === c)).filter((x) => x && hit(x))]).filter(([, l]) => l.length);
-  const rest = SLASH.filter((x) => hit(x) && !SLASH_GROUPS.some(([, c]) => c.includes(x[0])));
-  if (rest.length) groups.push(['DİĞER', rest]);
+  const hit = (x) => cmdNames(x).some((a) => a.startsWith(q));
+  const groups = SLASH_GROUPS.map(([g, cmds]) => [t(g), cmds.map((c) => SLASH.find((x) => x.c === c)).filter((x) => x && hit(x))]).filter(([, l]) => l.length);
+  const rest = SLASH.filter((x) => hit(x) && !SLASH_GROUPS.some(([, c]) => c.includes(x.c)));
+  if (rest.length) groups.push([t('Diğer'), rest]);
   slashItems = groups.flatMap(([, l]) => l);
   slash.hidden = !slashItems.length;
   slashSel = Math.min(slashSel, Math.max(slashItems.length - 1, 0));
   const mark = (c) => `<b>/</b>${q.length > 1 && c.startsWith(q) ? `<u>${esc(c.slice(1, q.length))}</u>${esc(c.slice(q.length))}` : esc(c.slice(1))}`;
   let n = 0;
-  slash.innerHTML = `<div class="sl-list">${groups.map(([t, l]) => `<div class="sl-grp">${t}</div>${l.map((x) => {
-    const [arg, text] = splitDesc(x[1]);
+  slash.innerHTML = `<div class="sl-list">${groups.map(([g, l]) => `<div class="sl-grp">${esc(g)}</div>${l.map((x) => {
     const i = n++;
-    return `<button class="sl-row ${i === slashSel ? 'sel' : ''}" data-i="${i}"><span class="sl-cmd">${mark(x[0])}</span>${arg ? `<span class="sl-arg">${esc(arg)}</span>` : ''}<span class="sl-txt">${esc(text)}</span>${x[3]?.length ? `<span class="sl-alias">${esc(x[3].join(' '))}</span>` : ''}</button>`;
+    const al = cmdAliases(x);
+    return `<button class="sl-row ${i === slashSel ? 'sel' : ''}" data-i="${i}"><span class="sl-cmd">${mark(cmdName(x))}</span>${x.arg ? `<span class="sl-arg">${esc(t(x.arg))}</span>` : ''}<span class="sl-txt">${esc(t(x.d))}</span>${al.length ? `<span class="sl-alias">${esc(al.join(' '))}</span>` : ''}</button>`;
   }).join('')}`).join('')}</div>
-    <div class="sl-foot"><span><kbd>↑</kbd><kbd>↓</kbd> seç</span><span><kbd>Tab</kbd> tamamla</span><span><kbd>↵</kbd> çalıştır</span><span><kbd>Esc</kbd> kapat</span></div>`;
+    <div class="sl-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t('seç')}</span><span><kbd>Tab</kbd> ${t('tamamla')}</span><span><kbd>↵</kbd> ${t('çalıştır')}</span><span><kbd>Esc</kbd> ${t('kapat')}</span></div>`;
   $('.sl-row.sel', slash)?.scrollIntoView({ block: 'nearest' });
 }
-slash.addEventListener('mousedown', (e) => { const b = e.target.closest('.sl-row'); if (!b) return; e.preventDefault(); input.value = slashItems[b.dataset.i][0] + ' '; slash.hidden = true; input.focus(); });
+slash.addEventListener('mousedown', (e) => { const b = e.target.closest('.sl-row'); if (!b) return; e.preventDefault(); input.value = cmdName(slashItems[b.dataset.i]) + ' '; slash.hidden = true; input.focus(); });
 slash.addEventListener('mousemove', (e) => { const b = e.target.closest('.sl-row'); if (b && Number(b.dataset.i) !== slashSel) { slashSel = Number(b.dataset.i); $$('.sl-row', slash).forEach((x) => x.classList.toggle('sel', x === b)); } });
 
 function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; }
@@ -818,8 +834,8 @@ input.addEventListener('keydown', (e) => {
   if (!slash.hidden) {
     if (e.key === 'ArrowDown') { slashSel = Math.min(slashSel + 1, slashItems.length - 1); drawSlash(); e.preventDefault(); return; }
     if (e.key === 'ArrowUp') { slashSel = Math.max(slashSel - 1, 0); drawSlash(); e.preventDefault(); return; }
-    if (e.key === 'Tab' || (e.key === 'Enter' && slashItems[slashSel] && input.value.trim() !== slashItems[slashSel][0])) {
-      e.preventDefault(); input.value = slashItems[slashSel][0] + ' '; slash.hidden = true; return;
+    if (e.key === 'Tab' || (e.key === 'Enter' && slashItems[slashSel] && !cmdNames(slashItems[slashSel]).includes(input.value.trim().toLowerCase()))) {
+      e.preventDefault(); input.value = cmdName(slashItems[slashSel]) + ' '; slash.hidden = true; return;
     }
     if (e.key === 'Escape') { e.stopPropagation(); slash.hidden = true; return; }
   }
@@ -835,8 +851,8 @@ function drawCommittee() {
   const extra = subs.filter((x) => !committee.some((c) => c.name === x.kind));
   const el = $('#komite');
   el.hidden = !subs.length; // yalnız alt ajan çalışırken görünür
-  $('summary', el).innerHTML = `<span class="caret">▸</span> 👥 KOMİTE (${committee.length} üye)${subs.length ? ` <span class="accent">· ${subs.length} çalışıyor</span>` : ''}`;
-  const row = (name, desc, list) => `<div class="km"><span class="dot ${list.length ? 'live' : ''}"></span><b class="mono">${esc(name)}</b><span class="km-d">${list.length ? list.map((x) => `${esc(x.description)} · ${x.tools} araç · ${ago(x.startedAt)}`).join(' | ') : esc(desc)}</span>${list.length ? `<button class="ghost xs" data-open="${esc(list[0].job.id)}">aç</button>` : ''}</div>`;
+  $('summary', el).innerHTML = `<span class="caret">▸</span> ${t('Komite ({n} üye)', { n: committee.length })}${subs.length ? ` <span class="accent">· ${t('{n} çalışıyor', { n: subs.length })}</span>` : ''}`;
+  const row = (name, desc, list) => `<div class="km"><span class="dot ${list.length ? 'live' : ''}"></span><b class="mono">${esc(name)}</b><span class="km-d">${list.length ? list.map((x) => `${esc(tx(x.description))} · ${t('{n} araç', { n: x.tools })} · ${ago(x.startedAt)}`).join(' | ') : esc(desc)}</span>${list.length ? `<button class="ghost xs" data-open="${esc(list[0].job.id)}">${t('aç')}</button>` : ''}</div>`;
   $('.komite-list', el).innerHTML = committee.map((c) => row(c.name, c.description, busy(c.name))).join('')
     + extra.map((x) => row(x.kind, '', [x])).join('');
   $$('[data-open]', el).forEach((b) => b.onclick = () => openSession(b.dataset.open));
@@ -885,7 +901,7 @@ function fillModels() {
   const short = (x) => x.label.replace(/^Claude /, '').replace(/\s*\([^)]*\)$/, '');
   const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && (x.id === want || want.startsWith(x.id)) ? 'selected' : ''}>${esc(short(x))}</option>`).join('')}</optgroup>`;
   $('#optModel').innerHTML = Object.keys(m.providers || { claude: 1 }).map(group).join('');
-  $('#optModel').title = sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model';
+  $('#optModel').title = t(sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model');
   $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude';
   requestAnimationFrame(fitSelects);
 }
@@ -905,12 +921,15 @@ function fitSelects() { ['#optModel', '#optEffort', '#sessSel'].forEach((q) => f
 $('#optEffort').addEventListener('change', fitSelects);
 $('#sessSel').addEventListener('change', fitSelects);
 
+// Düşünme seviyesi: değer (low…max) sabit, görünen ad çevrilir
+const EFFORT_NAME = { low: 'Düşük', medium: 'Orta', high: 'Yüksek', xhigh: 'Çok yüksek', max: 'En yüksek' };
+const EFFORT_TIP = { low: 'Kısa işler, düşük maliyet', medium: 'Dengeli', high: 'Karmaşık analiz', xhigh: 'Zor işler', max: 'Tüm düşünme bütçesi' };
+const effortName = (x) => (EFFORT_NAME[x] ? t(EFFORT_NAME[x]) : x);
 function fillOptions() {
   const m = state.meta, s = state.settings;
   if (!m) return;
   syncProvider();
-  const EFFORT_TIP = { low: 'kısa işler, düşük maliyet', medium: 'dengeli', high: 'karmaşık analiz', xhigh: 'zor işler', max: 'tüm düşünme bütçesi' };
-  $('#optEffort').innerHTML = m.efforts.map((x) => `<option value="${x}" ${x === s.effort ? 'selected' : ''} title="${EFFORT_TIP[x] || ''}">${x}</option>`).join('');
+  $('#optEffort').innerHTML = m.efforts.map((x) => `<option value="${x}" ${x === s.effort ? 'selected' : ''} title="${EFFORT_TIP[x] ? t(EFFORT_TIP[x]) : ''}">${esc(effortName(x))}</option>`).join('');
   permMode = s.permissionMode || 'default';
 }
 on('settings', fillOptions);

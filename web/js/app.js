@@ -8,6 +8,9 @@ import './reports-view.js';
 import './chat.js';
 import './kap.js';
 import { openSettings } from './settings.js';
+import { t, tx, lang, locale, translateDom, syncLangPref } from './i18n.js';
+
+translateDom();
 
 // ── Tema ve yazı boyutları ────────────────────────
 // İmza rengi: ayardaki renkten tema uyumlu tonlar (grafik ve xterm de okuyabilsin diye düz renk olarak)
@@ -31,6 +34,8 @@ function applySettings(s) {
   document.documentElement.dataset.theme = s.theme === 'light' ? 'light' : 'dark';
   applyAccent(s.accent || '#facc15', s.theme === 'light');
   document.documentElement.style.setProperty('--chat-font', `${s.chatFontSize || 14}px`);
+  syncLangPref(s.language);
+  native({ type: 'lang', lang });
   emit('settings', s);
 }
 
@@ -65,13 +70,13 @@ $('#agentMode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b
 on('agent:mode:set', setAgentMode);
 
 // Sağ panel sekmeleri
-export function showRightTab(t, { open = true } = {}) {
-  if (!['kap', 'reports', 'pdf'].includes(t)) t = 'kap';
-  if (t === 'pdf' && $('[data-rtab=pdf]').hidden) t = 'reports'; // PDF sekmesi yalnız bir rapor açıkken var
-  $$('.right-tabs [data-rtab]').forEach((b) => b.classList.toggle('active', b.dataset.rtab === t));
-  $$('.rtab').forEach((el) => el.classList.toggle('active', el.id === `rtab-${t}`));
-  localSet('rtab', t);
-  emit('rtab:shown', t);
+export function showRightTab(tab, { open = true } = {}) {
+  if (!['kap', 'reports', 'pdf'].includes(tab)) tab = 'kap';
+  if (tab === 'pdf' && $('[data-rtab=pdf]').hidden) tab = 'reports'; // PDF sekmesi yalnız bir rapor açıkken var
+  $$('.right-tabs [data-rtab]').forEach((b) => b.classList.toggle('active', b.dataset.rtab === tab));
+  $$('.rtab').forEach((el) => el.classList.toggle('active', el.id === `rtab-${tab}`));
+  localSet('rtab', tab);
+  emit('rtab:shown', tab);
   if (!open) return;
   if (matchMedia('(max-width: 860px)').matches) openPanel('right');
   if ($('#layout').classList.contains('no-right')) toggleRight(true);
@@ -82,17 +87,18 @@ $$('.right-tabs [data-rtab]').forEach((b) => b.addEventListener('click', () => s
 function toggleRight(force) {
   const hide = force === undefined ? !$('#layout').classList.contains('no-right') : !force;
   $('#layout').classList.toggle('no-right', hide);
-  $('#btnToggleRight').textContent = hide ? '◂ PANEL' : 'PANEL ▸';
+  const tb = $('#btnToggleRight'), label = hide ? t('Sağ paneli göster') : t('Sağ paneli gizle');
+  tb.classList.toggle('off', hide); tb.title = label; tb.setAttribute('aria-label', label);
   localSet('rightHidden', hide);
   window.dispatchEvent(new Event('resize'));
 }
 $('#btnToggleRight').onclick = () => toggleRight();
-on('ws:inbox.imported', (m) => toast(`Kurum raporu arşive alındı: ${m.items.map((x) => `${x.broker} · ${x.title}`).join(', ').slice(0, 160)}`, 'ok', 8000));
+on('ws:inbox.imported', (m) => toast(t('Kurum raporu arşive eklendi: {items}', { items: m.items.map((x) => `${x.broker} · ${x.title}`).join(', ').slice(0, 160) }), 'ok', 8000));
 
 // Masaüstüne uygulama olarak kurma (Chrome / Edge; tarayıcı kurulabilir olduğunu bildirince görünür)
 let installPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $('#btnInstall').hidden = false; });
-window.addEventListener('appinstalled', () => { installPrompt = null; $('#btnInstall').hidden = true; toast('Uygulama kuruldu', 'ok'); });
+window.addEventListener('appinstalled', () => { installPrompt = null; $('#btnInstall').hidden = true; toast(t('Uygulama kuruldu'), 'ok'); });
 $('#btnInstall').onclick = async () => {
   if (!installPrompt) return;
   installPrompt.prompt();
@@ -133,12 +139,12 @@ $$('.splitter').forEach((sp) => {
 
 // ── Üst bar: şerit, saat, seans, bağlantı ─────────
 const TICKER = ['XU100', 'XU030', 'XBANK', 'USDTRY', 'EURTRY', 'GRAM', 'ONS', 'BRENT', 'BTC', 'SPX'];
-const TICK_NAMES = { XU100: 'XU100', XU030: 'XU030', XBANK: 'XBANK', USDTRY: 'USD/TL', EURTRY: 'EUR/TL', GRAM: 'GRAM ALTIN', ONS: 'ONS', BRENT: 'BRENT', BTC: 'BTC', SPX: 'S&P 500' };
+const TICK_NAMES = { XU100: 'BIST 100', XU030: 'BIST 30', XBANK: t('Banka'), USDTRY: 'USD/TL', EURTRY: 'EUR/TL', GRAM: t('Gram altın'), ONS: t('Ons altın'), BRENT: 'Brent', BTC: 'Bitcoin', SPX: 'S&P 500' };
 // Kayan şerit: içerik iki kez yazılır, iz -%50 kayınca başa sarar (üzerine gelince durur)
 function renderTicker() {
   const one = TICKER.map((s) => {
     const q = state.quotes[s];
-    const tip = q ? `${q.name} · ${q.source || ''}${q.delayed ? ' · ~15 dk gecikmeli' : ''} · ${timeTR(q.time)}` : s;
+    const tip = q ? `${tx(q.name)} · ${q.source || ''}${q.delayed ? ` · ${t('yaklaşık 15 dk gecikmeli')}` : ''} · ${timeTR(q.time)}` : s;
     return `<div class="tick" data-s="${s}" title="${esc(tip)}"><span class="n">${TICK_NAMES[s] || s}</span><span class="v">${q ? price(q.price) : '…'}</span><span class="c ${cls(q?.changePct)}">${q ? pct(q.changePct) : ''}</span></div>`;
   }).join('');
   $('#ticker').innerHTML = one + one;
@@ -151,15 +157,15 @@ function renderMarket(ms) {
   if (!ms) return;
   state.market = ms;
   const el = $('#mktStatus');
-  el.textContent = ms.label;
+  el.textContent = tx(ms.label);
   el.classList.toggle('open', !!ms.open);
 }
 on('ws:market', (m) => renderMarket(m.market));
-setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }); }, 1000);
+setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }); }, 1000);
 
 on('conn', (ok) => {
   $('#conn').classList.toggle('ok', ok);
-  $('#conn').title = ok ? 'Sunucuya bağlı' : 'Bağlantı yok, yeniden deneniyor…';
+  $('#conn').title = ok ? t('Sunucuya bağlı') : t('Bağlantı koptu, yeniden deneniyor…');
 });
 on('ws:hello', (m) => {
   applySettings(m.settings);
@@ -173,18 +179,18 @@ on('ws:settings', (m) => applySettings(m.settings));
 function renderJobs() {
   const n = state.jobs.length;
   $('#chipJobs').classList.toggle('on', n > 0);
-  $('#chipJobsText').textContent = n ? `${n} arka plan işi · ${elapsed(Math.min(...state.jobs.map((j) => j.startedAt)))}` : '0 arka plan işi';
+  $('#chipJobsText').textContent = n ? t('{n} arka plan işi · {time}', { n, time: elapsed(Math.min(...state.jobs.map((j) => j.startedAt))) }) : t('Arka plan işi yok');
   if (renderJobs.last !== n) { renderJobs.last = n; native({ type: 'badge', text: n ? String(n) : '' }); }
 }
-function elapsed(t) { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s >= 3600 ? `${Math.floor(s / 3600)}s ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m ${s % 60}s`; }
+function elapsed(t0) { const s = Math.max(0, Math.round((Date.now() - t0) / 1000)); return s >= 3600 ? t('{h} sa {m} dk', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) }) : t('{m} dk {s} sn', { m: Math.floor(s / 60), s: s % 60 }); }
 on('ws:jobs', (m) => { state.jobs = m.jobs; renderJobs(); emit('jobs', m.jobs); });
 setInterval(renderJobs, 1000);
 $('#chipJobs').onclick = () => {
-  const m = modal({ title: 'Arka plan işleri', body: '' });
+  const m = modal({ title: t('Arka plan işleri'), body: '' });
   const draw = () => {
-    m.body.innerHTML = state.jobs.length ? state.jobs.map((j) => `<div class="card" style="margin-bottom:8px"><div class="row between"><b>${esc(j.title || 'Oturum')}</b><span class="mono dim">${ago(j.startedAt)}</span></div>
-      <div class="muted">${esc(j.activity || '')}</div>${j.subagents?.length ? `<div class="dim" style="font-size:11px">${j.subagents.length} alt ajan</div>` : ''}
-      <div class="row" style="margin-top:6px"><button class="btn sec" data-open="${j.id}">Aç</button><button class="btn danger" data-stop="${j.id}">Durdur</button></div></div>`).join('') : '<div class="empty">Çalışan iş yok</div>';
+    m.body.innerHTML = state.jobs.length ? state.jobs.map((j) => `<div class="card" style="margin-bottom:8px"><div class="row between"><b>${esc(j.title || t('Oturum'))}</b><span class="mono dim">${ago(j.startedAt)}</span></div>
+      <div class="muted">${esc(tx(j.activity || ''))}</div>${j.subagents?.length ? `<div class="dim" style="font-size:11px">${esc(t('{n} alt asistan çalışıyor', { n: j.subagents.length }))}</div>` : ''}
+      <div class="row" style="margin-top:6px"><button class="btn sec" data-open="${j.id}">${t('Aç')}</button><button class="btn danger" data-stop="${j.id}">${t('Durdur')}</button></div></div>`).join('') : `<div class="empty">${t('Şu an çalışan iş yok')}</div>`;
     $$('[data-open]', m.body).forEach((b) => b.onclick = () => { emit('agent:open', b.dataset.open); m.close(); });
     $$('[data-stop]', m.body).forEach((b) => b.onclick = () => wsCall({ t: 'chat.stop', sessionId: b.dataset.stop }));
   };
@@ -196,15 +202,15 @@ $('#chipJobs').onclick = () => {
 };
 
 // ── Sembol paleti (⌘K) ───────────────────────────
-const TYPE_TR = { equity: 'Hisse', index: 'Endeks', fx: 'Döviz', currency: 'Döviz', commodity: 'Emtia', etf: 'ETF', mutualfund: 'Fon', fund: 'Fon', cryptocurrency: 'Kripto', crypto: 'Kripto', future: 'Vadeli', gold: 'Altın' };
+const TYPE_TR = { equity: t('Hisse'), index: t('Endeks'), fx: t('Döviz'), currency: t('Döviz'), commodity: t('Emtia'), etf: 'ETF', mutualfund: t('Fon'), fund: t('Fon'), cryptocurrency: t('Kripto'), crypto: t('Kripto'), future: t('Vadeli'), gold: t('Altın') };
 const isLocal = (r) => ['BIST', 'Döviz', 'Borsa İstanbul', 'Serbest piyasa'].includes(r.exchange) || !/[.-]/.test(r.symbol);
 let palEl = null;
 function openPalette() {
   if (palEl) { palEl.close(); return; }
-  const back = h(`<div class="pal-back"><div class="pal" role="dialog" aria-modal="true" aria-label="Sembol ara">
-    <div class="pal-in"><span class="pal-ico" aria-hidden="true">⌕</span><input placeholder="Hisse, endeks, döviz veya şirket ara…" aria-label="Sembol ara" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
+  const back = h(`<div class="pal-back"><div class="pal" role="dialog" aria-modal="true" aria-label="${t('Sembol ara')}">
+    <div class="pal-in"><svg class="pal-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input placeholder="${t('Hisse, endeks, döviz veya şirket ara…')}" aria-label="${t('Sembol ara')}" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
     <div class="pal-res" role="listbox"></div>
-    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> gez</span><span><kbd>↵</kbd> aç</span><span><kbd>⌘K</kbd> kapat</span></div></div></div>`);
+    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t('gezin')}</span><span><kbd>↵</kbd> ${t('aç')}</span><span><kbd>esc</kbd> ${t('kapat')}</span></div></div></div>`);
   const input = $('input', back), res = $('.pal-res', back);
   let rows = [], sel = 0, tok = 0;
   const close = () => { back.remove(); palEl = null; document.removeEventListener('keydown', onKey, true); };
@@ -217,7 +223,7 @@ function openPalette() {
     const qt = state.quotes[r.symbol];
     return `<button class="pal-row ${i === sel ? 'sel' : ''}" data-i="${i}" role="option">
       <span class="pal-sym">${mark(r.symbol, q)}</span>
-      <span class="pal-name">${mark(r.name || '', q)}${r.sector ? `<small>${esc(r.sector)}</small>` : ''}</span>
+      <span class="pal-name">${mark(tx(r.name || ''), q)}${r.sector ? `<small>${esc(tx(r.sector))}</small>` : ''}</span>
       ${qt ? `<span class="pal-px"><b>${price(qt.price)}</b><i class="${cls(qt.changePct)}">${pct(qt.changePct)}</i></span>` : ''}
       <span class="pal-tag">${esc(TYPE_TR[r.type] || r.type || '')}${r.exchange && !isLocal(r) ? ` · ${esc(r.exchange)}` : ''}</span></button>`;
   };
@@ -225,15 +231,15 @@ function openPalette() {
     rows = groups.flatMap(([, items]) => items);
     sel = Math.min(sel, Math.max(rows.length - 1, 0));
     let i = 0;
-    res.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `<div class="pal-grp">${title}</div>${items.map((r) => row(r, i++, q)).join('')}`).join('')
-      || `<div class="pal-empty">${q ? `"${esc(q)}" için sonuç yok · Enter ile doğrudan açılır` : 'Yazmaya başlayın'}</div>`;
+    res.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `<div class="pal-grp">${esc(title)}</div>${items.map((r) => row(r, i++, q)).join('')}`).join('')
+      || `<div class="pal-empty">${q ? esc(t('“{q}” için sonuç yok. Enter ile doğrudan açabilirsiniz.', { q })) : t('Aramak için yazmaya başlayın')}</div>`;
     $('.pal-row.sel', res)?.scrollIntoView({ block: 'nearest' });
   };
   const recent = () => localGet('palRecent', []);
   const home = () => {
-    const nm = (s) => ({ symbol: s, name: state.quotes[s]?.name || '', type: state.quotes[s]?.type });
+    const nm = (s) => ({ symbol: s, name: tx(state.quotes[s]?.name || ''), type: state.quotes[s]?.type });
     const rec = recent().slice(0, 5);
-    draw([['SON ARANANLAR', rec], ['WATCHLIST', (state.watchlist || []).filter((s) => !rec.some((r) => r.symbol === s)).slice(0, 8).map(nm)]]);
+    draw([[t('Son arananlar'), rec], [t('İzleme listesi'), (state.watchlist || []).filter((s) => !rec.some((r) => r.symbol === s)).slice(0, 8).map(nm)]]);
   };
   const pick = (r) => {
     if (!r?.symbol) return;
@@ -243,13 +249,13 @@ function openPalette() {
   const search = debounce(async () => {
     const q = input.value.trim();
     if (!q) { sel = 0; home(); return; }
-    const t = ++tok;
+    const my = ++tok;
     res.classList.add('busy');
     const items = await api(`/search?q=${encodeURIComponent(q)}`).catch(() => []);
-    if (t !== tok || !palEl) return;
+    if (my !== tok || !palEl) return;
     res.classList.remove('busy');
     sel = 0;
-    draw([['BORSA İSTANBUL · DÖVİZ', items.filter(isLocal)], ['DİĞER PİYASALAR', items.filter((r) => !isLocal(r)).slice(0, 8)]], q);
+    draw([[t('Borsa İstanbul ve döviz'), items.filter(isLocal)], [t('Diğer piyasalar'), items.filter((r) => !isLocal(r)).slice(0, 8)]], q);
   }, 180);
   input.addEventListener('input', search);
   input.addEventListener('keydown', (e) => {
@@ -281,7 +287,7 @@ window.borsaApp = {
   view: (v) => showView(v), settings: (sec) => openSettings(sec), palette: () => openPalette(),
   newSession: () => { showView('agent'); emit('chat:new'); }, toggleRight: () => toggleRight(),
 };
-const native = (msg) => { try { window.webkit?.messageHandlers?.borsa?.postMessage(msg); } catch { /* tarayıcı */ } };
+export const native = (msg) => { try { window.webkit?.messageHandlers?.borsa?.postMessage(msg); } catch { /* tarayıcı */ } };
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
   if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); }
@@ -310,7 +316,7 @@ document.addEventListener('keydown', (e) => {
     renderTicker();
     emit('ready');
   } catch (e) {
-    toast('Sunucuya ulaşılamadı: ' + e.message, 'err');
+    toast(t('Sunucuya ulaşılamadı: {e}', { e: e.message }), 'err');
   }
   connect();
   showView('agent'); // açılışta her zaman TERMINAL (ajan) sekmesi
