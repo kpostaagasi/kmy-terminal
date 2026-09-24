@@ -2,6 +2,12 @@
 // izin ve soru kartları, dosya ekleri, eğik çizgi komutları, maliyet / tur / bağlam göstergesi
 import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR } from './core.js';
 
+// Çizgi simgeler (currentColor): ataç, gönder, durdur
+const ICON = {
+  clip: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6a4 4 0 0 1 5.7 5.7l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>',
+  send: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor"/></svg>',
+};
 const root = $('#agentChat');
 root.innerHTML = `
   <details class="komite" id="komite"><summary></summary><div class="komite-list"></div></details>
@@ -12,14 +18,13 @@ root.innerHTML = `
     <div class="composer">
       <textarea id="chatIn" rows="1" placeholder="Mesaj yaz..." aria-label="Mesaj"></textarea>
       <div class="cm-bar">
-        <button class="cm-ico" id="attachBtn" title="Dosya veya görsel ekle (en fazla 10 MB)" aria-label="Dosya ekle">📎</button>
+        <button class="cm-ico" id="attachBtn" title="Dosya veya görsel ekle (en fazla 10 MB)" aria-label="Dosya ekle">${ICON.clip}</button>
         <input type="file" id="attachFile" hidden multiple accept="image/*,.pdf,.txt,.csv,.md,.json,.xlsx,.html">
         <label class="cm-chip" title="Model"><select id="optModel" aria-label="Model"></select></label>
         <label class="cm-chip" title="Efor seviyesi (/think)"><select id="optEffort" aria-label="Efor"></select></label>
-        <button class="cm-chip cm-plan" id="planChip" title="Plan modu: ajan yalnızca plan çıkarır, dosya değiştirmez (/plan)">PLAN</button>
         <span class="spacer"></span>
         <span class="cm-hint" id="cmHint">↵ gönder · / komutlar</span>
-        <button class="cm-send" id="chatSend" title="Gönder (Enter)" aria-label="Gönder">↑</button>
+        <button class="cm-send" id="chatSend" title="Gönder (Enter)" aria-label="Gönder">${ICON.send}</button>
       </div>
     </div>
     <div class="cm-status">
@@ -91,6 +96,7 @@ async function loadSessions() {
   const sel = $('#sessSel');
   sel.innerHTML = `<option value="">Yeni oturum</option>` + sessions.map((s) => `<option value="${s.id}" ${s.id === current ? 'selected' : ''}>${s.running ? '● ' : ''}${provTag(s.provider)}${esc((s.title || 'Oturum').slice(0, 40))}</option>`).join('');
   if (current && !sessions.find((s) => s.id === current)) { current = null; localSet('session', null); }
+  requestAnimationFrame(() => fitSelect(sel));
 }
 $('#sessSel').onchange = (e) => openSession(e.target.value || null);
 $('#sessNew').onclick = () => openSession(null);
@@ -540,7 +546,7 @@ function showWorking() {
   hideWorking();
   workingEl = h('<div class="working"><span class="spinner"></span><span class="wt">Çalışıyor…</span><kbd>Esc</kbd><span class="dim">durdur</span></div>');
   log.append(workingEl);
-  $('#chatSend').textContent = '■';
+  $('#chatSend').innerHTML = ICON.stop;
   $('#chatSend').title = 'Durdur (Esc)';
   $('#cmHint').textContent = 'Esc ile durdur';
   $('#chatSend').classList.add('stop');
@@ -548,7 +554,7 @@ function showWorking() {
 }
 function hideWorking() {
   workingEl?.remove(); workingEl = null;
-  $('#chatSend').textContent = '↑';
+  $('#chatSend').innerHTML = ICON.send;
   $('#chatSend').title = 'Gönder (Enter)';
   $('#cmHint').textContent = '↵ gönder · / komutlar';
   $('#chatSend').classList.remove('stop');
@@ -688,7 +694,6 @@ const SLASH = [
   ['/temettu', 'Temettü analizi', () => 'Portföyümün temettü gelirini ve ilan edilmiş yaklaşan temettüleri analiz et; temettü verimi yüksek BIST hisselerinden izleme listeme eklenebilecek adayları gerekçeleriyle listele.'],
   ['/rapor', 'KONU — HTML rapor üret', (a) => `"${a}" konusunda ayrıntılı bir HTML rapor hazırla (tablolar ve gerekiyorsa SVG grafiklerle) ve mcp__borsa__save_report ile kaydet.`],
   ['/ekran', 'Ekranda açık olanı bağlam olarak ekle', null],
-  ['/plan', 'Plan modunu aç/kapat', null],
   ['/model', 'MODEL — model değiştir', null],
   ['/think', 'low|medium|high|xhigh|max — düşünme seviyesi', null, ['/efor']],
   ['/compact', 'Bağlamı özetleyerek küçült (Claude)', null],
@@ -717,7 +722,6 @@ async function handleSlash(text) {
       return true;
     case '/durdur': if (current) wsCall({ t: 'chat.stop', sessionId: current }).catch(() => {}); return true;
     case '/ekran': ctxScreen = !ctxScreen; localSet('ctxScreen', ctxScreen); if (arg) { ctxScreen = true; send(arg); } else toast(ctxScreen ? 'Ekran bağlamı (seçili sembol, açık rapor / KAP) mesajlara eklenecek' : 'Ekran bağlamı kapatıldı'); return true;
-    case '/plan': togglePlan(); return true;
     case '/model': {
       const opts = [...$('#optModel').options];
       const hit = arg && opts.find((o) => o.value.toLowerCase().includes(arg.toLowerCase()) || o.textContent.toLowerCase().includes(arg.toLowerCase()));
@@ -780,7 +784,7 @@ let slashSel = 0, slashItems = [];
 const SLASH_GROUPS = [
   ['ANALİZ', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/rapor', '/ekran']],
   ['OTURUM', ['/yeni', '/temizle', '/durdur', '/rename', '/export', '/compact', '/context']],
-  ['AJAN', ['/plan', '/model', '/think']],
+  ['AJAN', ['/model', '/think']],
   ['BİLGİ', ['/cost', '/status', '/doctor', '/settings', '/help']],
 ];
 const splitDesc = (d) => { const k = d.indexOf(' — '); return k > 0 ? [d.slice(0, k), d.slice(k + 3)] : ['', d]; };
@@ -854,20 +858,7 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault(); stopRun();
 });
 
-// ── Plan modu ve seçenekler ─────────────────────
-function defaultMode() { const m = state.settings.permissionMode; return m && m !== 'plan' ? m : 'default'; }
-function drawPlan() {
-  const isPlan = permMode === 'plan';
-  $('#planChip').classList.toggle('on', isPlan);
-  foot.classList.toggle('plan-mode', isPlan);
-  input.placeholder = isPlan ? 'Plan modu: ajan yalnızca plan çıkarır…' : 'Mesaj yaz...';
-}
-function togglePlan() {
-  permMode = permMode === 'plan' ? defaultMode() : 'plan';
-  drawPlan(); toast(permMode === 'plan' ? 'Plan modu AÇIK: ajan yalnızca plan oluşturur, dosya değiştirmez' : 'Plan modu KAPALI');
-}
-$('#planChip').onclick = togglePlan;
-
+// ── Seçenekler (izin modu Ayarlar › Bağlantı › Agent varsayılanlarından gelir) ─────────
 // Model listesi sağlayıcıya göre gruplanır; oturumun sağlayıcısı sabittir
 function pickModel() {
   const o = $('#optModel').selectedOptions[0];
@@ -883,13 +874,29 @@ function fillModels() {
   const prov = sessionProvider || s.provider || 'claude';
   const cur = pickModel();
   const want = cur.provider === prov && $('#optModel').options.length ? cur.model : prov === 'claude' ? s.model || '' : s[`${prov}Model`] || '';
-  const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && x.id === want ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</optgroup>`;
+  // Kısa ad seçicide görünür ("Claude", "Opus 5.5"), tam ad ipucunda
+  const short = (p, x) => (!x.id ? provName(p).replace(/ \/ .*| Code$/, '') : x.label.replace(/^Claude /, '').replace(/\s*\((?:[^)]*ayarı)\)$/, ''));
+  const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && x.id === want ? 'selected' : ''}>${esc(short(p, x))}</option>`).join('')}</optgroup>`;
   $('#optModel').innerHTML = Object.keys(m.providers || { claude: 1 }).map(group).join('');
   $('#optModel').title = sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model';
   $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude';
+  requestAnimationFrame(fitSelects);
 }
 function syncProvider() { fillModels(); updateStats(); }
-$('#optModel').onchange = () => { $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude'; };
+$('#optModel').onchange = () => { $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude'; fitSelects(); };
+
+// Seçici genişliği seçili yazıya göre (en uzun seçeneğe göre değil); ok ve kenar boşluğu dahil
+const measureCtx = document.createElement('canvas').getContext('2d');
+function fitSelect(sel) {
+  if (!sel || !sel.selectedOptions[0]) return;
+  const cs = getComputedStyle(sel);
+  measureCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const w = measureCtx.measureText(sel.selectedOptions[0].textContent).width;
+  sel.style.width = `${Math.ceil(w + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2)}px`;
+}
+function fitSelects() { ['#optModel', '#optEffort', '#sessSel'].forEach((q) => fitSelect($(q))); }
+$('#optEffort').addEventListener('change', fitSelects);
+$('#sessSel').addEventListener('change', fitSelects);
 
 function fillOptions() {
   const m = state.meta, s = state.settings;
@@ -897,8 +904,7 @@ function fillOptions() {
   syncProvider();
   const EFFORT_TIP = { low: 'kısa işler, düşük maliyet', medium: 'dengeli', high: 'karmaşık analiz', xhigh: 'zor işler', max: 'tüm düşünme bütçesi' };
   $('#optEffort').innerHTML = m.efforts.map((x) => `<option value="${x}" ${x === s.effort ? 'selected' : ''} title="${EFFORT_TIP[x] || ''}">${x}</option>`).join('');
-  if (permMode !== 'plan' || s.permissionMode === 'plan') permMode = s.permissionMode || 'default';
-  drawPlan();
+  permMode = s.permissionMode || 'default';
 }
 on('settings', fillOptions);
 

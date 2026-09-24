@@ -323,7 +323,6 @@ table.t tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); }
 .cm-chip::after { content: ""; position: absolute; right: 10px; top: 50%; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-70%) rotate(45deg); pointer-events: none; opacity: .7; }
 button.cm-chip { padding: 0 11px; font-weight: 700; letter-spacing: .06em; font-size: 10.5px; }
 button.cm-chip::after { display: none; }
-.cm-plan.on { color: #fff; background: var(--violet); border-color: var(--violet); }
 .cm-hint { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .cm-send { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--accent-bg); color: var(--accent-ink); font-size: 17px; font-weight: 800; cursor: pointer; flex: none; transition: transform .1s, filter .15s; }
 .cm-send:hover { filter: brightness(1.06); } .cm-send:active { transform: scale(.94); }
@@ -368,7 +367,6 @@ button.cm-chip::after { display: none; }
 .quick button { flex: 0 0 auto; }
 .quick button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; font-size: 11px; color: var(--text-2); cursor: pointer; }
 .quick button:hover { border-color: var(--accent); color: var(--text); }
-.chat-foot.plan-mode .composer { border-color: var(--violet); }
 .chat-foot.drop { outline: 2px dashed var(--accent); outline-offset: -4px; }
 .attach-list { display: flex; gap: 6px; flex-wrap: wrap; }
 .attach { display: inline-flex; gap: 6px; align-items: center; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 2px 4px 2px 8px; font-size: 11.5px; }
@@ -616,3 +614,6 @@ html.native-mac .modal-back { backdrop-filter: blur(2px); }
 html.native-mac .modal { border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .25), 0 22px 60px rgba(0, 0, 0, .35); }
 .welcome .w-setup { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); color: var(--text); font-size: 12.5px; line-height: 1.55; }
 .welcome .w-setup ol { margin: 6px 0; padding-left: 18px; }
+.cm-send { display: grid; place-items: center; }
+.cm-ico svg { display: block; }
+.cm-chip select { max-width: 220px; }
