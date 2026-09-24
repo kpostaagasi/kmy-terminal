@@ -9,6 +9,8 @@
 - Claude Code kurulu değilse sohbet ekranı ilk açılışta nasıl kurulacağını gösterir.
 
 ### Değişen
+- AGENT CHAT mesaj kutusu: 📎 yerine ince çizgili ataç simgesi, gönder / durdur düğmeleri de çizgi simge; model seçicide kısa adlar ("Claude", "Opus 5.5", tam ad üzerine gelince), seçiciler seçili yazı kadar genişlikte.
+- AGENT CHAT'ten plan modu kaldırıldı (PLAN düğmesi ve `/plan` komutu); izin modu Ayarlar › Bağlantı › Agent varsayılanlarından gelir.
 - Claude Code aranırken yalnız PATH değil yaygın kurulum yerleri de taranır (resmî kurulum, Homebrew, npm, nvm, volta, bun); kullanıcının kabuğu etkileşimli olarak okunur (.zshrc / .bashrc'deki PATH ayarları dahil).
 - Giriş yapılmamış Claude hesabı, eski Claude Code sürümü ve kullanım sınırı hataları anlaşılır Türkçe yönlendirmeyle gösterilir.
 - 7420 portu başka bir programdaysa uygulama boş bir portu seçip hatırlar.

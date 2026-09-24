@@ -367,7 +367,7 @@ export function openSettings(section = 'genel') {
         + card(cmds([
           ['/analiz SEMBOL', 'Kapsamlı analiz + rapor'], ['/teknik SEMBOL', 'Teknik analiz'], ['/karsilastir A B', 'Karşılaştırma'], ['/piyasa', 'Günlük özet'],
           ['/portfoy', 'Portföy değerlendirmesi'], ['/kap [SEMBOL]', 'Son KAP sinyalleri (sembolle: ajan taraması)'], ['/rapor KONU', 'HTML rapor'], ['/temettu', 'Temettü analizi'],
-          ['/tarama KOŞUL', 'Hisse tarayıcı'], ['/plan · /model · /think', 'Çalışma modu, model, düşünme seviyesi'],
+          ['/tarama KOŞUL', 'Hisse tarayıcı'], ['/model · /think', 'Model, düşünme seviyesi'],
           ['/yeni [İSİM] · /durdur · /status · /doctor', 'Oturum yönetimi ve sağlık'], ['/help', 'Tüm komutlar'],
         ]), 'Sohbet komutları')
         + '<p class="stg-foot">BIST fiyatları ~15 dk gecikmelidir; kaynak ve gecikme her fiyatın yanında gösterilir. Terminal ve ajan çıktıları yatırım tavsiyesi değildir.</p>';
