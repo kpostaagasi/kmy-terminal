@@ -7,11 +7,14 @@ const SHELL = t('kabuk'); // yeni kabuk sekmesinin varsayılan adı
 const root = $('#agentTerm');
 const visible = () => root.offsetParent !== null;
 root.innerHTML = `<div class="term-tabs" id="termTabs">
+    <button class="ghost" id="tBack" title="${t('Asistan sohbetine dön')}">‹ ${t('Sohbet')}</button>
     <span id="termTabList" class="row" style="gap:2px;flex-wrap:nowrap"></span>
     <button class="ghost" id="tNew" title="${t('Yeni kabuk')}">＋ ${t('Kabuk')}</button>
     <button class="ghost" id="tClaude" title="${t('Çalışma alanı klasöründe Claude Code başlat')}">＋ Claude Code</button>
     <button class="ghost" id="tHome" title="${t('Ev klasöründe kabuk aç')}">＋ ~</button>
   </div><div class="term-body" id="termBody"></div>`;
+
+$('#tBack').onclick = () => emit('agent:mode:set', 'chat');
 
 const terms = new Map(); // id -> { term, fit, pane, tab, title }
 let active = null;
@@ -20,7 +23,7 @@ let helloSeen = false; // sunucudaki açık terminaller bilinmeden yeni kabuk a�
 
 function theme() {
   return {
-    background: '#0a0c10', foreground: css('--text') || '#d9e0ea', cursor: css('--accent') || '#f5a524', selectionBackground: '#33415588',
+    background: '#050505', foreground: css('--text') || '#d9e0ea', cursor: css('--accent') || '#f5a524', selectionBackground: '#33415588',
     black: '#1e2430', red: '#ef4444', green: '#22c55e', yellow: '#f5a524', blue: '#38bdf8', magenta: '#a78bfa', cyan: '#2dd4bf', white: '#d9e0ea',
     brightBlack: '#66738a', brightRed: '#f87171', brightGreen: '#4ade80', brightYellow: '#ffc867', brightBlue: '#7dd3fc', brightMagenta: '#c4b5fd', brightCyan: '#5eead4', brightWhite: '#ffffff',
   };

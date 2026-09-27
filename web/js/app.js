@@ -18,7 +18,7 @@ function hexRgb(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').tri
 const mix = (c, t, k) => c.map((v, i) => Math.round(v + (t[i] - v) * k));
 const toHex = (c) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 function applyAccent(hex, light) {
-  const c = hexRgb(hex) || [250, 204, 21];
+  const c = hexRgb(hex) || [255, 159, 10];
   const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
   const st = document.documentElement.style;
   // Açık temada metin olarak kullanılan ton koyulaştırılır (okunabilirlik); düğme zemini asıl renk kalır
@@ -32,7 +32,7 @@ function applyAccent(hex, light) {
 function applySettings(s) {
   state.settings = s;
   document.documentElement.dataset.theme = s.theme === 'light' ? 'light' : 'dark';
-  applyAccent(s.accent || '#facc15', s.theme === 'light');
+  applyAccent(s.accent || '#ff9f0a', s.theme === 'light');
   document.documentElement.style.setProperty('--chat-font', `${s.chatFontSize || 14}px`);
   syncLangPref(s.language);
   native({ type: 'lang', lang });
@@ -40,8 +40,22 @@ function applySettings(s) {
 }
 
 // ── Görünümler ───────────────────────────────────
-// TERMINAL sekmesi (view-agent) ajan sohbetiyle açılır; kabuk (xterm) istenince aynı sekmede açılır
+// DASHBOARD sekmesi (view-agent): izleme listesi + asistan sohbeti + KAP; kabuk (xterm) istenince aynı sekmede açılır.
+// kmy terminal ve Portföy sekmelerinde izleme listesi gizlenir, sohbet sağ panele taşınır (Asistan sohbeti sekmesi).
 const VIEW_ALIAS = { terminal: 'agent', chat: 'agent', reports: 'agent' };
+let curView = 'agent';
+function placeChat(v) {
+  const chat = $('#agentChat');
+  const inRight = v !== 'agent';
+  $('[data-rtab=chat]').hidden = !inRight;
+  if (inRight && chat.parentElement.id !== 'rtab-chat') { $('#rtab-chat').append(chat); showRightTab('chat', { open: false }); }
+  else if (!inRight && chat.parentElement.id === 'rtab-chat') {
+    $('#agentTerm').before(chat);
+    if ($('[data-rtab=chat]').classList.contains('active')) showRightTab(localGet('rtab', 'kap'), { open: false });
+  }
+  $('#layout').classList.toggle('no-left', inRight);
+  emit('chat:moved');
+}
 function showView(v) {
   if (v === 'terminal') setAgentMode('terminal');
   else if (v === 'chat') setAgentMode('chat');
@@ -50,6 +64,8 @@ function showView(v) {
   if (!['agent', 'market', 'portfolio'].includes(v)) v = 'agent';
   $$('.viewbar [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
   $$('.view').forEach((el) => el.classList.toggle('active', el.id === `view-${v}`));
+  curView = v;
+  placeChat(v);
   localSet('view', v);
   emit('view:shown', v);
   document.body.classList.remove('left-open', 'right-open');
@@ -71,11 +87,12 @@ on('agent:mode:set', setAgentMode);
 
 // Sağ panel sekmeleri
 export function showRightTab(tab, { open = true } = {}) {
-  if (!['kap', 'reports', 'pdf'].includes(tab)) tab = 'kap';
+  if (!['kap', 'reports', 'pdf', 'chat'].includes(tab)) tab = 'kap';
+  if (tab === 'chat' && $('[data-rtab=chat]').hidden) tab = 'kap';
   if (tab === 'pdf' && $('[data-rtab=pdf]').hidden) tab = 'reports'; // PDF sekmesi yalnız bir rapor açıkken var
   $$('.right-tabs [data-rtab]').forEach((b) => b.classList.toggle('active', b.dataset.rtab === tab));
   $$('.rtab').forEach((el) => el.classList.toggle('active', el.id === `rtab-${tab}`));
-  localSet('rtab', tab);
+  if (tab !== 'chat') localSet('rtab', tab);
   emit('rtab:shown', tab);
   if (!open) return;
   if (matchMedia('(max-width: 860px)').matches) openPanel('right');
@@ -89,10 +106,13 @@ function toggleRight(force) {
   $('#layout').classList.toggle('no-right', hide);
   const tb = $('#btnToggleRight'), label = hide ? t('Sağ paneli göster') : t('Sağ paneli gizle');
   tb.classList.toggle('off', hide); tb.title = label; tb.setAttribute('aria-label', label);
+  const sh = $('#splitHandle'); sh.textContent = hide ? '«' : '»'; sh.title = label; sh.setAttribute('aria-label', label);
   localSet('rightHidden', hide);
   window.dispatchEvent(new Event('resize'));
 }
 $('#btnToggleRight').onclick = () => toggleRight();
+$('#splitHandle').addEventListener('pointerdown', (e) => e.stopPropagation());
+$('#splitHandle').onclick = () => toggleRight();
 on('ws:inbox.imported', (m) => toast(t('Kurum raporu arşive eklendi: {items}', { items: m.items.map((x) => `${x.broker} · ${x.title}`).join(', ').slice(0, 160) }), 'ok', 8000));
 
 // Masaüstüne uygulama olarak kurma (Chrome / Edge; tarayıcı kurulabilir olduğunu bildirince görünür)
@@ -138,20 +158,20 @@ $$('.splitter').forEach((sp) => {
 });
 
 // ── Üst bar: şerit, saat, seans, bağlantı ─────────
-const TICKER = ['XU100', 'XU030', 'XBANK', 'USDTRY', 'EURTRY', 'GRAM', 'ONS', 'BRENT', 'BTC', 'SPX'];
-const TICK_NAMES = { XU100: 'BIST 100', XU030: 'BIST 30', XBANK: t('Banka'), USDTRY: 'USD/TL', EURTRY: 'EUR/TL', GRAM: t('Gram altın'), ONS: t('Ons altın'), BRENT: 'Brent', BTC: 'Bitcoin', SPX: 'S&P 500' };
-// Kayan şerit: içerik iki kez yazılır, iz -%50 kayınca başa sarar (üzerine gelince durur)
+const TICKER = ['XU100', 'XU030', 'XBANK', 'USDTRY', 'EURTRY', 'GBPTRY', 'CHFTRY', 'GRAM', 'ONS', 'BRENT', 'BTC', 'SPX'];
+const TICK_NAMES = { XU100: 'XU100', XU030: 'XU030', XBANK: 'XBANK', USDTRY: 'USD/TL', EURTRY: 'EUR/TL', GBPTRY: 'GBP/TL', CHFTRY: 'CHF/TL', GRAM: t('Gram altın'), ONS: t('Ons altın'), BRENT: 'Brent', BTC: 'BTC', SPX: 'S&P 500' };
+// Piyasa şeridi: sabit hücreler (ad üstte, değer ve değişim altta); sığmayanlar gizlenir
 function renderTicker() {
-  const one = TICKER.map((s) => {
+  $('#ticker').innerHTML = TICKER.map((s) => {
     const q = state.quotes[s];
     const tip = q ? `${tx(q.name)} · ${q.source || ''}${q.delayed ? ` · ${t('yaklaşık 15 dk gecikmeli')}` : ''} · ${timeTR(q.time)}` : s;
     return `<div class="tick" data-s="${s}" title="${esc(tip)}"><span class="n">${TICK_NAMES[s] || s}</span><span class="v">${q ? price(q.price) : '…'}</span><span class="c ${cls(q?.changePct)}">${q ? pct(q.changePct) : ''}</span></div>`;
   }).join('');
-  $('#ticker').innerHTML = one + one;
 }
 $('#ticker').addEventListener('click', (e) => { const t = e.target.closest('.tick'); if (t) selectSymbol(t.dataset.s); });
 
-on('ws:quotes', (m) => { Object.assign(state.quotes, m.quotes); renderTicker(); emit('quotes', m.quotes); });
+const quoteTime = () => { $('#wlTime').textContent = t('Son: {time}', { time: new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }) }); };
+on('ws:quotes', (m) => { Object.assign(state.quotes, m.quotes); renderTicker(); quoteTime(); emit('quotes', m.quotes); });
 
 function renderMarket(ms) {
   if (!ms) return;
@@ -161,13 +181,17 @@ function renderMarket(ms) {
   el.classList.toggle('open', !!ms.open);
 }
 on('ws:market', (m) => renderMarket(m.market));
-setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }); }, 1000);
+setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }, 1000);
 
 on('conn', (ok) => {
   $('#conn').classList.toggle('ok', ok);
   $('#conn').title = ok ? t('Sunucuya bağlı') : t('Bağlantı koptu, yeniden deneniyor…');
+  $('#gwText').textContent = ok ? t('Gateway aktif') : t('Bağlantı yok');
+  $('#gwStatus').classList.toggle('off', !ok);
 });
+const statusInfo = (v) => { $('#sbInfo').textContent = t('kmy terminal v{v} · Veri: KAP, Yahoo Finance, TCMB, İş Yatırım', { v: v || '' }); };
 on('ws:hello', (m) => {
+  statusInfo(m.version);
   applySettings(m.settings);
   renderMarket(m.market);
   state.jobs = m.jobs; renderJobs();
@@ -314,11 +338,12 @@ document.addEventListener('keydown', (e) => {
     for (const q of overview.items) state.quotes[q.symbol] = q;
     renderMarket(overview.status);
     renderTicker();
+    quoteTime();
     emit('ready');
   } catch (e) {
     toast(t('Sunucuya ulaşılamadı: {e}', { e: e.message }), 'err');
   }
   connect();
-  showView('agent'); // açılışta her zaman TERMINAL (ajan) sekmesi
+  showView('agent'); // açılışta her zaman DASHBOARD sekmesi
   showRightTab(localGet('rtab', 'kap'), { open: false });
 })();

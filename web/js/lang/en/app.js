@@ -67,4 +67,10 @@ export default {
   'Borsa İstanbul ve döviz': 'Borsa Istanbul and FX',
   'Diğer piyasalar': 'Other markets',
   'Sunucuya ulaşılamadı: {e}': 'Could not reach the server: {e}',
+  'Dashboard': 'Dashboard',
+  'Asistan sohbeti': 'Assistant chat',
+  'Son: {time}': 'Last: {time}',
+  'Gateway aktif': 'Gateway active',
+  'Bağlantı yok': 'Disconnected',
+  'kmy terminal v{v} · Veri: KAP, Yahoo Finance, TCMB, İş Yatırım': 'kmy terminal v{v} · Data: KAP, Yahoo Finance, TCMB, İş Yatırım',
 };

@@ -25,7 +25,7 @@ const OLD = Object.fromEntries(SECTIONS.flatMap(([k, , bl]) => bl.map(([b]) => [
 const isSec = (k) => SECTIONS.some(([x]) => x === k);
 
 // İmza rengi hazır tonları (ilk = varsayılan)
-const ACCENTS = [['#facc15', t('Sarı')], ['#f5a524', t('Turuncu')], ['#f59e0b', t('Kehribar')], ['#22c55e', t('Yeşil')], ['#2dd4bf', t('Turkuaz')], ['#3b82f6', t('Mavi')], ['#a78bfa', t('Mor')], ['#f472b6', t('Pembe')], ['#ef4444', t('Kırmızı')]];
+const ACCENTS = [['#ff9f0a', t('Turuncu')], ['#facc15', t('Sarı')], ['#f59e0b', t('Kehribar')], ['#22c55e', t('Yeşil')], ['#2dd4bf', t('Turkuaz')], ['#3b82f6', t('Mavi')], ['#a78bfa', t('Mor')], ['#f472b6', t('Pembe')], ['#ef4444', t('Kırmızı')]];
 const ACCENT_DEF = ACCENTS[0][0];
 const hexOk = (x) => (/^#[0-9a-f]{6}$/i.test(x || '') ? x.toLowerCase() : null);
 

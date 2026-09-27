@@ -1,5 +1,20 @@
 # Sürüm Notları
 
+## 0.12.0 — 27 Eylül 2026 (terminal görünümü, kmy terminal sekmesi)
+
+### Yeni
+- **kmy terminal sekmesi** (eski Piyasa sekmesinin yerine): hisse kodu arama, fonksiyon tuşları ve komut satırı olan temel analiz terminali. Sayfalar: **1) Özet** (fiyat grafiği, istatistikler, teknik ve temel veriler, haberler, KAP, kurum raporları, notlar, belgeler, temettü), **2) Finans** (gelir tablosu, bilanço, çeyreklik / kümülatif mali tablolar), **3) Skor** (kârlılık, büyüme, finansal sağlık, değerleme ve momentum puanları, 8 maddelik kalite kontrol listesi), **4) Değer** (sektör ve BIST 100 medyan çarpanlarıyla adil değer aralığı, Graham sayısı, asistanla DCF), **5) Karş** (sektör benzerleriyle karşılaştırma tablosu ve göreli performans grafiği). Ana ekranda son arananlar, popüler hisseler, hisse tarayıcı, sektör haritası ve piyasa özeti. Klavye: 1–5 sayfa, Esc ana ekran, / komut satırı (`THYAO`, `THYAO SKOR`, `TARA`, `YARDIM`…).
+- Sohbet, kmy terminal ve Portföy sekmelerinde sağ panelde (Asistan sohbeti sekmesi) açık kalır; hızlı başla önerileri sekmeye göre değişir.
+
+### Değişen
+- **Terminal görünümü:** siyah zemin, turuncu vurgu, mono büyük harfli etiketler, ince çizgiler. Sekmeler DASHBOARD / KMY TERMINAL / PORTFÖY; üst çubukta gateway durumu; altında sabit piyasa şeridi (XU100, XU030, döviz, altın, Brent, BTC, S&P 500); en altta sürüm, veri kaynakları, seans durumu ve saat.
+- İzleme listesi sade satırlar (sembol · fiyat · değişim · ×); sembol ekleme alanı listenin altında.
+- Mesaj kutusu: üst satırda oturum, model, düşünme seviyesi, maliyet, tur ve bağlam; karşılama ekranında KMY logosu ve hızlı başla satırları.
+- KAP listesi: solda sinyal rozeti (TEZ · YAP · FİN · KUR · DİĞ), turuncu hisse kodu, sağda tarih; sinyal filtreleri üstte.
+- Kurum raporu akışında her satırda Analiz et / İndir düğmeleri.
+- Varsayılan imza rengi turuncu (eski varsayılan sarı kullanılıyorsa bir kez turuncuya taşınır; Ayarlar › Görünüm'den değiştirilebilir).
+- Sağ panel, ayırıcıdaki « / » tutamacıyla da gizlenip açılır.
+
 ## 0.11.0 — 24 Eylül 2026 (sade arayüz, İngilizce)
 
 ### Yeni

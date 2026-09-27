@@ -1,5 +1,5 @@
 // Sol panel: izleme listesi (canlı fiyat, mini grafik, sürükle-bırak sıralama, sembol ekleme)
-import { state, on, emit, api, $, $$, esc, price, pct, cls, sparkSvg, selectSymbol, debounce, toast, askAgent, contextMenu, srcTag } from './core.js';
+import { state, on, emit, api, $, $$, esc, price, pct, cls, selectSymbol, debounce, toast, askAgent, contextMenu, srcTag } from './core.js';
 import { openTxModal } from './portfolio-view.js';
 import { t, tx } from './i18n.js';
 
@@ -26,28 +26,22 @@ function ordered() {
   return s;
 }
 
-// Sembol rozeti: harflerden sabit bir renk tonu (her sembol hep aynı renkte)
-const hue = (str) => [...str].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
-function badge(sym, q) {
-  const type = q?.type;
-  const txt = type === 'fx' || /TRY$/.test(sym) ? '₺' : ['GRAM', 'ONS', 'CEYREK', 'YARIM', 'TAM'].includes(sym) ? 'Au' : sym.slice(0, 2);
-  return `<span class="wl-badge" style="--h:${hue(sym)}">${esc(txt)}</span>`;
-}
+// Satır: sembol · fiyat (para birimi simgesiyle) · günlük değişim · çıkar
+const CUR = { TRY: '₺', USD: '$', EUR: '€', GBP: '£' };
 function rowHtml(sym) {
   const q = state.quotes[sym];
   const tip = `${tx(q?.longName || q?.name || sym)}${q ? ` · ${q.source || ''}${q.delayed ? ` · ${t('~15 dk gecikmeli')}` : ''}` : ''}`;
   const c = q?.changePct;
   return `<div class="wl-row ${sym === state.selected ? 'sel' : ''}" role="listitem" data-s="${esc(sym)}" draggable="${sortMode === 'manual'}" tabindex="0" title="${esc(tip)}">
-    ${badge(sym, q)}
-    <div class="wl-id"><div class="sym">${esc(sym)}</div><div class="nm">${esc(tx(q?.name || ''))}</div></div>
-    ${sparkSvg(q?.spark, { w: 56, h: 24, area: true })}
-    <div class="wl-q"><div class="px">${q ? price(q.price) : '…'}</div><div class="pc ${cls(c)}">${q ? pct(c) : ''}</div></div>
-    <button class="rm" data-rm="${esc(sym)}" title="${t('Listeden çıkar')}" aria-label="${esc(t('{s} sembolünü listeden çıkar', { s: sym }))}">✕</button>
+    <span class="sym">${esc(sym)}</span>
+    <span class="px">${q ? `${CUR[q.currency] || ''}${price(q.price)}` : '…'}</span>
+    <span class="pc ${cls(c)}">${q ? pct(c, 1) : ''}</span>
+    <button class="rm" data-rm="${esc(sym)}" title="${t('Listeden çıkar')}" aria-label="${esc(t('{s} sembolünü listeden çıkar', { s: sym }))}">×</button>
   </div>`;
 }
 
 function render() {
-  list.innerHTML = state.watchlist.length ? ordered().map(rowHtml).join('') : `<div class="empty">${t('Liste boş. Yukarıdan sembol ekleyin.')}</div>`;
+  list.innerHTML = state.watchlist.length ? ordered().map(rowHtml).join('') : `<div class="empty">${t('Liste boş. Aşağıdan sembol ekleyin.')}</div>`;
 }
 
 // Yalnızca değişen satırları güncelle (yanıp sönme efekti)
@@ -59,9 +53,12 @@ on('quotes', (qs) => {
     const fresh = document.createElement('div');
     fresh.innerHTML = rowHtml(sym);
     const nr = fresh.firstElementChild;
-    nr.dataset.p = q.price;
-    if (old && q.price !== old) nr.classList.add(q.price > old ? 'flash-up' : 'flash-down');
-    row.replaceWith(nr);
+    // Satır öğesi yerinde kalır (fiyat güncellemesi tıklamayı yutmasın); yalnız içerik ve sınıflar yenilenir
+    row.innerHTML = nr.innerHTML;
+    row.title = nr.title;
+    row.className = nr.className;
+    row.dataset.p = q.price;
+    if (old && q.price !== old) { void row.offsetWidth; row.classList.add(q.price > old ? 'flash-up' : 'flash-down'); }
   }
 });
 

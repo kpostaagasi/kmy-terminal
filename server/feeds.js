@@ -152,14 +152,14 @@ async function mtCall(code, group, periods) {
 }
 const INDUSTRIAL_KEYS = {
   sales: '3C', grossProfit: '3D', operatingProfit: '3DF', pretax: '3I', netIncome: '3Z', depreciation: '4B',
-  totalAssets: '1BL', currentAssets: '1A', nonCurrentAssets: '1AK', monetaryGain: '3HCA', cash: '1AA', shortInvest: '1AB', equity: '2O', stDebt: '2AA', ltDebt: '2BA', opCashFlow: '4C', netFx: '4BE', exportSales: '4BD',
+  totalAssets: '1BL', currentAssets: '1A', nonCurrentAssets: '1AK', monetaryGain: '3HCA', cash: '1AA', shortInvest: '1AB', equity: '2O', stDebt: '2AA', ltDebt: '2BA', currentLiabilities: '2A', ltLiabilities: '2B', opCashFlow: '4C', netFx: '4BE', exportSales: '4BD',
 };
 const BANK_KEYS = { netInterest: '3C', fees: '3CA', provisions: '3CF', operatingProfit: '3CH', pretax: '3CL', netIncome: '3Z', totalAssets: '1Z', loans: '1AF', deposits: '2A', equity: '2O' };
 
 // symbol'ün son n çeyreği: satırlar kümülatif (yıl başından) gelir; gelir tablosu için çeyreklik değerler de hesaplanır
 export async function financials(symbol, n = 8) {
   const code = String(symbol).toUpperCase().replace(/\.IS$/, '');
-  const key = `mt2:${code}:${n}`;
+  const key = `mt3:${code}:${n}`;
   const hit = cacheGet(key, 12 * 3600_000);
   if (hit) return hit;
   const all = periodsBack(n);

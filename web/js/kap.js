@@ -1,25 +1,26 @@
 // KAP sekmesi: bildirim akışı, sinyal sınıfları (Tez/Yapı/Finans/Kurumsal/Diğer), okundu takibi, uygulama içi bildirim içeriği
 import { state, on, emit, api, $, $$, h, esc, toast, askAgent, localGet, localSet, selectSymbol, debounce, modal, openPdfViewer } from './core.js';
-import { t, tx } from './i18n.js';
+import { t, tx, locale } from './i18n.js';
 
 const SIG_STYLE = { TEZ: 'sig-tez', YAPISAL: 'sig-yap', FINANSAL: 'sig-fin', KURUMSAL: 'sig-kur', DIGER: 'sig-dig' };
 const SIG_LABEL = { TEZ: t('Tez'), YAPISAL: t('Yapı'), FINANSAL: t('Finans'), KURUMSAL: t('Kurumsal'), DIGER: t('Diğer') };
+// Rozetlerde kısa kodlar (terminal görünümü): TEZ · YAP · FİN · KUR · DİĞ
+const SIG_SHORT = { TEZ: t('TEZ'), YAPISAL: t('YAP'), FINANSAL: t('FİN'), KURUMSAL: t('KUR'), DIGER: t('DİĞ') };
 const sigTitle = (sig) => esc(tx(state.meta?.kapSignals?.[sig]?.title || ''));
 export function signalPill(sig) {
-  return sig ? `<span class="sig ${SIG_STYLE[sig] || ''}" title="${sigTitle(sig)}">${esc(SIG_LABEL[sig] || tx(state.meta?.kapSignals?.[sig]?.label || sig))}</span>` : '';
+  return sig ? `<span class="sig ${SIG_STYLE[sig] || ''}" title="${esc(SIG_LABEL[sig] || '')} · ${sigTitle(sig)}">${esc(SIG_SHORT[sig] || tx(state.meta?.kapSignals?.[sig]?.label || sig))}</span>` : '';
 }
 
 const root = $('#rtab-kap');
 root.innerHTML = `
+  <div class="kap-bar"><div class="kap-sigs" id="kSigs"></div><span class="spacer"></span><button class="icon-btn sm" id="kRefresh" title="${t('KAP’tan yenile')}">↻</button><input id="kQ" placeholder="${t('Sembol')}" aria-label="${t('Bildirimlerde ara (sembol veya metin)')}"></div>
   <div class="kap-filters">
     <select id="kScope" aria-label="${t('Kapsam')}"><option value="watchlist">${t('İzleme listesi')}</option><option value="portfolio">${t('Portföyüm')}</option><option value="all">${t('Tüm şirketler')}</option><option value="symbol">${t('Seçili sembol')}</option></select>
     <select id="kDays" aria-label="${t('Dönem')}"><option value="1">${t('{n} gün', { n: 1 })}</option><option value="3" selected>${t('{n} gün', { n: 3 })}</option><option value="7">${t('{n} gün', { n: 7 })}</option><option value="30">${t('{n} gün', { n: 30 })}</option><option value="90" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('{n} gün', { n: 90 })}</option><option value="365" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('1 yıl')}</option></select>
     <select id="kCls" aria-label="${t('Bildirim türü')}"><option value="">${t('Tüm türler')}</option><option value="ODA">${t('Özel durum')}</option><option value="FR">${t('Finansal rapor')}</option><option value="DG">${t('Diğer')}</option><option value="DKB">${t('Düzenleyici kurum')}</option></select>
-    <input id="kQ" placeholder="${t('Sembol veya metin')}" aria-label="${t('Bildirimlerde ara (sembol veya metin)')}">
   </div>
-  <div class="kap-sigs" id="kSigs"></div>
-  <div class="row between" style="padding:4px 10px;font-size:11px"><span class="dim" id="kInfo"></span>
-    <span class="row" style="gap:6px"><button class="icon-btn sm" id="kRefresh" title="${t('KAP’tan yenile')}">↻</button><button class="ghost" id="kRead" title="${t('Listedeki tüm bildirimleri okundu say')}">${t('Okundu say')}</button><button class="ghost" id="kAsk">${t('Tez sinyallerini asistanla özetle')}</button></span></div>
+  <div class="kap-info"><span id="kInfo"></span>
+    <span class="row" style="gap:6px"><button class="ghost xs" id="kRead" title="${t('Listedeki tüm bildirimleri okundu say')}">${t('Okundu say')}</button><button class="ghost xs" id="kAsk">${t('Tez sinyallerini asistanla özetle')}</button></span></div>
   <div class="list" id="kList"></div>`;
 
 let f = { scope: localGet('kapScope', 'watchlist'), cls: '', days: 3, q: '', symbol: null, signal: localGet('kapSignal', '') };
@@ -33,13 +34,17 @@ function qs(offset = 0) {
   return `/kap?scope=${f.scope}&symbol=${encodeURIComponent(sym)}&days=${f.days}&cls=${f.cls}&signal=${f.signal}&q=${encodeURIComponent(f.q)}&offset=${offset}&limit=100${forceNext ? '&refresh=1' : ''}`;
 }
 
+// "24.09.2026 18:19:37" → "24/09 18:19"
+const shortDate = (s) => { const m = /^(\d{2})\.(\d{2})\.\d{4}\s+(\d{2}:\d{2})/.exec(s || ''); return m ? `${m[1]}/${m[2]} ${m[3]}` : (s || ''); };
 function itemHtml(x) {
   return `<div class="kap-item ${seen.has(x.id) ? '' : 'new'}" data-id="${x.id}">
-    <div class="top">${signalPill(x.signal)}${x.stocks.slice(0, 3).map((s) => `<span class="stk" data-s="${esc(s)}">${esc(s)}</span>`).join(' ')}<span class="pill">${esc(tx(x.clsLabel))}</span>${x.late ? `<span class="pill down">${t('Geç bildirim')}</span>` : ''}${x.attachments ? `<span class="pill" title="${t('Ek dosya')}">📎 ${x.attachments}</span>` : ''}<span style="margin-left:auto">${esc(x.publishDate)}</span></div>
+    <div class="k-sig">${signalPill(x.signal) || `<span class="sig sig-dig">${esc(SIG_SHORT.DIGER)}</span>`}</div>
+    <div class="k-main">
+    <div class="top">${x.stocks.slice(0, 3).map((s) => `<span class="stk" data-s="${esc(s)}">${esc(s)}</span>`).join(' ')}<span class="k-cls">${esc(tx(x.clsLabel))}</span>${x.late ? `<span class="pill down">${t('Geç bildirim')}</span>` : ''}${x.attachments ? `<span class="k-att" title="${t('Ek dosya')}">📎${x.attachments}</span>` : ''}<span class="k-date" title="${esc(x.publishDate)}">${esc(shortDate(x.publishDate))}</span></div>
     <div class="subj">${esc(x.subject || '')}</div>
     ${x.summary ? `<div class="co">${esc(x.summary)}</div>` : ''}
     <div class="co dim">${esc(x.company)}</div>
-    <div class="acts"><button data-open="${x.id}">${t('İçeriği göster')}</button><a href="${esc(x.url)}" target="_blank" rel="noopener">${t('KAP’ta aç ↗')}</a><button data-ask="${x.id}">${t('Asistanla analiz et')}</button></div></div>`;
+    <div class="acts"><button data-open="${x.id}">${t('İçeriği göster')}</button><a href="${esc(x.url)}" target="_blank" rel="noopener">${t('KAP’ta aç ↗')}</a><button data-ask="${x.id}">${t('Asistanla analiz et')}</button></div></div></div>`;
 }
 
 let reqTok = 0;
@@ -55,10 +60,10 @@ async function load(append = false) {
     items = append ? [...items, ...r.items] : r.items;
     total = r.total;
     const sym = f.scope === 'symbol' ? (f.symbol || state.selected) : '';
-    $('#kInfo').textContent = [t('{n} bildirim', { n: total }), sym, r.stale ? t('önbellekten') : '', r.error ? tx(r.error) : ''].filter(Boolean).join(' · ');
+    $('#kInfo').textContent = [new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }), t('{n} sinyal', { n: total }), sym, r.stale ? t('önbellekten') : '', r.error ? tx(r.error) : ''].filter(Boolean).join(' | ');
     const counts = r.counts || {};
     const sum = Object.values(counts).reduce((a, b) => a + b, 0);
-    $('#kSigs').innerHTML = `<button class="${!f.signal ? 'on' : ''}" data-sig="">${t('Tümü')} <b>${sum}</b></button>` + ['TEZ', 'YAPISAL', 'FINANSAL', 'KURUMSAL', 'DIGER'].map((k) => `<button class="${f.signal === k ? 'on' : ''}" data-sig="${k}" title="${sigTitle(k)}">${signalPill(k)} <b>${counts[k] || 0}</b></button>`).join('');
+    $('#kSigs').innerHTML = `<button class="${!f.signal ? 'on' : ''}" data-sig="" title="${sum}">${t('Tümü')}</button>` + ['TEZ', 'YAPISAL', 'FINANSAL', 'KURUMSAL', 'DIGER'].map((k) => `<button class="${f.signal === k ? 'on' : ''}" data-sig="${k}" title="${esc(SIG_LABEL[k])} · ${counts[k] || 0} · ${sigTitle(k)}">${esc(SIG_SHORT[k])}</button>`).join('');
     $('#kList').innerHTML = items.map(itemHtml).join('') || `<div class="empty">${f.signal ? t('{label} sınıfında bildirim yok', { label: esc(SIG_LABEL[f.signal] || f.signal) }) : f.scope === 'watchlist' ? t('İzleme listenizdeki hisseler için bildirim yok') : t('Bildirim yok')}</div>`;
     if (items.length < total) $('#kList').append(h(`<button class="ghost" id="kMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: total - items.length })}</button>`));
     if (root.classList.contains('active')) { unread = 0; badge(); }
