@@ -6,10 +6,11 @@
   <title>kmy terminal</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#131417">
+  <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="/vendor/xterm.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/settings.css">
+  <link rel="stylesheet" href="/terminal.css">
   <script src="/vendor/chart.js"></script>
   <script src="/vendor/chartjs-adapter-date-fns.js"></script>
   <script src="/vendor/marked.js"></script>
@@ -20,75 +21,69 @@
 <body>
   <header class="topbar">
     <button class="icon-btn only-narrow" id="btnLeft" aria-label="İzleme listesini aç"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
-    <div class="brand" title="kmy terminal">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 17l5-6 4 4 8-10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>kmy terminal</span>
-    </div>
+    <div class="brand" title="kmy terminal"><b>KMY</b> <span>TERMINAL</span></div>
     <nav class="viewbar" role="tablist" aria-label="Görünümler">
-      <button role="tab" data-key="1" data-view="agent" class="active" data-i18n>Terminal</button>
-      <button role="tab" data-key="2" data-view="market" data-i18n>Piyasa</button>
+      <button role="tab" data-key="1" data-view="agent" class="active" data-i18n>Dashboard</button>
+      <button role="tab" data-key="2" data-view="market">kmy terminal</button>
       <button role="tab" data-key="3" data-view="portfolio" data-i18n>Portföy</button>
     </nav>
-    <div class="ticker" aria-label="Piyasa şeridi"><div class="ticker-track" id="ticker"></div></div>
+    <span class="spacer"></span>
     <div class="topbar-right">
-      <span class="mkt-status" id="mktStatus"></span>
-      <span class="clock" id="clock"></span>
-      <span class="conn" id="conn" title="Sunucu bağlantısı"></span>
+      <span class="gw-status" id="gwStatus"><span class="conn" id="conn" title="Sunucu bağlantısı"></span><span id="gwText"></span></span>
       <button class="icon-btn" id="btnPalette" title="Sembol ara (⌘K)" aria-label="Sembol ara"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></button>
       <button class="icon-btn" id="btnInstall" title="Uygulama olarak kur" aria-label="Uygulama olarak kur" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg></button>
-      <button class="icon-btn" id="btnToggleRight" title="Sağ paneli gizle" aria-label="Sağ paneli gizle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M14.5 4.5v15"/></svg></button>
-      <button class="icon-btn" id="btnSettings" title="Ayarlar (⌘,)" aria-label="Ayarlar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-      <button class="icon-btn only-narrow" id="btnRight" aria-label="Sağ paneli aç"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M14.5 4.5v15"/></svg></button>
+      <button class="icon-btn" id="btnToggleRight" title="Sağ paneli gizle" aria-label="Sağ paneli gizle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M14.5 4.5v15"/></svg></button>
+      <button class="icon-btn boxed" id="btnSettings" title="Ayarlar (⌘,)" aria-label="Ayarlar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M4.2 7.5l2.1 1.2M17.7 15.3l2.1 1.2M4.2 16.5l2.1-1.2M17.7 8.7l2.1-1.2"/><circle cx="12" cy="12" r="7"/></svg></button>
+      <button class="icon-btn only-narrow" id="btnRight" aria-label="Sağ paneli aç"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M14.5 4.5v15"/></svg></button>
     </div>
   </header>
+  <div class="tickerbar" aria-label="Piyasa şeridi"><div class="ticker" id="ticker"></div></div>
 
   <main class="layout" id="layout">
     <aside class="left" id="left">
-      <div class="panel-head">
-        <span data-i18n>İzleme listesi</span>
-        <div class="head-actions">
-          <button class="icon-btn sm" id="wlSort" title="Sırala" aria-label="Sırala"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M4.5 8.5L8 5l3.5 3.5M16 19V5M12.5 15.5L16 19l3.5-3.5"/></svg></button>
-        </div>
+      <div class="panel-bar">
+        <span class="pb-title" data-i18n>İzleme listesi</span><span class="pb-meta" id="wlTime"></span>
+        <span class="spacer"></span>
+        <button class="icon-btn sm" id="wlSort" title="Sırala" aria-label="Sırala"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M4.5 8.5L8 5l3.5 3.5M16 19V5M12.5 15.5L16 19l3.5-3.5"/></svg></button>
       </div>
-      <form class="wl-add" id="wlAddForm" autocomplete="off">
-        <input id="wlAddInput" placeholder="Sembol ekle: THYAO, USDTRY, GRAM…" aria-label="Sembol ekle">
-        <div class="suggest" id="wlSuggest" hidden></div>
-      </form>
       <div class="wl" id="watchlist" role="list"></div>
-      <details class="left-foot" id="dataFoot">
-        <summary data-i18n>Veri kaynakları</summary>
-        <div><span class="dot delayed"></span><span data-i18n>BIST hisse ve endeksleri: yaklaşık 15 dk gecikmeli (Yahoo)</span></div>
-        <div><span class="dot live"></span><span data-i18n>Döviz ve altın: serbest piyasa, yaklaşık 1 dk (Truncgil)</span></div>
-        <div><span class="dot live"></span><span data-i18n>KAP: anlık · Temel veriler ve mali tablolar: İş Yatırım</span></div>
-        <div><span class="dot live"></span><span data-i18n>Kurum raporları: 12 kurumun açık yayınları · Haberler: 7 RSS kaynağı</span></div>
-      </details>
+      <form class="wl-add" id="wlAddForm" autocomplete="off">
+        <div class="suggest" id="wlSuggest" hidden></div>
+        <input id="wlAddInput" placeholder="THYAO" aria-label="Sembol ekle">
+        <button class="wl-plus" type="submit" title="Sembol ekle" aria-label="Sembol ekle">+</button>
+      </form>
     </aside>
     <div class="splitter" data-split="left" aria-hidden="true"></div>
 
     <section class="center" id="center">
       <div class="view active" id="view-agent">
-        <div class="agent-head"><span class="head-actions" id="agentActions"></span><span class="spacer"></span>
-          <div class="seg" id="agentMode"><button data-m="chat" class="active" data-i18n>Sohbet</button><button data-m="terminal" title="Kabuk ve Claude Code komut satırı" data-i18n>Kabuk</button></div>
-        </div>
         <div class="agent-body"><div class="agent-pane active" id="agentChat"></div><div class="agent-pane" id="agentTerm"></div></div>
       </div>
       <div class="view" id="view-market"></div>
       <div class="view" id="view-portfolio"></div>
     </section>
 
-    <div class="splitter" data-split="right" aria-hidden="true"></div>
+    <div class="splitter" data-split="right" aria-hidden="true"><button class="split-handle" id="splitHandle" title="Sağ paneli gizle" aria-label="Sağ paneli gizle">»</button></div>
     <aside class="right" id="right">
       <div class="right-tabs" role="tablist">
+        <button role="tab" data-rtab="chat" hidden data-i18n>Asistan sohbeti</button>
         <button role="tab" data-rtab="kap" class="active">KAP <span class="badge" id="kapBadge" hidden></span></button>
         <button role="tab" data-rtab="reports" data-i18n>Raporlar</button>
         <button role="tab" data-rtab="pdf" hidden>PDF <span class="tab-x" id="pdfClose" title="Kapat" aria-label="PDF sekmesini kapat">✕</span></button>
         <button class="icon-btn sm only-narrow" id="btnRightClose" aria-label="Paneli kapat">✕</button>
       </div>
+      <div class="rtab" id="rtab-chat"></div>
       <div class="rtab active" id="rtab-kap"></div>
       <div class="rtab" id="rtab-reports"></div>
       <div class="rtab" id="rtab-pdf"></div>
     </aside>
   </main>
+  <footer class="statusbar">
+    <span id="sbInfo"></span>
+    <span class="spacer"></span>
+    <span class="mkt-status" id="mktStatus"></span>
+    <span class="clock" id="clock"></span>
+  </footer>
   <div class="backdrop" id="backdrop" hidden></div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>

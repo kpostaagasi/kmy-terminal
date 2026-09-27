@@ -142,4 +142,10 @@ export default {
   'Ev klasöründe kabuk aç': 'Open a shell in your home folder',
   'Kabuğu kapat': 'Close shell',
   'süreç sonlandı: {code}': 'process exited: {code}',
+  'TEZ': 'THS',
+  'YAP': 'STR',
+  'FİN': 'FIN',
+  'KUR': 'CRP',
+  'DİĞ': 'OTH',
+  '{n} sinyal': '{n} signals',
 };

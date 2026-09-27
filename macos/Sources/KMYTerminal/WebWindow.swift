@@ -191,13 +191,13 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     let html = """
     <!doctype html><html><head><meta charset="utf-8"><style>
     :root { color-scheme: light dark; }
-    body { margin: 0; height: 100vh; display: grid; place-items: center; font: 14px -apple-system, sans-serif; background: #18191d; color: #e8e8eb; }
-    @media (prefers-color-scheme: light) { body { background: #f4f4f2; color: #1c1d21; } }
+    body { margin: 0; height: 100vh; display: grid; place-items: center; font: 14px -apple-system, sans-serif; background: #0a0a0a; color: #e6e6e6; }
+    @media (prefers-color-scheme: light) { body { background: #ededea; color: #121212; } }
     .box { text-align: center; max-width: 440px; padding: 24px; }
     h1 { font-size: 17px; font-weight: 600; margin: 14px 0 6px; } p { opacity: .65; line-height: 1.55; margin: 0 0 20px; }
-    .spin { width: 20px; height: 20px; border: 2px solid rgba(128,128,128,.25); border-top-color: rgba(128,128,128,.8); border-radius: 50%; margin: auto; animation: s .8s linear infinite; }
+    .spin { width: 20px; height: 20px; border: 2px solid rgba(128,128,128,.25); border-top-color: #ff9f0a; border-radius: 50%; margin: auto; animation: s .8s linear infinite; }
     @keyframes s { to { transform: rotate(360deg); } }
-    button { background: #facc15; color: #1a1500; border: 0; border-radius: 10px; padding: 8px 16px; font-weight: 600; margin: 0 4px; }
+    button { background: #ff9f0a; color: #120a00; border: 0; border-radius: 2px; padding: 7px 14px; font: 700 12px ui-monospace, SF Mono, monospace; letter-spacing: .05em; text-transform: uppercase; margin: 0 4px; }
     button.sec { background: rgba(128,128,128,.2); color: inherit; }
     </style></head><body><div class="box">
     \(retry ? "" : "<div class=\"spin\"></div>")

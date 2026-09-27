@@ -116,7 +116,7 @@ export const DEFAULT_SETTINGS = {
   chatFontSize: 14,
   terminalFontSize: 13,
   theme: 'dark',
-  accent: '#facc15',
+  accent: '#ff9f0a',
   quoteRefreshSec: 15,
   kapRefreshSec: 120,
   baseCurrency: 'TRY',
@@ -130,6 +130,14 @@ export const DEFAULT_SETTINGS = {
   uiMode: 'chat',
   language: 'auto', // 'auto' (sistem dili) | 'tr' | 'en'
 };
+
+// 0.12: varsayılan imza rengi sarıdan turuncuya geçti; eski varsayılanı (#facc15) bir kez yeni varsayılana taşı
+try {
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'accentMigrated'").get()) {
+    db.prepare(`UPDATE settings SET value = '"#ff9f0a"' WHERE key = 'accent' AND value = '"#facc15"'`).run();
+    db.prepare("INSERT INTO settings(key, value) VALUES('accentMigrated', 'true')").run();
+  }
+} catch { /* ayarlar tablosu yoksa sorun değil */ }
 
 export function getSettings() {
   const out = { ...DEFAULT_SETTINGS };

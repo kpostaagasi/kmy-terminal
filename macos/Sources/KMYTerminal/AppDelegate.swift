@@ -213,8 +213,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       NSMenuItem(title: L("Tümünü Seç", "Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
     ])
     _ = menu(L("Görünüm", "View"), [
-      item("Terminal", #selector(viewAgent), "1"),
-      item(L("Piyasa", "Markets"), #selector(viewMarket), "2"),
+      item("Dashboard", #selector(viewAgent), "1"),
+      item("kmy terminal", #selector(viewMarket), "2"),
       item(L("Portföy", "Portfolio"), #selector(viewPortfolio), "3"),
       item(L("Sağ Paneli Göster/Gizle", "Show/Hide Side Panel"), #selector(toggleRight), "\\"),
       .separator(),

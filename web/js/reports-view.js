@@ -165,8 +165,10 @@ async function loadFeed() {
     $('#feedList').innerHTML = r.items.map((x) => `<div class="report-item feed-item ${x.id === feedSel ? 'sel' : ''}" data-id="${esc(x.id)}">
       <div class="t"><span class="dot" style="background:${BROKER_DOT[x.brokerKey] || 'var(--text-3)'}"></span>${x.symbols.length ? `<b class="mono accent">${esc(x.symbols.slice(0, 3).join(', '))}</b> ` : ''}<span class="dim">${esc(x.broker)}</span>${x.isNew ? ` <span class="pill acc">${t('Yeni')}</span>` : ''}${x.saved ? ` <span class="pill" title="${t('Arşivde')}">✓</span>` : ''}</div>
       <div class="t2">${esc(x.title)}</div>
-      <div class="m">${dateTR(x.date)} · ${esc(tx(x.category))}${x.size ? ` · ${esc(x.size)}` : ''}${x.access === 'web' ? ` · ${esc(tx(x.access))}` : ''}</div></div>`).join('') || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
-    $$('.feed-item', root).forEach((el) => el.onclick = () => showFeed(el.dataset.id));
+      <div class="m"><span>${dateTR(x.date)} · ${esc(tx(x.category))}${x.size ? ` · ${esc(x.size)}` : ''}${x.access === 'web' ? ` · ${esc(tx(x.access))}` : ''}</span>
+        <span class="f-acts"><button class="ghost xs" data-fa="${esc(x.id)}">${t('Analiz et')}</button>${x.access === 'web' ? '' : `<a class="ghost xs" href="/api/research/file?id=${encodeURIComponent(x.id)}" download>${t('İndir')}</a>`}</span></div></div>`).join('') || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
+    $$('.feed-item', root).forEach((el) => el.onclick = (e) => { if (e.target.closest('.f-acts')) return; showFeed(el.dataset.id); });
+    $$('[data-fa]', root).forEach((b) => b.onclick = () => askFeed(feed.items.find((i) => i.id === b.dataset.fa)));
     const fails = Object.entries(r.status || {}).filter(([, s]) => !s.ok).map(([k]) => r.brokers[k]?.name);
     const locked = r.unavailable.map((u) => `<span title="${esc(tx(u.reason))}">${esc(tx(u.name))}</span>`).join(', ');
     $('#feedNote').innerHTML = `${t('{n} şirket raporu', { n: r.total })} · ${t('Son güncelleme {date} · 30 dakikada bir yenilenir', { date: dateTR(r.at, true) })}${fails.length ? ` · <span class="down">${t('Alınamadı: {list}', { list: esc(fails.join(', ')) })}</span>` : ''}<br>${t('Giriş gerektiren kaynaklar ({list}): raporları kendi hesabınızla indirin; Ayarlar › Veri › Kurum raporları için klasör izleme onları arşive alır.', { list: locked })}`;
@@ -184,12 +186,17 @@ function showFeed(id) {
     ${x.summary ? `<div class="feed-sum">${x.symbols.length ? `<b class="mono">${esc(x.symbols.join(', '))}</b> · ` : ''}${esc(x.summary)}</div>` : ''}
     ${web ? `<div class="empty" style="margin:auto">${t('Bu kurum raporlarını web yazısı olarak yayımlıyor. "Kaynakta aç" ile okuyabilir ya da asistana analiz ettirebilirsiniz.')}</div>` : `<iframe src="${src}" title="${esc(x.title)}"></iframe>`}`;
   openPdfTab();
-  $('#fAsk').onclick = () => askAgent(web
+  $('#fAsk').onclick = () => askFeed(x);
+  const sv = $('#fSave');
+  if (sv) sv.onclick = async () => { sv.disabled = true; try { const r = await api('/research/save', { method: 'POST', body: { id } }); toast(t('Arşive kaydedildi: {name}', { name: r.name }), 'ok'); x.saved = r.name; } catch (e) { toast(tx(e.message), 'err'); } sv.disabled = false; };
+}
+function askFeed(x) {
+  if (!x) return;
+  const web = x.access === 'web';
+  askAgent(web
     ? t('{broker} yazısını oku (WebFetch: {url}) ve analiz et: temel tez, varsa tavsiye ve hedef fiyat, değerleme yaklaşımı, riskler; güncel fiyat ve temel verilerle karşılaştır ve kendi bağımsız görüşünle değerlendir.', { broker: x.broker, url: x.page })
     : t('read_broker_report ile "{id}" kimlikli {broker} raporunu ({title}, {date}) indir ve pdf-okuma becerisiyle oku. Özet değil analiz istiyorum: temel tez, tavsiye ve hedef fiyat, değerleme yaklaşımı, tahminler, riskler, farklılaşma noktaları. Güncel fiyat, temel veriler ve son KAP bildirimleriyle karşılaştır; güçlü ve zayıf yönleri kendi bağımsız görüşünle değerlendir.', { id: x.id, broker: x.broker, title: x.title, date: dateTR(x.date) })
       + (x.symbols.length ? ` ${t('Sonunda {symbol} için save_memory ile kurum görüşünü şirket notuna ekle.', { symbol: x.symbols[0] })}` : ''));
-  const sv = $('#fSave');
-  if (sv) sv.onclick = async () => { sv.disabled = true; try { const r = await api('/research/save', { method: 'POST', body: { id } }); toast(t('Arşive kaydedildi: {name}', { name: r.name }), 'ok'); x.saved = r.name; } catch (e) { toast(tx(e.message), 'err'); } sv.disabled = false; };
 }
 $('#fDays').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; feedDays = Number(b.dataset.d); localSet('feedDays', feedDays); loadFeed(); };
 $('#fSym').addEventListener('input', debounce(loadFeed, 300));

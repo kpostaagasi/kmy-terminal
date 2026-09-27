@@ -11,32 +11,37 @@ const ICON = {
 };
 const root = $('#agentChat');
 root.innerHTML = `
+  <div class="panel-bar"><span class="pb-title">${t('Asistan sohbeti')}</span><span class="head-actions" id="agentActions"></span><span class="spacer"></span>
+    <div class="seg" id="agentMode"><button data-m="chat" class="active">${t('Sohbet')}</button><button data-m="terminal" title="${t('Kabuk ve Claude Code komut satırı')}">${t('Kabuk')}</button></div></div>
   <details class="komite" id="komite"><summary></summary><div class="komite-list"></div></details>
   <div class="chat-log" id="chatLog" aria-live="polite"></div>
   <div class="chat-foot" id="chatFoot">
     <div class="slash" id="slash" hidden></div>
     <div class="attach-list" id="attachList" hidden></div>
     <div class="composer">
-      <textarea id="chatIn" rows="1" placeholder="${t('Mesaj yazın…')}" aria-label="${t('Mesaj')}"></textarea>
+      <div class="cm-top">
+        <label class="cm-chip sess-chip" title="${t('Oturum')}"><select id="sessSel" aria-label="${t('Oturum')}"></select></label>
+        <label class="cm-chip model" title="${t('Model')}"><select id="optModel" aria-label="${t('Model')}"></select></label>
+        <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
+        <span class="spacer"></span>
+        <span class="cm-stat">${t('Maliyet')} <b id="stCost">$0,00</b></span>
+        <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
+        <span class="cm-stat" title="${t('Model bağlam kullanımı')}">ctx <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
+      </div>
       <div class="cm-bar">
         <button class="cm-ico" id="attachBtn" title="${t('Dosya veya görsel ekle (en fazla 10 MB)')}" aria-label="${t('Dosya ekle')}">${ICON.clip}</button>
         <input type="file" id="attachFile" hidden multiple accept="image/*,.pdf,.txt,.csv,.md,.json,.xlsx,.html">
-        <label class="cm-chip" title="${t('Model')}"><select id="optModel" aria-label="${t('Model')}"></select></label>
-        <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
-        <span class="spacer"></span>
-        <span class="cm-hint" id="cmHint">${t('↵ gönder · / komutlar')}</span>
+        <textarea id="chatIn" rows="1" placeholder="${t('Mesaj yazın…')}" aria-label="${t('Mesaj')}"></textarea>
         <button class="cm-send" id="chatSend" title="${t('Gönder (Enter)')}" aria-label="${t('Gönder')}">${ICON.send}</button>
       </div>
     </div>
     <div class="cm-status">
       <button class="cm-jobs" id="chipJobs" title="${t('Arka planda süren asistan işleri')}"><i></i><span id="chipJobsText">${t('{n} arka plan işi', { n: 0 })}</span></button>
       <span class="spacer"></span>
-      <span class="cm-stat">${t('Maliyet')} <b id="stCost">$0,00</b></span>
-      <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
-      <span class="cm-stat" title="${t('Model bağlam kullanımı')}">${t('Bağlam')} <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
+      <span class="cm-hint" id="cmHint">${t('↵ gönder · / komutlar')}</span>
     </div>
   </div>`;
-$('#agentActions').innerHTML = `<label class="sess-chip" title="${t('Oturum')}"><select id="sessSel" aria-label="${t('Oturum')}"></select></label><button class="icon-btn sm" id="sessMenu" title="${t('Tüm oturumlar')}">☰</button><button class="icon-btn sm" id="sessNew" title="${t('Yeni oturum (/yeni)')}">＋</button><button class="icon-btn sm" id="sessExport" title="${t('Sohbeti JSON olarak indir (/export)')}">⤓</button>`;
+$('#agentActions').innerHTML = `<button class="icon-btn sm" id="sessMenu" title="${t('Tüm oturumlar')}">☰</button><button class="icon-btn sm" id="sessNew" title="${t('Yeni oturum (/yeni)')}">＋</button><button class="icon-btn sm" id="sessExport" title="${t('Sohbeti JSON olarak indir (/export)')}">⤓</button>`;
 
 const log = $('#chatLog'), input = $('#chatIn');
 const foot = $('#chatFoot');
@@ -232,31 +237,54 @@ function exportChat(id = current) {
 }
 
 // ── Karşılama ve bağlama göre hızlı istemler ─────────────
-const COMMON_QUICK = [
-  ['Piyasa özeti', 'Bugünün piyasa özetini çıkar.'],
-  ['Portföyümü özetle', 'Portföyümü özetle: değer, kâr/zarar, en güçlü ve en zayıf pozisyonlar, dikkat etmem gerekenler.'],
-  ['KAP tez sinyalleri', 'Bugünkü KAP tez sinyallerini özetle: izleme listemdeki ve portföyümdeki şirketlerin TEZ ve YAPISAL bildirimlerini oku, önem sırasıyla yorumla.'],
-  ['Tezlerim ne durumda?', 'Kayıtlı tezlerimin tetikleyicilerini güncel verilerle tara (tetikleyici-radar becerisi).'],
-].map(([l, p]) => [t(l), t(p)]);
+// Görünüme göre hızlı başlangıç istemleri (sohbet sağ panele taşındığında da geçerli)
+const QUICK = {
+  agent: [
+    ['İzleme listemin risklerini analiz et', 'İzleme listemdeki hisselerin risklerini analiz et: son fiyat hareketleri, teknik görünüm, önemli KAP bildirimleri ve dikkat etmem gerekenler.'],
+    ['KAP tez sinyallerini özetle', 'Bugünkü KAP tez sinyallerini özetle: izleme listemdeki ve portföyümdeki şirketlerin TEZ ve YAPISAL bildirimlerini oku, önem sırasıyla yorumla.'],
+    ['Tezlerim ne durumda?', 'Kayıtlı tezlerimin tetikleyicilerini güncel verilerle tara (tetikleyici-radar becerisi).'],
+  ],
+  portfolio: [
+    ['Portföyümü özetle', 'Portföyümü özetle: değer, kâr/zarar, en güçlü ve en zayıf pozisyonlar, dikkat etmem gerekenler.'],
+    ['Risk analizi yap', 'Portföyümün risk analizini yap: yoğunlaşma, volatilite, en büyük düşüş, beta ve çeşitlendirme önerileri.'],
+    ['Aylık performans', 'Portföyümün aylık performansını karşılaştırma ölçütleriyle birlikte özetle; en çok katkı ve kayıp veren pozisyonları belirt.'],
+  ],
+  market: [
+    ['Piyasa özeti', 'Bugünün piyasa özetini çıkar.'],
+    ['KAP özetini çıkar', 'Bugünün önemli KAP bildirimlerini özetle; izleme listemdeki şirketleri öne al.'],
+  ],
+};
+let quickView = 'agent';
 const quickPrompt = (s) => t('{s} hissesini hızlı analiz et: fiyat, teknik görünüm, temel oranlar ve son KAP; 5 maddelik özet.', { s: s || '' });
 function quickItems() {
   const s = state.selected;
   const out = [];
   if (state.openKap?.id) out.push([t('Bu bildirimi yorumla'), t('Açık olan KAP bildirimini (id {id}{stocks}) get_kap_detail ile oku; şirket için ne anlama geldiğini, tez etkisini ve izlenecekleri özetle.', { id: state.openKap.id, stocks: state.openKap.stocks?.length ? `, ${state.openKap.stocks.join(', ')}` : '' })]);
   if (state.openReport) out.push([t('Açık raporu özetle'), t('Açık olan raporu (workspace/reports/{file}) oku ve özetle; güçlü ve zayıf yönlerini kendi bağımsız görüşünle değerlendir.', { file: state.openReport })]);
-  if (s) out.push([t('{s} hızlı analiz', { s }), quickPrompt(s)]);
-  out.push(...COMMON_QUICK);
-  return out.slice(0, 6);
+  if (s && quickView === 'market') out.push([t('{s} hızlı analiz', { s }), quickPrompt(s)]);
+  out.push(...(QUICK[quickView] || QUICK.agent).map(([l, p]) => [t(l), t(p)]));
+  return out.slice(0, 5);
 }
 function drawQuick() {
   const q = $('#quick', log);
   if (!q) return;
   const items = quickItems();
-  q.innerHTML = items.map(([l], i) => `<button data-i="${i}">${esc(l)}</button>`).join('');
-  $$('button', q).forEach((b) => b.onclick = () => send(items[b.dataset.i][1]));
+  q.innerHTML = items.map(([l], i) => `<button data-i="${i}"><i>&gt;</i> ${esc(l)}</button>`).join('')
+    + `<button class="more" data-help><i>&gt;</i> ${t('Neler yapabilirim?')}</button>`;
+  $$('button[data-i]', q).forEach((b) => b.onclick = () => send(items[b.dataset.i][1]));
+  $('[data-help]', q).onclick = () => { input.value = '/'; input.focus(); input.dispatchEvent(new Event('input')); };
 }
+on('view:shown', (v) => { quickView = v; drawQuick(); });
+const LOGO = [
+  '██╗  ██╗███╗   ███╗██╗   ██╗',
+  '██║ ██╔╝████╗ ████║╚██╗ ██╔╝',
+  '█████╔╝ ██╔████╔██║ ╚████╔╝ ',
+  '██╔═██╗ ██║╚██╔╝██║  ╚██╔╝  ',
+  '██║  ██╗██║ ╚═╝ ██║   ██║   ',
+  '╚═╝  ╚═╝╚═╝     ╚═╝   ╚═╝   ',
+].join('\n');
 function welcome() {
-  log.innerHTML = `<div class="welcome"><div class="w-title">${t('Asistan hazır')}</div><div class="dim">${t('Bir hisse kodu veya soru yazın. Komutlar için {slash} yazın.', { slash: '<span class="mono">/</span>' })}</div><div class="quick" id="quick"></div></div>`;
+  log.innerHTML = `<div class="welcome"><pre class="w-logo" aria-hidden="true">${LOGO}</pre><div class="w-title">${t('KMY hazır')}</div><div class="w-sub">${t('Bir hisse kodu veya soru yazın. Komutlar için {slash} yazın.', { slash: '<span class="mono">/</span>' })}</div><div class="w-quick-h">${t('Hızlı başla:')}</div><div class="quick" id="quick"></div></div>`;
   drawQuick();
   setupCheck();
 }
