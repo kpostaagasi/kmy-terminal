@@ -31,6 +31,8 @@ export default {
   'Sohbeti JSON olarak indir (/export)': 'Download chat as JSON (/export)',
   'Önceki mesajları yükle ({n})': 'Load earlier messages ({n})',
   'Asistan çalışıyor; önce durdurun (Esc)': 'The assistant is working; stop it first (Esc)',
+  'Açık oturum {p} sağlayıcısında. {q} ile konuşmak için yeni oturum açın.': 'The open session runs on {p}. Start a new session to use {q}.',
+  'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)': 'Model (the session provider is fixed; start a new session to change it)',
   'Oturum ara…': 'Search sessions…',
   'Oturum ara': 'Search sessions',
   'Bugün': 'Today',

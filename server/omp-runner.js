@@ -49,7 +49,7 @@ function loadModels() {
       for (const m of all) count[m.provider] = (count[m.provider] || 0) + 1;
       // Yüzlerce model listeleyen toplayıcılar (nous, nvidia…) seçiciyi boğar: yalnız küçük sağlayıcılar, tarihli kopyalar hariç
       const list = all.filter((m) => count[m.provider] <= 40 && m.reasoning && !/-\d{8}$|embed/i.test(m.id))
-        .map((m) => ({ id: m.selector || `${m.provider}/${m.id}`, label: `${m.name || m.id} (${m.provider})` }));
+        .map((m) => ({ id: m.selector || `${m.provider}/${m.id}`, label: `${m.name || m.id} (${m.provider})`, contextWindow: m.contextWindow || null, thinking: Array.isArray(m.thinking) ? m.thinking : null }));
       if (list.length) models = list;
     } catch (e) {
       console.error('[omp] model listesi alınamadı:', String(e.message || e).slice(0, 200));
@@ -65,21 +65,37 @@ export function ompModels() {
   return models || OMP_DEFAULT_MODELS;
 }
 
+// Meta isteği senkron yanıt verdiği için model listesi hazır olana kadar bekleriz:
+// aksi hâlde ilk /api/meta çağrısı yalnız OMP_DEFAULT_MODELS döner ve seçici eksik kalır.
+export async function ompModelsReady() {
+  if (!ompBin()) return [];
+  if (!models || Date.now() - modelsAt > MODELS_TTL) await (loadModels() || Promise.resolve());
+  return models || OMP_DEFAULT_MODELS;
+}
+
 // ── workspace/.omp/mcp.json: borsa stdio MCP sunucusu (varsa diğer sunucular korunur) ──
+// Proje klasörü taşınırsa buradaki yol eskir ve MCP köprüsü sessizce ölür; bu yüzden sunucu
+// açılışında bir kez çağrılır (runOmp ayrıca her turda doğrular).
 export function ensureOmpMcp() {
   let cur = {};
   try { cur = JSON.parse(fs.readFileSync(MCP_FILE, 'utf8')); } catch { /* yok */ }
   const want = { command: process.execPath, args: [MCP_STDIO] };
-  if (JSON.stringify(cur.mcpServers?.borsa) === JSON.stringify(want)) return;
+  if (JSON.stringify(cur.mcpServers?.borsa) === JSON.stringify(want)) return false;
+  // Eski yol bir başka projeyi gösteriyorsa kullanıcıyı bilgilendir: borsa araçları çalışmayacak
+  const stale = cur.mcpServers?.borsa && JSON.stringify(cur.mcpServers.borsa) !== JSON.stringify(want);
+  if (stale) console.warn(`[omp] ${MCP_FILE} güncellendi: borsa MCP köprüsü eski yolu gösteriyordu (${cur.mcpServers.borsa.args?.[0] || 'bilinmiyor'}).`);
   const next = { ...cur, mcpServers: { ...(cur.mcpServers || {}), borsa: want } };
   fs.mkdirSync(path.dirname(MCP_FILE), { recursive: true });
   fs.writeFileSync(MCP_FILE, JSON.stringify(next, null, 2) + '\n');
+  return true;
 }
 
 // omp MCP araçlarını xd:// aygıtı olarak sunar: write(xd://mcp__borsa_get_quotes, JSON) → mcp__borsa__get_quotes
+// Sunucu adı ayraç olarak geçer; alt çizgi içereyen adlar (borsa, my_server) doğru bölünür.
+const XD_MCP = /^xd:\/\/mcp__(.+)_(\w+)$/i;
 function toolView(name, args = {}) {
   const p = typeof args.path === 'string' ? args.path : '';
-  const m = /^xd:\/\/mcp__([a-z0-9-]+?)_(\w+)$/i.exec(p);
+  const m = XD_MCP.exec(p);
   if (m && name === 'write') {
     let input = args.content;
     try { input = JSON.parse(args.content); } catch { /* düz metin */ }
@@ -87,6 +103,13 @@ function toolView(name, args = {}) {
   }
   const std = { bash: 'Bash', read: 'Read', write: 'Write', edit: 'Edit', grep: 'Grep', find: 'Glob', web_search: 'WebSearch', fetch: 'WebFetch', task: 'Task', todo_write: 'TodoWrite' }[name];
   return { name: std || name, input: args };
+}
+
+// Araç etiketi: mcp__sunucu__arac → "arac" (borsa) ya da "sunucu › arac" (diğer MCP sunucuları)
+export function toolLabel(name) {
+  if (name.startsWith('mcp__borsa__')) return name.slice(12).replace(/_/g, ' ');
+  if (name.startsWith('mcp__')) return name.split('__').slice(1).join(' › ');
+  return name;
 }
 
 const text = (content) => (Array.isArray(content) ? content.map((c) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n') : String(content ?? ''));
@@ -121,7 +144,7 @@ export function runOmp({ run, session, prompt, model, permissionMode, sys, io },
     const v = toolView(name, args);
     io.record('tool_use', { id, name: v.name, input: v.input });
     io.emit('tool_use', { id, name: v.name, input: v.input });
-    run.activity = v.name.startsWith('mcp__borsa__') ? v.name.slice(12).replace(/_/g, ' ') : v.name;
+    run.activity = toolLabel(v.name);
     io.jobs();
   };
 
@@ -129,9 +152,11 @@ export function runOmp({ run, session, prompt, model, permissionMode, sys, io },
   const approve = async (req) => {
     const m = /^Allow tool: (\S+)/.exec(req.title || '');
     const tool = m?.[1] || 'araç';
-    const xd = /Path: xd:\/\/mcp__borsa_(\w+)/.exec(req.title || '')?.[1];
+    // Onay başlığındaki xd:// yolunu tek seferde çöz: [1]=sunucu, [2]=araç
+    const xd = XD_MCP.exec(/Path: (xd:\/\/\S+)/.exec(req.title || '')?.[1] || '');
+    const xdTool = xd?.[2];
     const answer = (ok) => send({ type: 'extension_ui_response', id: req.id, value: ok ? 'Approve' : 'Deny' });
-    if (xd && AUTO_TOOLS.includes(xd)) return answer(true); // salt okunur terminal araçları Claude'daki gibi onaysız
+    if (xd && xd[1] === 'borsa' && AUTO_TOOLS.includes(xdTool)) return answer(true); // salt okunur terminal araçları onaysız; başka MCP sunucuları sorulur
     if (plan) return answer(false); // plan modu: değişiklik yapan araç yok
     if (st.always.has(tool)) return answer(true);
     const last = [...(st.pendingTools?.values() || [])].filter((t) => t.name === tool).at(-1);

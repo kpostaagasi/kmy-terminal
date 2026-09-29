@@ -934,11 +934,32 @@ function fillModels() {
   const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && (x.id === want || want.startsWith(x.id)) ? 'selected' : ''}>${esc(short(x))}</option>`).join('')}</optgroup>`;
   $('#optModel').innerHTML = Object.keys(m.providers || { claude: 1 }).map(group).join('');
   $('#optModel').title = t(sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model');
-  $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude';
+  syncEffort();
   requestAnimationFrame(fitSelects);
 }
+// Düşünme seviyesi: Claude'da sabit liste, omp modellerinde modelin kendi desteklediği seviyeler.
+function syncEffort() {
+  const sel = $('#optEffort'), box = sel.parentElement;
+  const p = pickModel().provider;
+  const model = (state.meta?.providerModels?.[p] || []).find((x) => x.id === baseId(pickModel().model));
+  const list = p === 'claude' ? (state.meta?.efforts || []) : (model?.thinking || null);
+  box.hidden = p !== 'claude' && !list?.length;
+  if (box.hidden) return;
+  const cur = sel.value || state.settings.effort || 'medium';
+  sel.innerHTML = (list || []).map((x) => `<option value="${x}" ${x === cur ? 'selected' : ''} title="${EFFORT_TIP[x] ? t(EFFORT_TIP[x]) : ''}">${esc(effortName(x))}</option>`).join('');
+}
 function syncProvider() { fillModels(); updateStats(); }
-$('#optModel').onchange = () => { $('#optEffort').parentElement.hidden = pickModel().provider !== 'claude'; fitSelects(); };
+// Açık oturumun sağlayıcısı sabittir; başka bir sağlayıcı seçilirse mesaj sessizce eski
+// sağlayıcıya gider. Kullanıcıyı bilgilendir, yoksa "omp seçtim" deyip Claude'a yazdırır.
+let warnedProvider = '';
+$('#optModel').onchange = () => {
+  const p = pickModel().provider;
+  if (sessionProvider && p !== sessionProvider) {
+    if (warnedProvider !== p) { warnedProvider = p; toast(t('Açık oturum {p} sağlayıcısında. {q} ile konuşmak için yeni oturum açın.', { p: provName(sessionProvider), q: provName(p) }), 'err', 7000); }
+  }
+  syncEffort();
+  fitSelects();
+};
 
 // Seçici genişliği seçili yazıya göre (en uzun seçeneğe göre değil); ok ve kenar boşluğu dahil
 const measureCtx = document.createElement('canvas').getContext('2d');
@@ -987,7 +1008,7 @@ function fillOptions() {
   const m = state.meta, s = state.settings;
   if (!m) return;
   syncProvider();
-  $('#optEffort').innerHTML = m.efforts.map((x) => `<option value="${x}" ${x === s.effort ? 'selected' : ''} title="${EFFORT_TIP[x] ? t(EFFORT_TIP[x]) : ''}">${esc(effortName(x))}</option>`).join('');
+  syncEffort();
   permMode = s.permissionMode || 'default';
 }
 on('settings', fillOptions);
