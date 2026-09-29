@@ -13,7 +13,7 @@ import * as pf from './portfolio.js';
 import * as store from './store.js';
 import * as term from './terminal.js';
 import { technicalSummary, indicatorSeries } from './indicators.js';
-import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, providerModels, claudeExecutable, defaultModels } from './agent.js';
+import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, providerModelsReady, claudeExecutable, defaultModels } from './agent.js';
 import { runTool, screen } from './agent-tools.js';
 import { radar } from './radar.js';
 import * as universe from './universe.js';
@@ -90,7 +90,7 @@ route('GET', '/api/health', async () => ({
   gateway: { daemon: gw.isDaemon(), pid: process.pid, startedAt: new Date(startedAt).toISOString(), port: PORT, reportPort: REPORT_PORT, activeSessions: agent.running.size, clients: wss?.clients.size || 0 },
 }));
 route('GET', '/api/meta', async () => ({
-  reportPort: REPORT_PORT, providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: providerModels(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES,
+  reportPort: REPORT_PORT, providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: await providerModelsReady(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES,
   txTypes: pf.TX_TYPES, txMeta: pf.TX_META, assetTypes: pf.ASSET_TYPES, currencies: pf.CURRENCIES, benchmarks: pf.reference().benchmarks,
   kapClasses: kap.CLASS_LABELS, kapSignals: kap.SIGNALS, indices: market.INDICES, indexNames: market.INDEX_NAMES,
   special: Object.fromEntries(Object.entries(market.SPECIAL).map(([k, v]) => [k, v.name])),

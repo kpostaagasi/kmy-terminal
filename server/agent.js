@@ -13,7 +13,7 @@ import { WORKSPACE_DIR, ROOT } from './paths.js';
 import { buildBorsaServer, AUTO_TOOLS } from './agent-tools.js';
 import { marketStatus } from './market.js';
 import * as memory from './memory.js';
-import { ompBin, ompModels, runOmp } from './omp-runner.js';
+import { ompBin, ompModels, ompModelsReady, runOmp, ensureOmpMcp } from './omp-runner.js';
 
 // Claude Code yürütülebilir dosyası: SDK'nın platform paketi yoksa (DMG ile dağıtılan uygulama) kullanıcının kurduğu `claude` kullanılır
 const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
@@ -55,11 +55,18 @@ export function defaultModels() {
   return { claude: normClaude(claude) || 'claude-opus-5-5', codex, omp };
 }
 const pretty = (id) => id.replace(/^gpt/i, 'GPT').replace(/-(\w)/g, (_, c) => ` ${c.toUpperCase()}`).replace(/^GPT /, 'GPT-');
-export const providerModels = () => {
+const buildProviderModels = (omp) => {
   const d = defaultModels();
   const codex = d.codex ? [{ id: d.codex, label: pretty(d.codex) }] : [];
-  return { codex, ...(PROVIDERS.omp ? { omp: ompModels().filter((x) => x.id) } : {}) };
+  // omp: `models --json` yüzlerce sağlayıcıyı elediği için kullanıcının kendi varsayılanı
+  // listede çıkmayabilir; seçicide görünmezse o modelle konuşmak imkânsız.
+  let list = (omp || []).filter((x) => x.id);
+  // Varsayılan listede yoksa elle ekle (model elenmiş demektir, metadata'sı da yoktur).
+  if (d.omp && !list.some((m) => m.id === d.omp)) list = [{ id: d.omp, label: `${pretty(d.omp)} (varsayılan)` }, ...list];
+  return { codex, ...(PROVIDERS.omp ? { omp: list } : {}) };
 };
+export const providerModels = () => buildProviderModels(ompModels());
+export const providerModelsReady = () => ompModelsReady().then(buildProviderModels);
 const MCP_STDIO = path.join(ROOT, 'server', 'mcp-stdio.js');
 
 export const MODELS = [
@@ -122,7 +129,10 @@ export class AgentManager extends EventEmitter {
     this.lastInit = null;      // son Claude oturumunun araç/MCP bağlantı durumu (Ayarlar > Bağlantılar)
     this.ctxWindow = new Map(); // sessionId -> model bağlam penceresi (token)
     this.borsaServer = buildBorsaServer((type, data) => this.emit('notify', { type, data }));
-    if (PROVIDERS.omp) ompModels(); // omp model listesini arka planda önbelleğe al
+    if (PROVIDERS.omp) {
+      ompModels(); // model listesini arka planda önbelleğe al
+      try { ensureOmpMcp(); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
+    }
   }
 
   listSessions() {
@@ -482,7 +492,7 @@ export class AgentManager extends EventEmitter {
       else return false;
       this.#record(sessionId, 'tool_use', { id: item.id, name, input });
       this.#emit(sessionId, 'tool_use', { id: item.id, name, input });
-      run.activity = name.startsWith('mcp__borsa__') ? name.slice(12).replace(/_/g, ' ') : name;
+      run.activity = toolLabel(name);
       this.emit('jobs');
       return true;
     };
