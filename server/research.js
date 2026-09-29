@@ -8,6 +8,7 @@ import { cacheGet, cachePut } from './db.js';
 import { REPORTS_DIR } from './paths.js';
 import * as universe from './universe.js';
 import * as store from './store.js';
+import * as pf from './portfolio.js';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const LIST_TTL = 30 * 60_000;
@@ -70,6 +71,13 @@ export function symbolsIn(...parts) {
   return [...out].slice(0, 6);
 }
 
+// Uyarlayıcıların kendi etiket/liste alanlarından gelen kodları süz: yıl ("2026"), çeyrek ("2C26")
+// ve benzeri rakam ağırlıklı diziler BIST kodu değildir. Gerçek kodu olanlar geçer.
+export function cleanCodes(list) {
+  const codes = new Set(universe.allStocks().map((s) => s.code));
+  return [...new Set((list || []).map((c) => String(c).trim().toUpperCase().replace(/\.IS$/, '')).filter((c) => codes.has(c) && !NOT_SYMBOL.has(c)))].slice(0, 6);
+}
+
 function category(s) {
   const t = String(s || '').toLocaleLowerCase('tr');
   if (/model portf/.test(t)) return 'Model portföy';
@@ -119,7 +127,7 @@ const ADAPTERS = {
         for (const x of d?.data?.pdfReport || []) {
           out.push(item(this.name, 'ak', {
             srcId: x.id, title: x.title.replace(/^AK Yatırım Arş:\s*/i, ''), date: new Date(x.contentDate).toISOString(), cat: type.includes('Strateji') ? 'Strateji' : '',
-            symbols: String(x.stockCodes || '').split(/[;,\s]+/).filter((c) => /^[A-Z0-9]{4,6}$/.test(c)), summary: strip(x.contentOfTeaser), url: x.pdfDownloadUrl, size: x.fileSize, analyst: String(x.analyst || '').replace(/;\s*$/, ''),
+            symbols: cleanCodes(String(x.stockCodes || '').split(/[;,\s]+/)), summary: strip(x.contentOfTeaser), url: x.pdfDownloadUrl, size: x.fileSize, analyst: String(x.analyst || '').replace(/;\s*$/, ''),
           }));
         }
       }
@@ -138,7 +146,7 @@ const ADAPTERS = {
           const link = strip(it.match(/<link>(.*?)<\/link>/)?.[1]);
           out.push(item(this.name, 'isyatirim', {
             srcId: it.match(/\?p=(\d+)/)?.[1] || link, title: strip(it.match(/<title>(.*?)<\/title>/s)?.[1]), date: parseDate(it.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]), category: cat,
-            symbols: [...new Set(tags.map((t) => t.replace(/\.IS$/, '')).filter((t) => /^[A-Z0-9]{4,6}$/.test(t)))], summary: strip(it.match(/<description>(.*?)<\/description>/s)?.[1]).replace(/\s*\[…\].*$/, '…').replace(/ yazısı ilk önce .*$/, ''),
+            symbols: cleanCodes(tags), summary: strip(it.match(/<description>(.*?)<\/description>/s)?.[1]).replace(/\s*\[…\].*$/, '…').replace(/ yazısı ilk önce .*$/, ''),
             analyst: strip(it.match(/<dc:creator>(.*?)<\/dc:creator>/s)?.[1]), page: link,
           }));
         }
@@ -178,7 +186,9 @@ const ADAPTERS = {
           if (!href) continue;
           const t = strip(`<li${li}`);
           const date = t.match(/\d{2}-\d{2}-\d{4}/)?.[0];
-          const title = t.replace(date || '', '').trim();
+          // Sayfalama izi ("1 2 3 … 7  Toplam 132 dosya bulundu") son <li> bloğuna bulaşıyor
+          const title = t.replace(date || '', '').replace(/\b\d{1,2}\b(\s+\b\d{1,2}\b)*\s*Toplam[^]*$/i, '').replace(/\s+/g, ' ').trim();
+          if (!title) continue;
           out.push(item(this.name, 'ziraat', { srcId: href.split('/').pop(), title: `${title} Şirket Raporu`, date: parseDate(date), category: 'Şirket', url: abs('https://www.ziraatyatirim.com.tr/', href) }));
         }
         if (!/Sayfa \d+ \/ (\d+)/.test(strip(html)) || Number(strip(html).match(/Sayfa (\d+) \/ (\d+)/)?.[2]) <= page) break;
@@ -323,6 +333,19 @@ export const UNAVAILABLE = [
   { name: 'Alnus Yatırım', reason: 'site otomatik erişimi engelliyor' },
 ];
 
+// Aynı kurum, aynı sembol(ler), aynı gün: çoğu zaman tek raporun İngilizce/Türkçe kopyası
+// ("ASELS Company Report" / "ASELS Şirket Raporu"). İlkini tut, diğerlerini at.
+function dedupe(items) {
+  const seen = new Set();
+  return items.filter((x) => {
+    if (!x.symbols.length) return true;
+    const k = `${x.brokerKey}|${[...x.symbols].sort().join(',')}|${String(x.date).slice(0, 10)}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 // ── Liste ────────────────────────────────────────────────────
 let inflight = null;
 export async function refresh(force = false) {
@@ -342,7 +365,7 @@ export async function refresh(force = false) {
     // Başarısız kurumun eski kayıtları korunur; 400 günden eskiler atılır
     const cutoff = Date.now() - 400 * 86400_000;
     const items = [...byId.values()].filter((x) => new Date(x.date).getTime() > cutoff).sort((a, b) => b.date.localeCompare(a.date));
-    const data = { at: Date.now(), items, status };
+    const data = { at: Date.now(), items: dedupe(items), status };
     cachePut('research:list', data);
     return data;
   })().finally(() => { inflight = null; });
@@ -357,14 +380,22 @@ export function isCompanyReport(x) {
   return x.symbols.length > 0 || x.category === 'Şirket';
 }
 
-export async function list({ days = 30, broker = null, symbol = null, q = null, category: cat = null, scope = 'all', limit = 100, offset = 0 } = {}) {
+// "Kendi" semboller: izleme listesi veya portföydeki pozisyonlar
+function mineSetFor(mine) {
+  if (mine === 'portfolio') return new Set(pf.computeLedger().holdings.map((h) => h.symbol));
+  return new Set(store.watchlist());
+}
+
+export async function list({ days = 30, broker = null, symbol = null, q = null, category: cat = null, scope = 'all', mine = null, limit = 100, offset = 0 } = {}) {
   const d = await refresh();
   const since = Date.now() - days * 86400_000;
   const sym = symbol ? symbol.toUpperCase() : null;
   const needle = q ? q.toLocaleLowerCase('tr') : null;
+  const mineSet = mine ? mineSetFor(mine) : null;
   const items = d.items.filter((x) => (!days || new Date(x.date).getTime() >= since) && (!broker || x.brokerKey === broker)
     && (!sym || x.symbols.includes(sym)) && (!cat || x.category === cat) && (scope !== 'company' || isCompanyReport(x))
-    && (!needle || `${x.title} ${x.summary || ''} ${x.broker} ${x.symbols.join(' ')}`.toLocaleLowerCase('tr').includes(needle)));
+    && (!needle || `${x.title} ${x.summary || ''} ${x.broker} ${x.symbols.join(' ')}`.toLocaleLowerCase('tr').includes(needle))
+    && (!mineSet || x.symbols.some((s) => mineSet.has(s))));
   const saved = savedIndex();
   return {
     at: d.at, total: items.length, status: d.status, brokers: BROKERS, unavailable: UNAVAILABLE,

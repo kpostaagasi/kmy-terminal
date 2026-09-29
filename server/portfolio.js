@@ -388,6 +388,7 @@ export async function summary() {
   const [quotes, fx] = await Promise.all([getQuotes(symbols).catch(() => ({})), fxRates().catch(() => ({ TRY: { now: 1, prev: 1 } }))]);
   const manual = manualPrices();
   let value = 0, cost = 0, dayChange = 0;
+  const sellRate = Number(getSettings().sellTaxRate ?? 0.10);
   const holdings = L.holdings.map((h) => {
     const q = quotes[h.symbol];
     const m = manual[h.symbol];
@@ -401,6 +402,13 @@ export async function summary() {
     // Günlük değişim TL bazında: fiyat + kur değişimi birlikte
     const dc = q?.prevClose != null && rate ? h.qty * (price * rate.now - q.prevClose * rate.prev) : 0;
     if (v != null) { value += v; cost += h.cost; dayChange += dc; }
+    // "Bugün satarsam" senaryosu: brüt satış tutarı, stopaj kesintisi ve elde kalan net tutar.
+    // BIST hisselerinde stopaj uygulanır; yurt dışı varlıklar ve fonlar muaftır.
+    const sellTax = isBist(h.symbol) ? sellRate : 0;
+    const gross = v == null ? null : v;
+    const tax = gross == null ? null : gross * sellTax;
+    const netSell = gross == null ? null : gross - tax;
+    const realizedNow = netSell == null ? null : netSell - h.cost;
     // Döviz cinsi varlıkta K/Z = fiyat etkisi (kendi para biriminde) + kur etkisi; toplamları pnl'e eşittir
     const split = qCur !== 'TRY' && v != null && h.costNative > 0
       ? { pnlPrice: (price - h.costNative / h.qty) * h.qty * rate.now, pnlFx: h.costNative * rate.now - h.cost } : {};
@@ -413,6 +421,7 @@ export async function summary() {
       price, priced: priceSource !== 'son işlem', priceSource, priceTime, changePct: q?.changePct ?? null,
       value: v, dayChange: dc, pnl: v != null ? v - h.cost : null, pnlPct: v != null && h.cost ? (v / h.cost - 1) * 100 : null,
       realized: L.realizedBySym[h.symbol] || 0, dividends: L.dividendsBySym[h.symbol] || 0, firstDate: h.firstDate,
+      sellGross: gross, sellTax: tax, sellNet: netSell, sellRealized: realizedNow, sellTaxRate: sellTax, sellTaxable: sellTax > 0,
       missingFx: !rate,
     };
   });
@@ -462,6 +471,10 @@ export async function summary() {
       netInvested, totalPnl, totalPnlPct: netInvested > 0 ? (totalPnl / netInvested) * 100 : null,
       valueUSD: fx.USD?.now ? total / fx.USD.now : null,
       positionsCount: holdings.length,
+      // Tüm portföyü bugün satma senaryosu (stopaj sonrası)
+      sellNet: holdings.reduce((a, h) => a + (h.sellNet || 0), 0),
+      sellTax: holdings.reduce((a, h) => a + (h.sellTax || 0), 0),
+      sellRealized: holdings.reduce((a, h) => a + (h.sellRealized || 0), 0),
       largest: holdings[0] ? { symbol: holdings[0].symbol, weight: holdings[0].weight } : null,
       best: [...holdings].filter((h) => h.changePct != null).sort((a, b) => b.changePct - a.changePct)[0]?.symbol || null,
       worst: [...holdings].filter((h) => h.changePct != null).sort((a, b) => a.changePct - b.changePct)[0]?.symbol || null,

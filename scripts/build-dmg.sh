@@ -45,6 +45,13 @@ chmod +x "$RES/app/bin/"*
 say "Node $NODE_VER ekleniyor…"
 mkdir -p "$RES/node/bin"
 cp "$NODE_BIN" "$RES/node/bin/node"
+# Homebrew/official dağıtımlarda node ikilisi ../lib/libnode.*.dylib'e bağlıdır; ikili tek başına çalışmaz.
+NODE_LIB="$(cd "$(dirname "$NODE_BIN")/.." && pwd)/lib"
+if [ -d "$NODE_LIB" ] && ls "$NODE_LIB"/libnode*.dylib >/dev/null 2>&1; then
+  say "Node kitaplıkları ekleniyor…"
+  mkdir -p "$RES/node/lib"
+  cp "$NODE_LIB"/libnode*.dylib "$RES/node/lib/"
+fi
 cat > "$RES/node/NOTICE.txt" <<TXT
 Bu klasördeki node ikilisi Node.js $NODE_VER'dir (https://nodejs.org). Node.js MIT lisanslıdır.
 TXT

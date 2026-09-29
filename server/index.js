@@ -165,7 +165,7 @@ route('POST', '/api/kap/file/:id/save', async ({ p, body }) => { const r = await
 // Aracı kurum raporları (kurumların açık yayınları)
 route('GET', '/api/research', async ({ q }) => research.list({
   days: q.get('days') != null ? Number(q.get('days')) : 30, broker: q.get('broker') || null, symbol: q.get('symbol') || null,
-  q: q.get('q') || null, category: q.get('category') || null, scope: q.get('scope') || 'all', limit: Number(q.get('limit') || 100), offset: Number(q.get('offset') || 0),
+  q: q.get('q') || null, category: q.get('category') || null, scope: q.get('scope') || 'all', mine: q.get('mine') || null, limit: Number(q.get('limit') || 100), offset: Number(q.get('offset') || 0),
 }));
 route('POST', '/api/research/refresh', async () => { const d = await research.refresh(true); return { at: d.at, count: d.items.length, status: d.status }; });
 route('GET', '/api/research/file', async ({ q, res }) => {
@@ -445,6 +445,7 @@ const onTermData = (id, data) => { const s = JSON.stringify({ t: 'term.data', id
 const onTermExit = (id, code) => broadcast({ t: 'term.exit', id, code });
 
 wss.on('connection', (ws, req) => {
+  ws.subs = new Set(); // canlı fiyat abonelikleri (hangi sembol ekranda açık)
   ws.gwVia = req.gwVia;
   ws.send(JSON.stringify({ t: 'hello', version: VERSION, settings: getSettings(), jobs: agent.backgroundJobs(), terminals: term.list(), market: market.marketStatus() }));
   ws.on('message', async (raw) => {
@@ -465,6 +466,7 @@ wss.on('connection', (ws, req) => {
         case 'term.resize': term.resize(m.id, m.cols, m.rows); break;
         case 'term.close': term.close(m.id); break;
         case 'log.get': reply({ t: 'log', entries: wsLog }); break;
+        case 'sub': ws.subs = new Set((m.symbols || []).filter(Boolean).slice(0, 20)); break;
         default: reply({ t: 'error', message: `Bilinmeyen mesaj: ${m.t}` });
       }
     } catch (e) {
@@ -489,10 +491,13 @@ function restartTimers() {
   ];
 }
 
+// Görüntülenen semboller de canlı akar: izleme listesinde olmayan hissenin fiyatı ekranda donmasın.
 async function pushQuotes() {
   if (!wss.clients.size) return;
   try {
-    const syms = [...new Set([...store.watchlist(), ...market.OVERVIEW])];
+    const extra = new Set();
+    for (const c of wss.clients) for (const s of c.subs || []) extra.add(s);
+    const syms = [...new Set([...store.watchlist(), ...market.OVERVIEW, ...extra])];
     const quotes = await market.getQuotes(syms);
     broadcast({ t: 'quotes', quotes });
   } catch (e) {

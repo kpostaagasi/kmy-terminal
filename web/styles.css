@@ -5,11 +5,11 @@
   --bg-2: #0a0a0a;
   --panel: #0f0f0f;
   --panel-2: #181818;
-  --line: #222222;
-  --line-2: #333333;
+  --line: #666666;
+  --line-2: #717171;
   --text: #e6e6e6;
   --text-2: #a3a3a3;
-  --text-3: #6b6b6b;
+  --text-3: #828282;
   --accent: #ff9f0a;
   --accent-2: #ffc266;
   --accent-bg: #ff9f0a;
@@ -19,6 +19,8 @@
   --down: #ef4444;
   --info: #60a5fa;
   --violet: #a78bfa;
+  /* Grafik seri renkleri (charts.js palette()) — açık temada hepsi beyaz zeminde okunur */
+  --c1: #f472b6; --c2: #2dd4bf; --c3: #facc15; --c4: #fb923c; --c5: #94a3b8; --c6: #818cf8; --c7: #4ade80;
   --up-bg: rgba(34, 197, 94, .12);
   --down-bg: rgba(239, 68, 68, .12);
   --shadow: 0 16px 48px rgba(0, 0, 0, .6), 0 0 0 1px var(--line-2);
@@ -34,10 +36,11 @@
   color-scheme: dark;
 }
 :root[data-theme="light"] {
-  --bg: #f6f6f3; --bg-2: #ededea; --panel: #ffffff; --panel-2: #f0f0ec; --line: #d9d9d2; --line-2: #c4c4bb;
-  --text: #121212; --text-2: #4f4f4f; --text-3: #85857f;
+  --bg: #f6f6f3; --bg-2: #ededea; --panel: #ffffff; --panel-2: #f0f0ec; --line: #878782; --line-2: #77776f;
+  --text: #121212; --text-2: #4f4f4f; --text-3: #6a6a66;
   --accent: #c46a00; --accent-2: #8a4b00; --accent-bg: #ff9f0a; --accent-ink: #120a00; --accent-soft: rgba(255, 159, 10, .16);
   --up: #15803d; --down: #dc2626; --info: #2563eb; --violet: #7c3aed; --up-bg: rgba(21, 128, 61, .09); --down-bg: rgba(220, 38, 38, .09);
+  --c1: #db2777; --c2: #0d9488; --c3: #a16207; --c4: #4d7c0f; --c5: #64748b; --c6: #a21caf; --c7: #0369a1;
   --shadow: 0 14px 40px rgba(20, 20, 20, .14), 0 0 0 1px var(--line-2);
   color-scheme: light;
 }
@@ -105,11 +108,15 @@ a { color: var(--info); text-underline-offset: 2px; }
 .mkt-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
 .mkt-status.open { color: var(--up); }
 .mkt-status.open::before { background: var(--up); }
+.statusbar .freshness { color: var(--text-3); cursor: help; }
+.statusbar .freshness:empty { display: none; }
+.statusbar .freshness.stale { color: var(--warn, #f5a524); font-weight: 700; }
 .clock { font-family: var(--mono); color: var(--text-2); }
 
 .ghost { background: none; border: 1px solid var(--line-2); color: var(--text-2); border-radius: 2px; padding: 3px 9px; transition: background .12s, color .12s, border-color .12s; cursor: pointer; font: 500 11px/1.4 var(--mono); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .ghost:hover { color: var(--accent); border-color: var(--accent); }
 .ghost.xs { padding: 1px 7px; font-size: 10.5px; }
+.ghost.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* ── Yerleşim ─────────────────────────────────── */

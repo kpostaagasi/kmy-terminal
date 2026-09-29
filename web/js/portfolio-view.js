@@ -67,6 +67,9 @@ function renderSummary() {
     ${kpi(t('Temettü ve faiz'), money(tot.dividends + tot.interest), `${t('temettü {d} · faiz {i}', { d: money(tot.dividends), i: money(tot.interest) })}${tot.staking ? ` · staking ${money(tot.staking)}` : ''}`)}
     ${kpi(t('Kur farkı'), money(tot.kurFarki), t('gerçekleşen {r} · açık {u}', { r: money(tot.fxRealized), u: money(tot.fxUnrealized) }), cls(tot.kurFarki), t('Yabancı para nakdin TL karşılığındaki değişim'))}
   </div>
+  <div class="card strip" style="margin-top:12px" title="${esc(t('Tüm pozisyonlar bugünkü fiyattan satılırsa eline geçecek tutar (stopaj sonrası).'))}">
+    <b>${t('Bugün hepsini satarsan')}</b> · ${t('net {n}', { n: money(tot.sellNet) })} · ${t('stopaj kesintisi {n}', { n: money(tot.sellTax) })} · <span class="${cls(tot.sellRealized)}">${t('kâr/zarar {n}', { n: money(tot.sellRealized) })}</span>
+  </div>
   <div class="card strip" id="pfStrip" style="margin-top:12px">${t('Maliyet {v}', { v: money(tot.cost) })} · ${t('Nakit {v}', { v: `${tot.cash == null ? '—' : money(tot.cash)}${cashTip ? ` (${esc(cashTip)})` : ''}` })} · ${t('Pozisyon {n}', { n: tot.positionsCount })} · <span class="dim">${t('Getiri metrikleri hesaplanıyor…')}</span></div>
   <div class="grid g2" style="margin-top:12px">
     <div class="card"><h3>${t('Portföy ve karşılaştırma ölçütleri (TL)')} <span class="dim" id="perfNote" style="font-weight:400"></span></h3><div class="row" id="benchToggles" style="margin-bottom:6px"></div><div class="chart-box md"><canvas id="pfPerf"></canvas></div></div>
@@ -149,7 +152,6 @@ async function perfChart(canvas, mode = 'level', withStrip = false, range = { fr
   } catch (e) { if (canvas.isConnected) canvas.parentElement.innerHTML = `<div class="empty">${esc(tx(e.message))}</div>`; }
 }
 
-// ── Varlıklar ─────────────────────────────────────
 const HOLD_COLS = [
   ['symbol', t('Sembol')], ['assetLabel', t('Tür')], ['sector', t('Sektör')], ['qty', t('Miktar'), 'r'], ['avgCost', t('Ort. maliyet'), 'r'], ['price', t('Güncel fiyat'), 'r'],
   ['changePct', t('Gün %'), 'r'], ['value', t('Değer ₺'), 'r'], ['weight', t('Ağırlık'), 'r'], ['pnl', t('K/Z ₺'), 'r'], ['pnlPct', t('K/Z %'), 'r'], ['dividends', t('Temettü ₺'), 'r'],
@@ -174,7 +176,8 @@ function renderHoldings() {
       <td class="r num">${num(x.qty, x.qty % 1 ? 4 : 0)}</td><td class="r num" title="${esc(t('TL ortalama maliyet: {v} ₺', { v: price(x.avgCost) }))}">${x.currency !== 'TRY' ? `${price(x.avgCostNative)} <span class="dim">${esc(x.currency)}</span>` : price(x.avgCost)}</td><td class="r num" title="${esc(tx(x.priceSource))}${x.priceTime ? ' · ' + (typeof x.priceTime === 'number' ? timeTR(x.priceTime) : x.priceTime) : ''}">${price(x.price)} <span class="dim">${x.currency !== 'TRY' ? esc(x.currency) : ''}</span></td>
       <td class="r num ${cls(x.changePct)}">${pct(x.changePct)}</td><td class="r num">${money(x.value)}</td>
       <td class="r"><div class="row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap"><span class="num">${num(x.weight, 1)}%</span><div class="bar" style="width:50px"><i style="width:${Math.min(x.weight, 100)}%"></i></div></div></td>
-      <td class="r num ${cls(x.pnl)}" ${x.pnlFx != null ? `title="${esc(t('Fiyat etkisi {p} · kur etkisi {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) }))}"` : ''}>${money(x.pnl)}${x.pnlFx != null ? `<div class="dim" style="font-size:10px">${t('fiyat {p} · kur {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) })}</div>` : ''}</td><td class="r num ${cls(x.pnlPct)}">${pct(x.pnlPct)}</td><td class="r num">${x.dividends ? money(x.dividends) : '—'}</td>
+      <td class="r num ${cls(x.pnl)}" title="${x.pnlFx != null ? esc(t('Fiyat etkisi {p} · kur etkisi {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) })) : ''}${x.sellNet != null ? esc(t('\n\nBugün satılırsa eline geçen: {n} ({g} brüt', { n: money(x.sellNet), g: money(x.sellGross) }) + (x.sellTax ? ` − ${t('stopaj')} ${money(x.sellTax)}` : t(' · stopaj yok')) + `) → ${t('kâr/zarar')} ${money(x.sellRealized)}`) : ''}">${money(x.pnl)}${x.pnlFx != null ? `<div class="dim" style="font-size:10px">${t('fiyat {p} · kur {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) })}</div>` : ''}${x.sellTax ? `<div class="dim" style="font-size:10px">${t('satışa çevir {n}', { n: money(x.sellNet) })}</div>` : ''}</td><td class="r num ${cls(x.pnlPct)}">${pct(x.pnlPct)}</td>
+      <td class="r num">${x.dividends ? money(x.dividends) : '—'}</td>
       <td style="white-space:nowrap"><button class="ghost" data-buy="${esc(x.symbol)}">${t('Al')}</button> <button class="ghost" data-sell="${esc(x.symbol)}">${t('Sat')}</button>${x.priceSource === 'son işlem' || x.priceSource === 'manuel' ? ` <button class="ghost" data-price="${esc(x.symbol)}">${t('Fiyat gir')}</button>` : ''}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="7">${t('Toplam (nakit hariç)')}</td><td class="r num">${money(tot.holdingsValue)}</td><td></td><td class="r num ${cls(tot.unrealized)}">${money(tot.unrealized)}</td><td class="r num ${cls(tot.unrealizedPct)}">${pct(tot.unrealizedPct)}</td><td class="r num">${money(data.holdings.reduce((a, x) => a + x.dividends, 0))}</td><td></td></tr></tfoot>
   </table></div></div>
@@ -280,6 +283,7 @@ function renderDist() {
   if (isEmpty()) return emptyState();
   const d = data.distribution;
   const byAsset = trItems(d.byAsset), bySector = trItems(d.bySector), byCountry = trItems(d.byCountry);
+  const byCur = trItems(d.byCurrency);
   const block = (id, title, items) => `<div class="card"><h3>${title}</h3><div class="chart-box md"><canvas id="${id}"></canvas></div>
     <table class="t" style="margin-top:8px"><tbody>${items.map((x) => `<tr><td>${esc(x.key)}</td><td class="r num">${money(x.value)}</td><td class="r num">${num(x.pct, 1)}%</td></tr>`).join('')}</tbody></table></div>`;
   body.innerHTML = `<div class="grid g4" style="margin-bottom:12px">
@@ -291,9 +295,9 @@ function renderDist() {
     <div class="card strip" style="margin-bottom:12px" title="${esc(t('Altın, döviz, kripto, emtia, döviz cinsi hisseler ve döviz nakit: TL’nin değer kaybına karşı doğal koruma sağlayan kısım'))}">
       ${t('TL dışı (korunaklı) pay {p}', { p: `<b>${num(d.nonTl?.pct || 0, 1)}%</b>` })} <span class="dim">(${money(d.nonTl?.value || 0)})</span> · ${t('TL varlıklar {p}', { p: `${num(100 - (d.nonTl?.pct || 0), 1)}%` })}
       <div class="bar" style="margin-top:6px;display:flex"><i style="width:${Math.min(d.nonTl?.pct || 0, 100)}%;background:var(--accent)"></i></div></div>
-    <div class="grid g2">${block('dAsset', t('Varlık sınıfı'), byAsset)}${block('dSector', t('Sektörler'), bySector)}${block('dCur', t('Para birimi maruziyeti'), d.byCurrency)}${block('dCountry', t('Ülke / piyasa'), byCountry)}${block('dPlat', t('Platformlar'), d.byPlatform)}</div>
+    <div class="grid g2">${block('dAsset', t('Varlık sınıfı'), byAsset)}${block('dSector', t('Sektörler'), bySector)}${block('dCur', t('Para birimi maruziyeti'), byCur)}${block('dCountry', t('Ülke / piyasa'), byCountry)}${block('dPlat', t('Platformlar'), d.byPlatform)}</div>
     <div class="card" style="margin-top:12px"><h3>${t('Sembol ağırlıkları')}</h3><div class="chart-box md"><canvas id="dSym"></canvas></div></div>`;
-  doughnut($('#dAsset'), byAsset); doughnut($('#dSector'), bySector); doughnut($('#dCur'), d.byCurrency); doughnut($('#dCountry'), byCountry); doughnut($('#dPlat'), d.byPlatform);
+  doughnut($('#dAsset'), byAsset); doughnut($('#dSector'), bySector); doughnut($('#dCur'), byCur); doughnut($('#dCountry'), byCountry); doughnut($('#dPlat'), d.byPlatform);
   const colors = palette();
   makeChart($('#dSym'), { type: 'bar', data: { labels: d.bySymbol.map((x) => keyLabel(x.key)), datasets: [{ label: t('Ağırlık %'), data: d.bySymbol.map((x) => x.pct), backgroundColor: d.bySymbol.map((_, i) => colors[i % colors.length]) }] }, options: baseOptions({ time: false }) });
 }
@@ -304,7 +308,8 @@ async function renderDiv() {
   const d = await api('/portfolio/dividends');
   if (tab !== 'temettu') return;
   const months = [];
-  for (let i = 11; i >= 0; i--) { const dt = new Date(); dt.setDate(1); dt.setMonth(dt.getMonth() - i); months.push(dt.toISOString().slice(0, 7)); }
+  // toISOString UTC'ye çevirip dilimlerken sabah 03'ten önce açılan uygulamada ay bir geriye kayar
+  for (let i = 11; i >= 0; i--) { const dt = new Date(); dt.setDate(1); dt.setMonth(dt.getMonth() - i); months.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`); }
   const upNet = d.upcoming.reduce((a, x) => a + x.net, 0);
   body.innerHTML = `<div class="grid g4">
       ${kpi(t('Toplam alınan (net)'), money(d.total))}${kpi(t('Son 12 ay'), money(d.last12), t('aylık ortalama {v}', { v: money(d.monthlyAvg) }))}
@@ -510,6 +515,7 @@ async function renderSettings() {
         <div class="field"><label>${t('Risksiz faiz kaynağı (Sharpe / Sortino)')}</label><select id="rfSrc"><option value="tlref">${t('TLREF dönem ortalaması (Borsa İstanbul, otomatik)')}</option><option value="sabit">${t('Sabit oran')}</option></select></div>
         <div class="field"><label>${t('Sabit risksiz faiz (yıllık %)')}</label><input id="rf" type="number" step="0.01"></div>
         <div class="field"><label>${t('Temettü stopajı (%)')}</label><input id="dtax" type="number" step="0.01" value="${(s.dividendTaxRate ?? 0.15) * 100}"></div>
+        <div class="field"><label>${t('Hisse satış stopajı (%)')}</label><input id="stax" type="number" step="0.01" value="${(s.sellTaxRate ?? 0.10) * 100}"></div>
         <div class="field"><label>${t('Ana karşılaştırma ölçütü (beta)')}</label><select id="bench">${Object.entries(ref.benchmarks).map(([k, v]) => `<option value="${k}" ${k === (s.benchmark || 'XU100') ? 'selected' : ''}>${esc(tx(v))}</option>`).join('')}</select></div>
       </div>
       <div class="mini-head" style="margin-top:10px">${t('Grafikteki karşılaştırma ölçütleri')}</div>
@@ -535,7 +541,7 @@ async function renderSettings() {
   $('#rfSrc').value = s.riskFreeSource || 'tlref';
   $('#calcSave').onclick = async () => {
     const benchmarks = $$('[data-bm]', body).filter((c) => c.checked).map((c) => c.dataset.bm);
-    await api('/settings', { method: 'PUT', body: { riskFreeRate: Number($('#rf').value) / 100, riskFreeSource: $('#rfSrc').value, dividendTaxRate: Number($('#dtax').value) / 100, benchmark: $('#bench').value, benchmarks } });
+    await api('/settings', { method: 'PUT', body: { riskFreeRate: Number($('#rf').value) / 100, riskFreeSource: $('#rfSrc').value, dividendTaxRate: Number($('#dtax').value) / 100, sellTaxRate: Number($('#stax').value) / 100, benchmark: $('#bench').value, benchmarks } });
     riskCache.clear(); toast(t('Kaydedildi'), 'ok');
   };
   $('#pfReset').onclick = () => {

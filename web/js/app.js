@@ -167,11 +167,36 @@ function renderTicker() {
     const tip = q ? `${tx(q.name)} · ${q.source || ''}${q.delayed ? ` · ${t('yaklaşık 15 dk gecikmeli')}` : ''} · ${timeTR(q.time)}` : s;
     return `<div class="tick" data-s="${s}" title="${esc(tip)}"><span class="n">${TICK_NAMES[s] || s}</span><span class="v">${q ? price(q.price) : '…'}</span><span class="c ${cls(q?.changePct)}">${q ? pct(q.changePct) : ''}</span></div>`;
   }).join('');
+  fitTicker();
 }
+// Sığmayan hücreleri sağdan gizle (yarım kesilmiş fiyat göstermesin)
+function fitTicker() {
+  const el = $('#ticker'), bar = el.parentElement;
+  const cells = [...el.children];
+  cells.forEach((c) => { c.style.display = ''; });
+  if (!bar.clientWidth) return;
+  for (let i = cells.length - 1; i >= 0 && el.scrollWidth > bar.clientWidth; i--) cells[i].style.display = 'none';
+}
+addEventListener('resize', fitTicker);
 $('#ticker').addEventListener('click', (e) => { const t = e.target.closest('.tick'); if (t) selectSymbol(t.dataset.s); });
 
-const quoteTime = () => { $('#wlTime').textContent = t('Son: {time}', { time: new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }) }); };
-on('ws:quotes', (m) => { Object.assign(state.quotes, m.quotes); renderTicker(); quoteTime(); emit('quotes', m.quotes); });
+// Fiyat tazeliği: akış durursa (ağ kesintisi, veri kaynağı hatası) saat narinleşir.
+// Sol panel yalnız Dashboard'da göründüğü için rozet alt durum çubuğunda durur (her sekmede görünür).
+let lastQuoteAt = Date.now(); // açılışta özet REST'ten geldi; akış hiç başlamasa da bayat sayılabilmeli
+const staleAfter = () => Math.max(60, (Number(state.settings.quoteRefreshSec) || 15) * 4) * 1000;
+const quoteTime = () => {
+  const hm = new Date().toLocaleTimeString(locale, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
+  $('#wlTime').textContent = t('Son: {time}', { time: hm });
+  const el = $('#quoteFresh');
+  el.textContent = t('Fiyat {time}', { time: hm });
+  el.classList.remove('stale');
+};
+on('ws:quotes', (m) => { lastQuoteAt = Date.now(); Object.assign(state.quotes, m.quotes); renderTicker(); quoteTime(); emit('quotes', m.quotes); });
+setInterval(() => {
+  const el = $('#quoteFresh');
+  el.classList.toggle('stale', !!lastQuoteAt && Date.now() - lastQuoteAt > staleAfter());
+  el.title = el.classList.contains('stale') ? t('Fiyat akışı {n} saniyedir güncellenmedi', { n: Math.round((Date.now() - lastQuoteAt) / 1000) }) : t('Fiyat akışının son güncellemesi');
+}, 5000);
 
 function renderMarket(ms) {
   if (!ms) return;
@@ -203,10 +228,9 @@ on('ws:settings', (m) => applySettings(m.settings));
 function renderJobs() {
   const n = state.jobs.length;
   $('#chipJobs').classList.toggle('on', n > 0);
-  $('#chipJobsText').textContent = n ? t('{n} arka plan işi · {time}', { n, time: elapsed(Math.min(...state.jobs.map((j) => j.startedAt))) }) : t('Arka plan işi yok');
+  $('#chipJobsText').textContent = n ? t('{n} arka plan işi · {time}', { n, time: ago(Math.min(...state.jobs.map((j) => j.startedAt))) }) : t('Arka plan işi yok');
   if (renderJobs.last !== n) { renderJobs.last = n; native({ type: 'badge', text: n ? String(n) : '' }); }
 }
-function elapsed(t0) { const s = Math.max(0, Math.round((Date.now() - t0) / 1000)); return s >= 3600 ? t('{h} sa {m} dk', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) }) : t('{m} dk {s} sn', { m: Math.floor(s / 60), s: s % 60 }); }
 on('ws:jobs', (m) => { state.jobs = m.jobs; renderJobs(); emit('jobs', m.jobs); });
 setInterval(renderJobs, 1000);
 $('#chipJobs').onclick = () => {

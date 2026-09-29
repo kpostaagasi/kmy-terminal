@@ -66,11 +66,22 @@ function parseDate(s) {
   return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}+03:00` : null;
 }
 
+// KAP iki ayrı biçim gönderiyor ("29.09.2026 …" liste, "2026.09.29 …" detay). Arayüz tek biçim görsün.
+const fmtPublish = (s) => {
+  const t = String(s || '').trim();
+  if (!t) return null;
+  const md = /^(\d{2})[.\-](\d{2})[.\-](\d{4})(.*)$/.exec(t); // 29.09.2026 20:35:33
+  if (md) return `${md[1]}.${md[2]}.${md[3]}${md[4] || ''}`;
+  const ymd = /^(\d{4})[.\-](\d{2})[.\-](\d{2})(.*)$/.exec(t); // 2026.09.29 20:35:33
+  if (ymd) return `${ymd[3]}.${ymd[2]}.${ymd[1]}${ymd[4] || ''}`;
+  return t;
+};
+
 function slim(x) {
   const it = {
     id: x.disclosureIndex,
     date: parseDate(x.publishDate),
-    publishDate: x.publishDate,
+    publishDate: fmtPublish(x.publishDate),
     company: x.kapTitle,
     stocks: (x.stockCodes || x.relatedStocks || '').split(/[,\s]+/).map((s) => s.trim()).filter(Boolean),
     cls: x.disclosureClass,
@@ -322,7 +333,7 @@ export async function detail(id) {
     id: Number(id), url,
     title: basic.title || null, company: basic.companyTitle || null,
     stocks: String(basic.stockCode || '').split(/[,\s]+/).filter(Boolean),
-    publishDate: basic.publishDate || null, summary: basic.summary || null,
+    publishDate: fmtPublish(basic.publishDate), summary: basic.summary || null,
     html: clean, text: htmlToText(clean).slice(0, 60_000),
     attachments: attachments.filter((a) => a?.objId).map((a) => ({ name: a.fileName || 'ek', ext: a.fileExtension || '', url: `https://www.kap.org.tr/tr/api/file/download/${a.objId}` })),
   };

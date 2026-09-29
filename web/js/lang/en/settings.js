@@ -268,6 +268,7 @@ export default {
   'Canlı': 'Live',
   'Yenile': 'Refresh',
   'Sürüm notu yok': 'No release notes',
+  'Sürüm notları Türkçe yazıldı.': 'Release notes are written in Turkish.',
 
   // Kısayollar ve komutlar
   'Sembol ara': 'Search symbols',
