@@ -1,5 +1,41 @@
 # Sürüm Notları
 
+## 0.13.0 — 29 Eylül 2026 (canlı fiyat, kurum raporu süzgeci, satış senaryosu)
+
+### Yeni
+- **Ekranda açık hisse canlı akar.** Sunucu yalnız izleme listesi ve piyasa şeridindeki sembolleri gönderiyordu; izleme listesinde olmayan bir hisseyi terminalde açtığınızda başlıktaki fiyat donuyordu. Arayüz artık baktığı sembolü sunucuya abone ediyor (bağlantı kopunca yeniden abone olunur) ve o sembol de canlı güncelleniyor.
+- **Fiyat tazeliği göstergesi.** Alt durum çubuğunda "Fiyat 21:04" saati. Akış durursa (sunucu kapalı, ağ kesintisi, veri kaynağı hatası) saat turuncuya döner ve üzerine gelince kaç saniyedir güncellenmediği yazar. Sol panel yalnız Dashboard'da göründüğü için gösterge oraya değil her sekmede görünen durum çubuğuna kondu.
+- **Sekmeye dönünce Özet tazelenir.** 5 dakikalık yenileme döngüsü sekme görünmezken duruyordu; görünür olunca fiyat, haber, KAP ve kurum raporları yeniden çekilir.
+- **Kurum raporlarında "İzleme listem" / "Portföyüm" süzgeci.** Akış sekmesine iki düğme: yalnız kendi sembollerinizle ilgili raporlar listelenir. Örnek: 39 rapor → 5. Tekrar tıklama süzgeci kaldırır. Süzgeç sunucuda uygulanır, tarayıcı hepsini indirmez.
+- **Portföyde "bugün satarsam" senaryosu.** Özet sekmesinde net eline geçecek tutar, stopaj kesintisi ve o andaki kâr/zarar tek satırda. Varlıklar tablosunda her pozisyonun K/Z hücresinin altında "satışa çevir ₺26.235"; üzerine gelince brüt tutar, kesinti ve kâr/zarar ayrıntısı. BIST hisselerinde stopaj uygulanır, yurt dışı varlık ve fonlarda uygulanmaz.
+- **Hisse satış stopajı ayarı.** Ayarlar › Hesaplama › Hisse satış stopajı (varsayılan %10). Temettü stopajından ayrı tutulur.
+
+### Düzeltilen
+- Kurum raporu akışında aynı raporun İngilizce ve Türkçe kopyaları ayrı ayrı listeleniyordu ("ASELS Company Report" / "ASELS Şirket Raporu"). Aynı kurum + sembol + gün kombinasyonundaki tekrarlar eleniyor; 30 günde 42 kayıt 39 rapora indi.
+- Bazı raporlara "2026" gibi yıl dizileri BIST sembolü sanılıyordu ("MAVI.IS: 2Ç26 Kar Tahmini" → semboller "MAVI, 2026"). Uyarlayıcılardan gelen kodlar artık gerçek BIST kodlarına karşı süzülüyor.
+- Ziraat Yatırım raporlarının başlığına sayfalama izi bulaşıyordu ("ASELS 2Ç26 1 2 3 4 5 6 7 Toplam 132 dosya bulundu"). Başlık temizleniyor.
+
+### Düzeltilen (arayüz çapraz doğrulama)
+- **Sohbet alt çubuğu taşması:** dar panelde TURNS ve CTX göstergeleri ekran dışında kalıyordu (1280 px'de 202 px). Satır artık gerektiğinde iki satıra sarıyor; ctx metni tur sonrası büyüdüğünde de yeniden ölçülüyor.
+- **Piyasa şeridi kırpılması:** sığmayan hücreler sağdan gizleniyor. 1920→500 px arasında 12'den 4'e düşüyor, hiçbir hücre yarım görünmüyor.
+- **Temettü takviminde 24 boş hücre:** verim sütunu yalnız izleme listesindeki sembollerde doluyordu. Eksik semboller tek toplu istekle çekiliyor; hesaplanamayan hücre artık "—" gösteriyor.
+- **Kurum raporu akışında 52 rapora ulaşılamıyordu:** liste 200 ile sınırlıydı. KAP panelindeki "Daha fazla yükle" düğmesi akışa da eklendi (200 → 252).
+- **KAP tarih biçimi tutarsızdı:** liste "29.09.2026", detay "2026.09.29" dönüyordu. Sunucu artık tek biçim üretiyor.
+- **Para birimi dağılımı dil sızıntısı:** İngilizce arayüzde Türkçe anahtar ("Altın") görünüyordu.
+- **Aylık temettü etiketleri UTC kayması:** uygulama 00:00–03:00 arasında açıldığında tüm etiketler bir ay geri kayıyordu.
+- **"Bugün" UTC ile hesaplanıyordu:** aynı saat aralığında takvim dünkü olayları çekiyor, yaklaşan temettüleri geçmiş gibi işaretliyordu.
+- **Ayar kaydı sessizce kayboluyordu:** Claude model seçimi `claudeModel` anahtarına yazılıyordu, sunucu `model` bekliyor.
+- **Tarih/zaman biçimlendiricileri:** geçersiz tarihte "Invalid Date", eksik başlangıçta "497418h 38m" gösteriyordu.
+- **Açık tema okunabilirliği:** ikincil metin 3.16:1 ile AA'nın altındaydı, tablo/kart çizgileri 1.31:1 ile görünmezdi. Metin 4.63:1, çizgiler 3.08:1. Koyu tema de iyileştirildi (metin 3.33→4.53, çizgi 1.20→3.03).
+- **Açık tema grafik renkleri:** dağılım grafiğinde 4 dilim beyaz zeminde görünmezdi (1.54:1). Seri renkleri temaya bağlandı, en düşük oran 3.74:1.
+- **KAP 31 gün uyarısı:** kapsam "Tüm şirketler"e çevrilirken uyarı çıkmıyor, sonuç sessizce kırpılıyordu.
+- **Düzen bozulmaları:** KAP bilgi satırı İngilizce arayüzde iki satıra bölünüyor, ayarlar alt bilgisi "Esc"u yalnız satırda bırakıyordu.
+- **Yinelenen `id`:** "İzleme listem" ve "Portföyüm" düğmeleri aynı `id`yi kullanıyordu; süzgeç işleyicisi yalnız ilkini buluyordu.
+- **Eksik kurum renkleri:** Gedik ve Halk raporları gri nokta ile görünüyordu.
+- **Takılı kalan araç kartı:** tur bitince "çalışıyor" yazıp dönen çarkıp kalıyordu.
+- **Bağlam satırı:** 90 karakteri aşınca kelime ortasından kesiliyor, "…" eklenmiyordu.
+
+
 ## 0.12.0 — 27 Eylül 2026 (terminal görünümü, kmy terminal sekmesi)
 
 ### Yeni

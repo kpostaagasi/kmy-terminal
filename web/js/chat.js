@@ -400,7 +400,10 @@ function renderEvent(e) {
       $('.welcome', log)?.remove();
       const el = h(`<div class="msg user"><div class="who"><b>${t('Sen')}</b><span class="meta">${timeTR(tsOf(e))}</span></div><div class="body"></div></div>`);
       $('.body', el).textContent = e.text;
-      if (e.context) el.append(h(`<div class="ctx">＋ ${esc(t('Bağlam: {text}', { text: e.context.split('\n')[0].slice(0, 90) }))}</div>`));
+      if (e.context) {
+        const c = e.context.split('\n')[0];
+        el.append(h(`<div class="ctx">＋ ${esc(t('Bağlam: {text}', { text: c.length > 90 ? `${c.slice(0, 90)}…` : c }))}</div>`));
+      }
       if (e.attachments?.length) el.append(h(`<div class="ctx">📎 ${e.attachments.map((a) => esc(a.name || a.path)).join(', ')}</div>`));
       add(el);
       stick = true; scrollEnd(true);
@@ -611,6 +614,7 @@ function updateStats() {
   bar.className = p >= 90 ? 'hi' : p >= 50 ? 'mid' : '';
   if (p >= 95 && ctxWarned < 95) { ctxWarned = 95; toast(t('Bağlam penceresi %95 dolu. /compact ile sıkıştırın veya /yeni ile yeni oturum açın.'), 'err', 9000); }
   else if (p >= 80 && ctxWarned < 80) { ctxWarned = 80; toast(t('Bağlam penceresi %80 dolu. /compact ile sıkıştırabilirsiniz.'), '', 7000); }
+  fitSelects(); // istatistik metni genişleyince satır yeniden ölçülür
 }
 
 // ── Canlı olaylar ─────────────────────────────────
@@ -623,7 +627,7 @@ on('ws:agent', (e) => {
     return;
   }
   if (e.type === 'run.start') { running = true; runStart = e.startedAt; showWorking(); return; }
-  if (e.type === 'run.end') { running = false; hideWorking(); return; }
+  if (e.type === 'run.end') { running = false; hideWorking(); for (const r of $$('.tool-run', log).slice(-3)) drawRun(r); return; }
   if (e.type === 'user') return;
   renderEvent(e);
   if (workingEl) log.append(workingEl);
@@ -945,7 +949,33 @@ function fitSelect(sel) {
   const w = measureCtx.measureText(sel.selectedOptions[0].textContent).width;
   sel.style.width = `${Math.ceil(w + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2)}px`;
 }
-function fitSelects() { ['#optModel', '#optEffort', '#sessSel'].forEach((q) => fitSelect($(q))); }
+// Dar panelde satır kırpılmasın: önce ctx çubuğu, sonra seçiciler kısalır, yetmezse seçiciler kendi satırına geçer
+function fitSelects() {
+  const top = $('.cm-top'), bar = $('.ctxbar');
+  const spacer = $('.spacer', top);
+  const sels = ['#sessSel', '#optModel', '#optEffort'].map((q) => $(q)).filter((s) => s && !s.closest('.cm-chip').hidden);
+  sels.forEach((s) => { s.style.maxWidth = ''; fitSelect(s); });
+  if (!top) return;
+  if (bar) { bar.style.display = ''; bar.style.width = ''; }
+  top.style.flexWrap = '';
+  if (spacer) { spacer.style.flexBasis = ''; spacer.style.height = ''; }
+  const gap = () => top.scrollWidth - top.clientWidth;
+  let over = gap();
+  if (over > 0 && bar) {
+    bar.style.width = `${Math.max(20, 80 - over)}px`;
+    if ((over = gap()) > 0) { bar.style.display = 'none'; over = gap(); }
+  }
+  if (over > 0) {
+    const ws = sels.map((s) => s.offsetWidth), total = ws.reduce((a, b) => a + b, 0);
+    sels.forEach((s, i) => { s.style.maxWidth = `${Math.max(40, Math.round(ws[i] - (over * ws[i]) / total))}px`; });
+    over = gap();
+  }
+  if (over <= 0) return;
+  // Alt satıra kaydır: istatistikler kırpılmadan tam görünür
+  top.style.flexWrap = 'wrap';
+  if (spacer) { spacer.style.flexBasis = '100%'; spacer.style.height = '0'; }
+}
+new ResizeObserver(fitSelects).observe($('.cm-top'));
 $('#optEffort').addEventListener('change', fitSelects);
 $('#sessSel').addEventListener('change', fitSelects);
 

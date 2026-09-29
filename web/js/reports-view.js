@@ -14,7 +14,7 @@ root.innerHTML = `<div class="reports">
       <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
         <div class="seg" id="fDays" style="display:flex"><button data-d="7" style="flex:1">${t('{n} gün', { n: 7 })}</button><button data-d="30" style="flex:1">${t('{n} gün', { n: 30 })}</button><button data-d="90" style="flex:1">${t('{n} gün', { n: 90 })}</button><button data-d="0" style="flex:1">${t('Tümü')}</button></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="fSym" placeholder="${t('Sembol')}" style="width:84px" aria-label="${t('Sembol')}"><select id="fBroker" style="flex:1;min-width:0" aria-label="${t('Kurum')}">${ALL_BROKERS}</select></div>
-      </div>
+        <div class="row" style="gap:6px"><button class="ghost xs fMine" data-m="watchlist" style="flex:1">${t('İzleme listem')}</button><button class="ghost xs fMine" data-m="portfolio" style="flex:1">${t('Portföyüm')}</button></div>
       <div id="feedList"></div>
       <div class="dim" id="feedNote" style="font-size:11px;padding:8px"></div>
     </div>
@@ -149,30 +149,46 @@ function uploadModal(files) {
 $('#rKind').onclick = (e) => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; localSet('reportKind', kind); draw(); };
 
 // ── Kurum raporu akışı ─────────────────────────────
-let feed = { items: [] }, feedDays = localGet('feedDays', 30), feedTok = 0, feedSel = null;
-const BROKER_DOT = { garanti: '#2dd4bf', ak: '#ef4444', isyatirim: '#3b82f6', yapikredi: '#60a5fa', ziraat: '#22c55e', vakif: '#f59e0b', tacirler: '#a78bfa', phillip: '#f472b6', integral: '#94a3b8', a1: '#facc15' };
-async function loadFeed() {
-  const tok = ++feedTok;
-  $$('#fDays button').forEach((b) => b.classList.toggle('active', Number(b.dataset.d) === feedDays));
-  if (!feed.items.length) $('#feedList').innerHTML = '<div class="skeleton" style="height:160px;margin:8px"></div>';
-  const q = new URLSearchParams({ days: feedDays, limit: 200, ...(($('#fSym').value.trim()) ? { symbol: $('#fSym').value.trim().toUpperCase() } : {}), ...($('#fBroker').value ? { broker: $('#fBroker').value } : {}), scope: 'company' });
-  try {
-    const r = await api(`/research?${q}`);
-    if (tok !== feedTok) return;
-    feed = r;
-    const cur = $('#fBroker').value;
-    $('#fBroker').innerHTML = ALL_BROKERS + Object.entries(r.brokers).map(([k, b]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(r.status?.[k] && !r.status[k].ok ? t('{name} (hata)', { name: b.name }) : b.name)}</option>`).join('');
-    $('#feedList').innerHTML = r.items.map((x) => `<div class="report-item feed-item ${x.id === feedSel ? 'sel' : ''}" data-id="${esc(x.id)}">
+let feed = { items: [] }, feedDays = localGet('feedDays', 30), feedTok = 0, feedSel = null, feedMine = localGet('feedMine', '');
+// Renksiz kalan kurum gri noktaya düşmesin: gedik listede en çok raporu olanlardan
+const BROKER_DOT = { garanti: '#2dd4bf', ak: '#ef4444', isyatirim: '#3b82f6', yapikredi: '#60a5fa', ziraat: '#22c55e', vakif: '#f59e0b', tacirler: '#a78bfa', phillip: '#f472b6', integral: '#94a3b8', a1: '#facc15', gedik: '#eab308', halk: '#38bdf8' };
+const FEED_PAGE = 200;
+let feedLoading = false;
+const feedItemHtml = (x) => `<div class="report-item feed-item ${x.id === feedSel ? 'sel' : ''}" data-id="${esc(x.id)}">
       <div class="t"><span class="dot" style="background:${BROKER_DOT[x.brokerKey] || 'var(--text-3)'}"></span>${x.symbols.length ? `<b class="mono accent">${esc(x.symbols.slice(0, 3).join(', '))}</b> ` : ''}<span class="dim">${esc(x.broker)}</span>${x.isNew ? ` <span class="pill acc">${t('Yeni')}</span>` : ''}${x.saved ? ` <span class="pill" title="${t('Arşivde')}">✓</span>` : ''}</div>
       <div class="t2">${esc(x.title)}</div>
       <div class="m"><span>${dateTR(x.date)} · ${esc(tx(x.category))}${x.size ? ` · ${esc(x.size)}` : ''}${x.access === 'web' ? ` · ${esc(tx(x.access))}` : ''}</span>
-        <span class="f-acts"><button class="ghost xs" data-fa="${esc(x.id)}">${t('Analiz et')}</button>${x.access === 'web' ? '' : `<a class="ghost xs" href="/api/research/file?id=${encodeURIComponent(x.id)}" download>${t('İndir')}</a>`}</span></div></div>`).join('') || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
-    $$('.feed-item', root).forEach((el) => el.onclick = (e) => { if (e.target.closest('.f-acts')) return; showFeed(el.dataset.id); });
-    $$('[data-fa]', root).forEach((b) => b.onclick = () => askFeed(feed.items.find((i) => i.id === b.dataset.fa)));
+        <span class="f-acts"><button class="ghost xs" data-fa="${esc(x.id)}">${t('Analiz et')}</button>${x.access === 'web' ? '' : `<a class="ghost xs" href="/api/research/file?id=${encodeURIComponent(x.id)}" download>${t('İndir')}</a>`}</span></div></div>`;
+function bindFeed() {
+  $$('.feed-item', root).forEach((el) => el.onclick = (e) => { if (e.target.closest('.f-acts')) return; showFeed(el.dataset.id); });
+  $$('[data-fa]', root).forEach((b) => b.onclick = () => askFeed(feed.items.find((i) => i.id === b.dataset.fa)));
+}
+async function loadFeed(append = false) {
+  append = append === true;         // debounce/onchange olay nesnesini append diye yorumlamasın
+  if (append && feedLoading) return; // aynı anda iki "daha fazla" isteği olmasın
+  feedLoading = true;
+  const tok = ++feedTok;
+  $$('#fDays button').forEach((b) => b.classList.toggle('active', Number(b.dataset.d) === feedDays));
+  $$('.fMine').forEach((b) => b.classList.toggle('on', feedMine === b.dataset.m));
+  if (!feed.items.length) $('#feedList').innerHTML = '<div class="skeleton" style="height:160px;margin:8px"></div>';
+  const q = new URLSearchParams({ days: feedDays, limit: FEED_PAGE, offset: append ? feed.items.length : 0, ...(($('#fSym').value.trim()) ? { symbol: $('#fSym').value.trim().toUpperCase() } : {}), ...($('#fBroker').value ? { broker: $('#fBroker').value } : {}), ...(feedMine ? { mine: feedMine } : {}), scope: 'company' });
+  try {
+    const r = await api(`/research?${q}`);
+    if (tok !== feedTok) return;
+    feed = append ? { ...r, items: [...feed.items, ...r.items] } : r;
+    const cur = $('#fBroker').value;
+    $('#fBroker').innerHTML = ALL_BROKERS + Object.entries(r.brokers).map(([k, b]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(r.status?.[k] && !r.status[k].ok ? t('{name} (hata)', { name: b.name }) : b.name)}</option>`).join('');
+    const html = r.items.map(feedItemHtml).join('');
+    if (append) $('#feedList').insertAdjacentHTML('beforeend', html);
+    else $('#feedList').innerHTML = html || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
+    $('#fMore')?.remove();
+    if (feed.items.length < r.total) $('#feedList').insertAdjacentHTML('beforeend', `<button class="ghost" id="fMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: r.total - feed.items.length })}</button>`);
+    bindFeed();
     const fails = Object.entries(r.status || {}).filter(([, s]) => !s.ok).map(([k]) => r.brokers[k]?.name);
     const locked = r.unavailable.map((u) => `<span title="${esc(tx(u.reason))}">${esc(tx(u.name))}</span>`).join(', ');
     $('#feedNote').innerHTML = `${t('{n} şirket raporu', { n: r.total })} · ${t('Son güncelleme {date} · 30 dakikada bir yenilenir', { date: dateTR(r.at, true) })}${fails.length ? ` · <span class="down">${t('Alınamadı: {list}', { list: esc(fails.join(', ')) })}</span>` : ''}<br>${t('Giriş gerektiren kaynaklar ({list}): raporları kendi hesabınızla indirin; Ayarlar › Veri › Kurum raporları için klasör izleme onları arşive alır.', { list: locked })}`;
   } catch (e) { if (tok === feedTok) $('#feedList').innerHTML = `<div class="empty">${esc(tx(e.message))}</div>`; }
+  finally { if (tok === feedTok) feedLoading = false; }
 }
 function showFeed(id) {
   const x = feed.items.find((i) => i.id === id);
@@ -199,9 +215,12 @@ function askFeed(x) {
       + (x.symbols.length ? ` ${t('Sonunda {symbol} için save_memory ile kurum görüşünü şirket notuna ekle.', { symbol: x.symbols[0] })}` : ''));
 }
 $('#fDays').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; feedDays = Number(b.dataset.d); localSet('feedDays', feedDays); loadFeed(); };
+// İzleme listem / Portföyüm: yalnız kendi sembollerimle ilgili raporlar. Tekrar tıklama süzgeci kaldırır.
+$$('.fMine').forEach((b) => b.onclick = () => { feedMine = feedMine === b.dataset.m ? '' : b.dataset.m; localSet('feedMine', feedMine); loadFeed(); });
 $('#fSym').addEventListener('input', debounce(loadFeed, 300));
 $('#fBroker').onchange = loadFeed;
 on('ws:research.updated', () => { if (kind === 'akis' && root.classList.contains('active')) loadFeed(); });
+$('#feedList').addEventListener('click', (e) => { if (e.target.closest('#fMore')) loadFeed(true); });
 on('research:symbol', (s) => { kind = 'akis'; localSet('reportKind', kind); $('#fSym').value = s; emit('rtab', 'reports'); draw(); });
 $('#rFilter').addEventListener('input', debounce(draw, 150));
 $('#rBroker').onchange = draw;

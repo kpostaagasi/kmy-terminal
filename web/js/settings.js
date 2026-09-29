@@ -45,7 +45,7 @@ export function openSettings(section = 'genel') {
       <aside class="stg-side">
         <div class="stg-brand"><b>${t('Ayarlar')}</b><span>kmy terminal</span></div>
         <nav class="stg-nav" role="tablist" aria-label="${t('Ayar bölümleri')}">${SECTIONS.map(([k, l]) => `<button type="button" role="tab" data-s="${k}">${svg(k)}<span>${l}</span></button>`).join('')}</nav>
-        <div class="stg-tip">${t('{open} ile açılır · {close} ile kapanır', { open: '<kbd>⌘</kbd><kbd>,</kbd>', close: '<kbd>Esc</kbd>' })}</div>
+        <div class="stg-tip">${t('{open} ile açılır · {close} ile kapanır', { open: '<kbd>⌘</kbd><kbd>,</kbd>', close: '<kbd>Esc</kbd>' }).replace(' · ', '<br>· ')}</div>
       </aside>
       <div class="stg-main">
         <div class="stg-head"><div><h2 id="stgTitle"></h2><p id="stgDesc"></p></div><button class="icon-btn stg-x" data-close aria-label="${t('Kapat')}">✕</button></div>
@@ -198,7 +198,8 @@ export function openSettings(section = 'genel') {
       $('#sCodexModel')?.addEventListener('change', (e) => save({ codexModel: e.target.value.trim() }));
       for (const [key] of provs) {
         const sm = $(`#s${key[0].toUpperCase()}${key.slice(1)}Model`, el);
-        if (sm && key !== 'codex') sm.onchange = (e) => save({ [`${key}Model`]: e.target.value });
+        // Sunucu anahtarı 'model' tutar (bkz. DEFAULT_SETTINGS); 'claudeModel' sessizce düşerdi
+        if (sm && key !== 'codex') sm.onchange = (e) => save({ [key === 'claude' ? 'model' : `${key}Model`]: e.target.value });
       }
       $('#sLoginC')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'claude /login', title: 'claude login' }); });
       $('#sLoginX')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'codex login', title: 'codex login' }); });
@@ -366,7 +367,9 @@ export function openSettings(section = 'genel') {
     async surum(el, stale) {
       const r = await api('/changelog').catch(() => ({ text: '' }));
       if (stale()) return;
-      el.innerHTML = card(`<div class="msg assistant stg-prose">${md(r.text || t('Sürüm notu yok'))}</div>`);
+      // CHANGELOG.md'nin H1'i panel başlığının ("Sürüm notları") kopyasıydı; ikinci başlık olarak atılır.
+      const body = String(r.text || '').replace(/^#\s+.*(\r?\n)+/, '');
+      el.innerHTML = card(`<div class="msg assistant stg-prose">${body ? md(`> ${t('Sürüm notları Türkçe yazıldı.')}\n\n${body}`) : md(t('Sürüm notu yok'))}</div>`);
     },
     async yardim(el) {
       const keys = (list) => list.map(([k, d]) => row(esc(d), '', k.map((x) => `<kbd>${esc(x)}</kbd>`).join(''), { sm: true })).join('');

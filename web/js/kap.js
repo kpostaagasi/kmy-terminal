@@ -16,17 +16,19 @@ root.innerHTML = `
   <div class="kap-bar"><div class="kap-sigs" id="kSigs"></div><span class="spacer"></span><button class="icon-btn sm" id="kRefresh" title="${t('KAP’tan yenile')}">↻</button><input id="kQ" placeholder="${t('Sembol')}" aria-label="${t('Bildirimlerde ara (sembol veya metin)')}"></div>
   <div class="kap-filters">
     <select id="kScope" aria-label="${t('Kapsam')}"><option value="watchlist">${t('İzleme listesi')}</option><option value="portfolio">${t('Portföyüm')}</option><option value="all">${t('Tüm şirketler')}</option><option value="symbol">${t('Seçili sembol')}</option></select>
-    <select id="kDays" aria-label="${t('Dönem')}"><option value="1">${t('{n} gün', { n: 1 })}</option><option value="3" selected>${t('{n} gün', { n: 3 })}</option><option value="7">${t('{n} gün', { n: 7 })}</option><option value="30">${t('{n} gün', { n: 30 })}</option><option value="90" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('{n} gün', { n: 90 })}</option><option value="365" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('1 yıl')}</option></select>
+    <select id="kDays" aria-label="${t('Dönem')}"><option value="1">${t('{n} gün', { n: 1 })}</option><option value="3">${t('{n} gün', { n: 3 })}</option><option value="7" selected>${t('{n} gün', { n: 7 })}</option><option value="30">${t('{n} gün', { n: 30 })}</option><option value="90" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('{n} gün', { n: 90 })}</option><option value="365" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('1 yıl')}</option></select>
     <select id="kCls" aria-label="${t('Bildirim türü')}"><option value="">${t('Tüm türler')}</option><option value="ODA">${t('Özel durum')}</option><option value="FR">${t('Finansal rapor')}</option><option value="DG">${t('Diğer')}</option><option value="DKB">${t('Düzenleyici kurum')}</option></select>
   </div>
-  <div class="kap-info"><span id="kInfo"></span>
+  <div class="kap-info" style="flex-wrap:wrap"><span id="kInfo" style="flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
     <span class="row" style="gap:6px"><button class="ghost xs" id="kRead" title="${t('Listedeki tüm bildirimleri okundu say')}">${t('Okundu say')}</button><button class="ghost xs" id="kAsk">${t('Tez sinyallerini asistanla özetle')}</button></span></div>
   <div class="list" id="kList"></div>`;
 
-let f = { scope: localGet('kapScope', 'watchlist'), cls: '', days: 3, q: '', symbol: null, signal: localGet('kapSignal', '') };
+// Varsayılan 7 gün: izleme listesinde 3 günde çoğu zaman 2-3 bildirim çıkar, "akış durdu" sanılıyor.
+let f = { scope: localGet('kapScope', 'watchlist'), cls: '', days: localGet('kapDays', 7), q: '', symbol: null, signal: localGet('kapSignal', '') };
 const seen = new Set(localGet('kapSeen', []));
 let unread = 0, items = [], total = 0, loading = false;
 $('#kScope').value = f.scope;
+$('#kDays').value = String(f.days);
 
 let forceNext = false;
 function qs(offset = 0) {
@@ -34,8 +36,12 @@ function qs(offset = 0) {
   return `/kap?scope=${f.scope}&symbol=${encodeURIComponent(sym)}&days=${f.days}&cls=${f.cls}&signal=${f.signal}&q=${encodeURIComponent(f.q)}&offset=${offset}&limit=100${forceNext ? '&refresh=1' : ''}`;
 }
 
-// "24.09.2026 18:19:37" → "24/09 18:19"
-const shortDate = (s) => { const m = /^(\d{2})\.(\d{2})\.\d{4}\s+(\d{2}:\d{2})/.exec(s || ''); return m ? `${m[1]}/${m[2]} ${m[3]}` : (s || ''); };
+// "24.09.2026 18:19:37" / "2026.09.24 18:19:37" → "24/09 18:19" (ayrıntı ucu tarihi farklı yazıyor)
+const shortDate = (s) => {
+  const n = String(s || '').replace(/^(\d{4})\.(\d{2})\.(\d{2})\s+/, '$3.$2.$1 ');
+  const m = /^(\d{2})\.(\d{2})\.\d{4}\s+(\d{2}:\d{2})/.exec(n);
+  return m ? `${m[1]}/${m[2]} ${m[3]}` : (s || '');
+};
 function itemHtml(x) {
   return `<div class="kap-item ${seen.has(x.id) ? '' : 'new'}" data-id="${x.id}">
     <div class="k-sig">${signalPill(x.signal) || `<span class="sig sig-dig">${esc(SIG_SHORT.DIGER)}</span>`}</div>
@@ -124,7 +130,7 @@ export async function openKapDetail(id) {
     const d = await api(`/kap/${id}`);
     state.openKap = { id, title: d.title, stocks: d.stocks };
     const safe = window.DOMPurify ? window.DOMPurify.sanitize(d.html, { FORBID_TAGS: ['style', 'script', 'form', 'input'], FORBID_ATTR: ['style'] }) : esc(d.text);
-    m.body.innerHTML = `<div class="row between" style="margin-bottom:10px"><div><b>${esc(d.title || '')}</b><div class="dim">${esc(d.company || '')} · ${esc(d.publishDate || '')} · ${d.stocks.map((s) => `<span class="stk mono" data-s="${esc(s)}" style="cursor:pointer;color:var(--accent)">${esc(s)}</span>`).join(' ')}</div></div>
+    m.body.innerHTML = `<div class="row between" style="margin-bottom:10px"><div><b>${esc(d.title || '')}</b><div class="dim">${esc(d.company || '')} · <span title="${esc(d.publishDate || '')}">${esc(shortDate(d.publishDate))}</span> · ${d.stocks.map((s) => `<span class="stk mono" data-s="${esc(s)}" style="cursor:pointer;color:var(--accent)">${esc(s)}</span>`).join(' ')}</div></div>
       <div class="row"><button class="btn" id="kdAsk">${t('Asistanla analiz et')}</button><a class="btn sec" href="${esc(d.url)}" target="_blank" rel="noopener">${t('KAP’ta aç ↗')}</a></div></div>
       ${d.attachments.length ? `<div class="row" style="margin-bottom:10px">${d.attachments.map((a, i) => `<button class="pill" data-att="${i}" title="${t('Uygulama içinde aç')}">📎 ${esc(a.name)}</button>`).join('')}</div>` : ''}
       <div class="kap-detail">${safe}</div>`;
@@ -136,11 +142,14 @@ export async function openKapDetail(id) {
   }
 }
 
-$('#kScope').onchange = (e) => { f.scope = e.target.value; f.symbol = null; localSet('kapScope', f.scope); load(); };
+// "Tüm şirketler" kapsamı sunucuda 31 güne kırpılır; kapsam ya da dönem değiştiğinde her yolda uyar
+const guardDays = () => { if (f.days > 31 && f.scope === 'all') toast(t('Tüm şirketler için en fazla 31 gün gösterilir; daha uzun geçmiş için sembol, izleme listesi veya portföy kapsamını seçin.')); };
+$('#kScope').onchange = (e) => { f.scope = e.target.value; f.symbol = null; localSet('kapScope', f.scope); guardDays(); load(); };
 $('#kCls').onchange = (e) => { f.cls = e.target.value; load(); };
 $('#kDays').onchange = (e) => {
   f.days = Number(e.target.value);
-  if (f.days > 31 && f.scope === 'all') toast(t('Tüm şirketler için en fazla 31 gün gösterilir; daha uzun geçmiş için sembol, izleme listesi veya portföy kapsamını seçin.'));
+  localSet('kapDays', f.days);
+  guardDays();
   load();
 };
 $('#kQ').addEventListener('input', debounce((e) => { f.q = e.target.value.trim(); load(); }, 300));

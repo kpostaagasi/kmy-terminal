@@ -6,6 +6,8 @@ export default {
   'Raporlar sekmesinden bir rapor seçin.': 'Choose a report from the Reports tab.',
   'Tüm kurumlar': 'All brokers',
   'Raporlar': 'Reports',
+  'İzleme listem': 'My watchlist',
+  'Portföyüm': 'My portfolio',
   'Kurum raporu veya PDF yükle': 'Upload a broker report or PDF',
   'Yenile': 'Refresh',
   'Aracı kurumların yeni yayımladığı şirket raporları': 'Company reports newly published by brokers',

@@ -79,6 +79,18 @@ check('AAPL K/Z = fiyat etkisi + kur etkisi', aaplH.pnlPrice + aaplH.pnlFx, aapl
 const usdCash = S.cash.filter((c) => c.currency === 'USD').reduce((a, c) => a + c.valueTRY, 0);
 const hedged = S.holdings.filter((h) => ['AAPL.US', 'CEYREK'].includes(h.symbol)).reduce((a, h) => a + h.value, 0) + usdCash;
 check('TL dışı pay (AAPL + çeyrek + USD nakit)', S.distribution.nonTl.value, hedged);
+// Satış senaryosu: BIST hisselerinde stopaj kesilir, yurt dışı varlık ve fonlarda uygulanmaz
+const sellable = S.holdings.filter((h) => h.value != null);
+for (const h of sellable) {
+  const wantTax = h.sellTaxable ? h.value * 0.1 : 0;
+  check(`${h.symbol} stopaj = değer × oran`, h.sellTax, wantTax, 0.01);
+  check(`${h.symbol} satışa çevir (net) = değer − stopaj`, h.sellNet, h.value - h.sellTax, 0.01);
+  check(`${h.symbol} satış K/Z = net − maliyet`, h.sellRealized, h.sellNet - h.cost, 0.01);
+}
+check('BIST hissesi stopaja tabi', S.holdings.find((h) => h.symbol === 'THYAO')?.sellTaxable, true);
+check('ABD hissesi stopaja tabi değil', S.holdings.find((h) => h.symbol === 'AAPL.US')?.sellTaxable, false);
+check('Toplam satışa çevir = Σ net', t.sellNet, sellable.reduce((a, h) => a + h.sellNet, 0), 0.01);
+check('Toplam stopaj = Σ kesinti', t.sellTax, sellable.reduce((a, h) => a + h.sellTax, 0), 0.01);
 const D = await pf.dividendReport();
 const b25 = D.breakdown['2025'] || {};
 check('Temettü kırılımı 2025 toplamı', Object.values(b25.bySector || {}).reduce((a, v) => a + v, 0), 2315);

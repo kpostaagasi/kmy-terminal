@@ -41,7 +41,8 @@ export function baseOptions({ time = true, legend = false, yRight = true } = {})
 }
 
 export function palette() {
-  return [css('--accent'), css('--info'), css('--violet'), css('--up'), css('--down'), '#f472b6', '#2dd4bf', '#facc15', '#fb923c', '#94a3b8', '#818cf8', '#4ade80'];
+  return [css('--accent'), css('--info'), css('--violet'), css('--up'), css('--down'),
+    css('--c1'), css('--c2'), css('--c3'), css('--c4'), css('--c5'), css('--c6'), css('--c7')];
 }
 
 export function makeChart(canvas, config) {

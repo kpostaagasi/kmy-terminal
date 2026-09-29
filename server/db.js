@@ -127,6 +127,7 @@ export const DEFAULT_SETTINGS = {
   benchmark: 'XU100',
   benchmarks: ['XU100', 'USDTRY', 'GRAM', 'SPX_TRY', 'BTC_TRY'],
   dividendTaxRate: 0.15,
+  sellTaxRate: 0.10, // BIST hisse satış stopajı (varsayılan %10)
   uiMode: 'chat',
   language: 'auto', // 'auto' (sistem dili) | 'tr' | 'en'
 };

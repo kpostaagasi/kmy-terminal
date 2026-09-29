@@ -80,11 +80,11 @@ export function pct(x, d = 2, sign = true) { if (x == null || !Number.isFinite(+
 export function money(x, cur = 'TRY', d = 0) { if (x == null || !Number.isFinite(+x)) return '—'; const s = { TRY: '₺', USD: '$', EUR: '€', GBP: '£' }[cur] || ''; return `${x < 0 ? '−' : ''}${s}${num(Math.abs(x), d)}${s ? '' : ' ' + cur}`; }
 export function compact(x) { if (x == null) return '—'; const a = Math.abs(x); const [bn, mn, k] = lang === 'tr' ? [' mr', ' mn', ' b'] : ['B', 'M', 'K']; if (a >= 1e9) return num(x / 1e9, 2) + bn; if (a >= 1e6) return num(x / 1e6, 2) + mn; if (a >= 1e3) return num(x / 1e3, 1) + k; return num(x, 0); }
 export function cls(x) { return x > 0 ? 'up' : x < 0 ? 'down' : ''; }
-export function dateTR(d, withTime = false) { if (!d) return '—'; const dt = new Date(d); return withTime ? dt.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) : dt.toLocaleDateString(locale); }
-export function ago(ms) { const s = Math.round((Date.now() - ms) / 1000); if (s < 60) return t('{s} sn', { s }); if (s < 3600) return t('{m} dk {s} sn', { m: Math.floor(s / 60), s: s % 60 }); return t('{h} sa {m} dk', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) }); }
+export function dateTR(d, withTime = false) { if (!d) return '—'; const dt = new Date(d); if (Number.isNaN(dt.getTime())) return '—'; return withTime ? dt.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) : dt.toLocaleDateString(locale); }
+export function ago(ms) { const n = Number(ms); if (!ms || !Number.isFinite(n)) return '—'; const s = Math.max(0, Math.round((Date.now() - n) / 1000)); if (s < 60) return t('{s} sn', { s }); if (s < 3600) return t('{m} dk {s} sn', { m: Math.floor(s / 60), s: s % 60 }); return t('{h} sa {m} dk', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) }); }
 // SQLite datetime('now') UTC döner ("2026-09-23 08:54:48"); her tarayıcıda güvenli ayrıştır
 export function sqlDate(s) { if (!s) return null; const d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? '' : 'Z')); return Number.isNaN(d.getTime()) ? null : d; }
-export function timeTR(ms) { return ms ? new Date(ms).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) : '—'; }
+export function timeTR(ms) { const d = ms ? new Date(ms) : null; return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) : '—'; }
 export function relTime(ms) {
   if (!ms) return '—';
   const s = Math.round((Date.now() - ms) / 1000);
@@ -189,13 +189,23 @@ export function md(text) {
 
 export function debounce(fn, ms = 250) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
+// Canlı fiyat aboneliği: sunucu yalnız izleme listesi + şerit sembollerini itiyor.
+// Ekranda açık sembolü de abone et ki başlıktaki fiyat donmasın (bağlantı kopunca yeniden abone olunur).
+const subs = new Set();
+const pushSubs = () => wsSend({ t: 'sub', symbols: [...subs] });
+function syncSubs() { if (ws?.readyState !== 1) return; pushSubs(); }
+on('conn', (ok) => { if (ok) syncSubs(); });
+on('ready', () => { subs.add(state.selected); syncSubs(); });
+
 // Seçili sembolü değiştir (tüm görünümler dinler)
 export function selectSymbol(sym, { show = true } = {}) {
   state.selected = sym;
   localSet('selected', sym);
   emit('symbol', sym);
+  subs.add(sym); syncSubs();
   if (show) emit('view', 'market');
 }
+
 
 // Sohbete istem gönder (başka modüllerden)
 export function askAgent(text, { context = null, newSession = false } = {}) {

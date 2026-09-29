@@ -1,6 +1,6 @@
 // kmy terminal sekmesi: ana ekran, sembol sayfaları (özet · finans · skor · değer · karşılaştırma),
 // piyasa sayfaları (tarayıcı · sektör haritası · piyasa özeti) ve alttaki komut satırı
-import { state, on, emit, api, $, $$, h, esc, md, num, price, pct, cls, compact, dateTR, css, toast, selectSymbol, askAgent, localGet, localSet, timeTR, srcTag, debounce, confirmBox, openPdfViewer } from './core.js';
+import { state, on, emit, api, $, $$, h, esc, md, num, price, pct, cls, compact, dateTR, css, toast, selectSymbol, askAgent, localGet, localSet, timeTR, srcTag, debounce, confirmBox, openPdfViewer, today } from './core.js';
 import { baseOptions, makeChart, palette } from './charts.js';
 import { openTxModal } from './portfolio-view.js';
 import { openKapDetail, signalPill } from './kap.js';
@@ -504,6 +504,16 @@ setInterval(() => {
   loadSymNews(s, same); loadSymKap(s, same); loadSymReports(s, same);
 }, 5 * 60_000);
 
+// Sekmeye geri dönünce: döngü görünmezken durduğu için Özet ekrana dönünce tazele.
+addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (page !== 'sum' || rendered.sum !== curSym || !root.classList.contains('active')) return;
+  const s = curSym;
+  const same = () => curSym === s;
+  api(`/quote/${enc(s)}`).then((q) => { if (q && same()) { state.quotes[s] = q; renderHead(); renderCur(); } }).catch(() => {});
+  loadSymNews(s, same); loadSymKap(s, same); loadSymReports(s, same);
+});
+
 // Sembolün aracı kurum raporları
 async function loadSymReports(s, fresh = () => true) {
   $('#symRep').innerHTML = SKEL;
@@ -561,10 +571,9 @@ function caList(rows, note) {
     <div class="dim ca-note">${note}</div>`;
 }
 function renderActions(acts) {
-  const today = new Date().toISOString().slice(0, 10);
   const rows = [];
   for (const a of [...acts].reverse().slice(0, 10)) {
-    const base = { date: dateTR(a.date), soon: a.date >= today };
+    const base = { date: dateTR(a.date), soon: a.date >= today() };
     if (a.dpsGross > 0) rows.push({ ...base, kind: t('Nakit temettü'), cls: 'div', detail: t('{v} ₺ / hisse', { v: num(a.dpsGross, 4) }), amount: a.cashTotal ? `${compact(a.cashTotal)} ₺` : '' });
     if (a.bonusPct > 0) rows.push({ ...base, kind: t('Bedelsiz'), cls: 'cap', detail: t('%{v}', { v: num(a.bonusPct, 2) }) });
     if (a.bonusDivPct > 0) rows.push({ ...base, kind: t('Bedelsiz (temettüden)'), cls: 'cap', detail: t('%{v}', { v: num(a.bonusDivPct, 2) }) });
@@ -1251,7 +1260,6 @@ $('#calSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) re
 
 // Temettü takvimi: ilan edilmiş, bugünden sonraki olaylar
 async function loadCalendar() {
-  const today = new Date().toISOString().slice(0, 10);
   let symbols = null;
   if (calScope === 'watchlist') symbols = state.watchlist;
   if (calScope === 'portfolio') symbols = (await api('/portfolio').catch(() => ({ holdings: [] }))).holdings.map((x) => x.symbol);
@@ -1261,11 +1269,15 @@ async function loadCalendar() {
   }
   const qs = symbols ? `&symbols=${enc(symbols.join(','))}` : '';
   try {
-    const list = await api(`/corporate-actions?from=${today}${qs}`);
+    const list = await api(`/corporate-actions?from=${today()}${qs}`);
+    // Verim için fiyat gerekiyor; semboller izleme listesinde olmayabilir → tek toplu istek (satır başına istek yok)
+    const miss = [...new Set(list.filter((a) => a.dpsGross && !state.quotes[a.code]?.price).map((a) => a.code))];
+    if (miss.length) Object.assign(state.quotes, await api(`/quotes?symbols=${enc(miss.join(','))}`).catch(() => ({})));
     $('#calendar').innerHTML = list.length ? `<thead><tr><th>${t('Tarih')}</th><th>${t('Sembol')}</th><th>${t('Olay')}</th><th class="r">${t('Hisse başı brüt')}</th><th class="r">${t('Verim')}</th></tr></thead><tbody>${list.map((a) => {
       const q = state.quotes[a.code];
-      const kind = [a.dpsGross > 0 ? t('Nakit temettü') : null, a.bonusPct > 0 ? t('Bedelsiz %{v}', { v: num(a.bonusPct, 2) }) : null, a.rightsPct > 0 ? t('Bedelli %{v}', { v: num(a.rightsPct, 2) }) : null].filter(Boolean).join(' · ') || '—';
-      return `<tr class="click" data-s="${esc(a.code)}"><td class="num">${dateTR(a.date)}</td><td class="mono"><b>${esc(a.code)}</b></td><td>${kind}</td><td class="r num">${a.dpsGross ? num(a.dpsGross, 4) + ' ₺' : ''}</td><td class="r num">${a.dpsGross && q?.price ? pct((a.dpsGross / q.price) * 100, 2, false) : ''}</td></tr>`;
+      const kind = [a.dpsGross > 0 ? t('Nakit temettü') : null, a.bonusPct > 0 ? t('Bedelsiz %{v}', { v: num(a.bonusPct, 2) }) : null, a.bonusDivPct > 0 ? `${t('Bedelsiz (temettüden)')} ${t('%{v}', { v: num(a.bonusDivPct, 2) })}` : null, a.rightsPct > 0 ? t('Bedelli %{v}', { v: num(a.rightsPct, 2) }) : null].filter(Boolean).join(' · ') || '—';
+      const px = q?.price;
+      return `<tr class="click" data-s="${esc(a.code)}"><td class="num">${dateTR(a.date)}</td><td class="mono"><b>${esc(a.code)}</b></td><td>${kind}</td><td class="r num">${a.dpsGross ? num(a.dpsGross, 4) + ' ₺' : '—'}</td><td class="r num">${a.dpsGross ? pct(px ? (a.dpsGross / px) * 100 : null, 2, false) : '—'}</td></tr>`;
     }).join('')}</tbody>` : `<tbody><tr><td class="dim">${calScope === 'all' ? t('İlan edilmiş yaklaşan olay yok') : t('Bu kapsamda ilan edilmiş yaklaşan temettü ya da sermaye artırımı yok')}</td></tr></tbody>`;
   } catch (e) { $('#calendar').innerHTML = `<tbody><tr><td class="dim">${esc(tx(e.message))}</td></tr></tbody>`; }
 }
