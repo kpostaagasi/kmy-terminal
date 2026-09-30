@@ -151,7 +151,11 @@ async function mtCall(code, group, periods) {
   return d.value || [];
 }
 const INDUSTRIAL_KEYS = {
-  sales: '3C', grossProfit: '3D', operatingProfit: '3DF', pretax: '3I', netIncome: '3Z', depreciation: '4B',
+  // operatingProfit = 3DF "Esas Faaliyet Karı" (yönetim tanımlı, dar)
+  // ebitdaBase     = 3H  "Net Faaliyet Kar/Zararı" (finansman öncesi, EBITDA'nın doğru tabanı)
+  // FAVÖK = ebitdaBase + depreciation. 3DF tabanı kullanıldığında "Diğer Faaliyet Gelir/Giderleri"
+  // (3DD−3DE) düşülüyor ve FAVÖK %5 eksik çıkıyor (TUPRS 2026/6: 67.898 mn ↔ doğrusu 71.246 mn).
+  sales: '3C', grossProfit: '3D', operatingProfit: '3DF', ebitdaBase: '3H', pretax: '3I', netIncome: '3Z', depreciation: '4B',
   totalAssets: '1BL', currentAssets: '1A', nonCurrentAssets: '1AK', monetaryGain: '3HCA', cash: '1AA', shortInvest: '1AB', equity: '2O', stDebt: '2AA', ltDebt: '2BA', currentLiabilities: '2A', ltLiabilities: '2B', opCashFlow: '4C', netFx: '4BE', exportSales: '4BD',
 };
 const BANK_KEYS = { netInterest: '3C', fees: '3CA', provisions: '3CF', operatingProfit: '3CH', pretax: '3CL', netIncome: '3Z', totalAssets: '1Z', loans: '1AF', deposits: '2A', equity: '2O' };
@@ -179,18 +183,21 @@ export async function financials(symbol, n = 8) {
   const periods = cols.filter((c) => c.get(bank ? '1Z' : '1BL')).slice(0, n);
   const table = periods.map((c) => ({ period: c.label, ...Object.fromEntries(Object.entries(keys).map(([k, ic]) => [k, c.get(ic)])) }));
   // Çeyreklik gelir tablosu: kümülatiften önceki çeyreği çıkar (aynı yıl içinde)
-  const flowKeys = bank ? ['netInterest', 'fees', 'provisions', 'operatingProfit', 'pretax', 'netIncome'] : ['sales', 'grossProfit', 'operatingProfit', 'pretax', 'netIncome', 'depreciation', 'opCashFlow', 'exportSales', 'monetaryGain'];
+  const flowKeys = bank ? ['netInterest', 'fees', 'provisions', 'operatingProfit', 'pretax', 'netIncome'] : ['sales', 'grossProfit', 'operatingProfit', 'ebitdaBase', 'pretax', 'netIncome', 'depreciation', 'opCashFlow', 'exportSales', 'monetaryGain'];
+  // FAVÖK = finansman öncesi faaliyet kârı (3H) + amortisman. Eski önbellek kayıtlarında
+  // ebitdaBase yok, o zaman 3DF tabanına düşüyoruz ki değer hiç kaybolmasın.
+  const ebitdaOf = (r) => (r.ebitdaBase ?? r.operatingProfit) == null || r.depreciation == null ? null : (r.ebitdaBase ?? r.operatingProfit) + r.depreciation;
   const quarterly = table.map((r, i) => {
     const [y, m] = r.period.split('/').map(Number);
     const prev = table[i + 1] && table[i + 1].period.startsWith(`${y}/`) && Number(table[i + 1].period.split('/')[1]) === m - 3 ? table[i + 1] : null;
     const q = { period: `${y}-Ç${m / 3}`, label: r.period };
     for (const k of flowKeys) q[k] = r[k] == null ? null : m === 3 ? r[k] : prev && prev[k] != null ? r[k] - prev[k] : null;
-    if (!bank && q.operatingProfit != null && q.depreciation != null) q.ebitda = q.operatingProfit + q.depreciation;
+    if (!bank) q.ebitda = ebitdaOf(q);
     return q;
   });
   if (!bank) for (const r of table) {
     const debt = (r.stDebt || 0) + (r.ltDebt || 0); r.netDebt = debt - (r.cash || 0) - (r.shortInvest || 0);
-    if (r.operatingProfit != null && r.depreciation != null) r.ebitda = r.operatingProfit + r.depreciation; // kümülatif FAVÖK
+    if (!bank) r.ebitda = ebitdaOf(r); // kümülatif FAVÖK
   }
   const raw = (chunks[0] || []).map((r) => ({ code: r.itemCode, name: r.itemDescTr.trim(), value: Number(r[`value${cols.findIndex((c) => c.label === periods[0]?.label) + 1}`]) || 0 }));
   const out = { symbol: code, type: bank ? 'banka' : 'sanayi', currency: 'TRY', source: 'İş Yatırım (KAP finansal tabloları)', note: 'Bilanço dönem sonu; gelir tablosu yıl başından kümülatif, quarterly çeyreklik', latest: periods[0]?.label || null, cumulative: table, quarterly, lastPeriodItems: raw };
