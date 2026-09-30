@@ -1,7 +1,11 @@
 # Sürüm Notları
 
+## 0.16.1 — 30 Eylül 2026 (FAVÖK taban satırı, sohbet bestecisi)
 
 ### Düzeltilen
+- **Sohbet bestecisinin üst şeridi hizasızdı.** Seçim kutuları 24px, istatistikler 16px yükseklikte olduğu için dikey ayırıcı çizgileri farklı uzunlukta ve tırtıklı görünüyordu. Tüm öğeler 22px'e eşitlendi, ayırıcı istatistiklere de verildi, çip–istatistik arasındaki boşluğa `flex: 1` spacer kondu. Üst satır artık tek, düzgün bir şerit. Doğrulama: 1500 px genişlikte ve sağ panelde (470 px) taşma yok, konsol hatası yok.
+- **Maliyet değeri yeşildi** (`#stCost { color: var(--up) }`). Bu arayüzde yeşil kazanç/zemin anlamına geldiği için yanlış sinyaldı; nötr griye alındı. Bütçe uyarısı ayrı rozet olarak (BÜGÜN) kendi rengini taşımaya devam ediyor.
+- **`TUR 0` gürültüydü.** Tur sayacı ilk turdan önce gizleniyor, sıfır olduğunda ekranda yer kaplamıyor.
 - **FAVÖK %4,9 eksik hesaplanıyordu.** FAVÖK, mali tablodaki "Esas Faaliyet Karı" (`3DF`) satırı üzerine kuruluyordu. O satır "Diğer Faaliyet Gelir/Giderleri"ni (`3DD` − `3DE`) düştüğü için sonuç eksik çıkıyordu. Doğru taban **"Net Faaliyet Kar/Zararı"** (`3H`, finansman öncesi faaliyet kârı) — Fintables ve piyasa standardı da bunu kullanıyor. TUPRS 2026/6 kanıtı: `3H` 62.373.927.000 + `4B` 8.872.312.000 = **71.246.239.000**; eski hesap 67.898 mn idi, sapma tam 3.349 mn (%4,9). FAVÖK marjı %10,24 → **%10,75** (kaynakla birebir). Etkilenen: FAVÖK marjı, `ebitda` alanı, çeyreklik FAVÖK grafiği.
 - "Faaliyet kârı" satırı `3DF` olarak **korunuyor** — ayrı ve geçerli bir ölçüm, yalnız FAVÖK tabanı olmaktan çıkarıldı.
 - Önbellekteki eski kayıtlarda `ebitdaBase` yok; bunlar `3DF` tabanına düşüyor, değer kaybolmuyor.

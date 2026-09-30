@@ -412,8 +412,12 @@ table.fin-sum th.r { font-weight: 600; }
 .chat-foot { padding: 8px max(14px, calc((100% - 900px) / 2)) 10px; display: flex; flex-direction: column; gap: 5px; position: relative; }
 .composer { border: 1px solid color-mix(in srgb, var(--accent-bg) 45%, var(--line-2)); border-radius: 6px; background: var(--panel); transition: border-color .12s, box-shadow .12s; }
 .composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-bg) 35%, transparent); }
-.cm-top { display: flex; align-items: center; gap: 2px; min-height: 30px; padding: 3px 10px 2px 8px; border-bottom: 1px solid var(--line); font-family: var(--mono); overflow: hidden; }
-.cm-top > .cm-chip + .cm-chip { border-left: 1px solid var(--line-2); }
+.cm-top { display: flex; align-items: stretch; gap: 0; min-height: 30px; padding: 3px 10px 2px 8px; border-bottom: 1px solid var(--line); font-family: var(--mono); overflow: hidden; }
+/* Üst satırdaki tüm öğeler aynı yükseklikte ve ortalı: dikey ayırıcılar hizalanır.
+   Aksi hâlde çipler 24px, istatistikler 16px olduğu için ayırıcı çizgileri tırtıklı görünüyor. */
+.cm-top > .cm-chip, .cm-top > .cm-stat { height: 22px; align-self: center; }
+.cm-top > .cm-chip + .cm-chip, .cm-top > .cm-stat { border-left: 1px solid var(--line-2); }
+.cm-top > .spacer { height: auto; }
 .cm-bar { display: flex; align-items: flex-end; gap: 6px; padding: 6px 8px; }
 .composer textarea { flex: 1; display: block; resize: none; min-height: 32px; max-height: 220px; font-size: var(--chat-font); line-height: 1.45; border: 0; background: transparent; padding: 6px 4px; box-shadow: none !important; }
 .cm-ico { width: 32px; height: 32px; border-radius: 3px; border: 0; background: none; color: var(--text-2); cursor: pointer; display: grid; place-items: center; flex: none; }
@@ -434,9 +438,12 @@ table.fin-sum th.r { font-weight: 600; }
 .cm-jobs:hover { color: var(--text); }
 .cm-jobs i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
 .cm-jobs.on { color: var(--text); } .cm-jobs.on i { background: var(--up); }
-.cm-stat { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 8px; border-left: 1px solid var(--line-2); }
+.cm-stat { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 9px; }
+.cm-stat[hidden] { display: none; }
 .cm-stat b { color: var(--text-2); font-weight: 500; text-transform: none; letter-spacing: 0; }
-#stCost { color: var(--up); }
+/* Maliyet yeşil olmaz: yeşil bu arayüzde kazanç/zemin anlamına geliyor. Sıfırdaki
+   bütçe rozeti kendi rengini taşıyor (#stBudget), burada nötr kalıyoruz. */
+#stCost { color: var(--text-2); font-weight: 500; }
 .ctxbar { width: 80px; height: 3px; border-radius: 1px; background: var(--line-2); overflow: hidden; display: inline-block; }
 .ctxbar i { display: block; height: 100%; background: var(--up); } .ctxbar i.mid { background: #eab308; } .ctxbar i.hi { background: var(--down); }
 
