@@ -216,7 +216,7 @@ export class AgentManager extends EventEmitter {
       return { sessionId };
     }
     if (provider === 'omp') {
-      this.#runOmp(sessionId, run, session, prompt, { model, permissionMode });
+      this.#runOmp(sessionId, run, session, prompt, { model, effort, permissionMode });
       return { sessionId };
     }
 
@@ -563,7 +563,7 @@ export class AgentManager extends EventEmitter {
 
   // ── oh-my-pi (omp) ─────────────────────────────────────
   // Ayrıntılar server/omp-runner.js'de; burada yalnız kayıt / yayın / izin köprüsü.
-  #runOmp(sessionId, run, session, prompt, { model, permissionMode }) {
+  #runOmp(sessionId, run, session, prompt, { model, effort, permissionMode }) {
     const sys = `${systemAppend(!session.sdk_session_id, run.lang)}\n- Terminal araçları "borsa" MCP sunucusundadır (omp'de xd://mcp__borsa_<araç>). Kalıcı talimatlar: AGENTS.md / CLAUDE.md.${permissionMode === 'plan' ? '\n- PLAN MODU: dosya değiştirme, komut çalıştırma; yalnız okuyup plan öner.' : ''}`;
     const io = {
       record: (kind, data) => this.#record(sessionId, kind, data),
@@ -581,7 +581,7 @@ export class AgentManager extends EventEmitter {
         this.emit('jobs');
       },
     };
-    runOmp({ run, session, prompt, model, permissionMode, sys, io });
+    runOmp({ run, session, prompt, model, effort, permissionMode, sys, io });
   }
 
   #askPermission(sessionId, run, toolName, input, signal, suggestions) {
