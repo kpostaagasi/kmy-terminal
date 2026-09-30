@@ -115,13 +115,16 @@ export function toolLabel(name) {
 const text = (content) => (Array.isArray(content) ? content.map((c) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n') : String(content ?? ''));
 
 // io: { record, emit, jobs, ask(tool, input, signal, canAlways) → Promise<{behavior, updatedInput, updatedPermissions}>, setSdkSession, setCtxWindow, contextNote(), end() }
-export function runOmp({ run, session, prompt, model, permissionMode, sys, io }, fresh = false) {
+export function runOmp({ run, session, prompt, model, effort, permissionMode, sys, io }, fresh = false) {
   try { ensureOmpMcp(); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
   const approval = permissionMode === 'bypassPermissions' ? 'yolo' : permissionMode === 'acceptEdits' ? 'write' : 'always-ask';
   const plan = permissionMode === 'plan';
   const resume = !fresh && session.sdk_session_id;
   const args = ['--mode', 'rpc-ui', '--approval-mode', approval, '--append-system-prompt', sys];
   if (model) args.push('--model', model);
+  // Düşünme seviyesi: omp'de --thinking. Geçersiz değer süreci hata koduyla düşürürdü;
+  // "minimal"/"off" gibi arayüzde görünmeyen değerler de gelebilir, hepsini süzüyoruz.
+  if (effort && /^(off|minimal|low|medium|high|xhigh|max|auto)$/.test(effort)) args.push('--thinking', effort);
   if (resume) args.push('--resume', session.sdk_session_id);
 
   const started = Date.now();
@@ -278,7 +281,7 @@ export function runOmp({ run, session, prompt, model, permissionMode, sys, io },
     if (!st.ready && resume && /not found/i.test(stderr) && !run.abort.signal.aborted) {
       console.error('[omp] oturum bulunamadı, yeni oturum açılıyor:', session.sdk_session_id);
       io.emit('notice', { message: 'omp oturumu bulunamadı; önceki konuşma özetiyle yeni oturum açıldı.' });
-      return runOmp({ run, session, prompt: io.contextNote() + prompt, model, permissionMode, sys, io }, true);
+      return runOmp({ run, session, prompt: io.contextNote() + prompt, model, effort, permissionMode, sys, io }, true);
     }
     if (st.stopped || run.abort.signal.aborted) {
       io.record('stopped', { message: 'Kullanıcı durdurdu' });
