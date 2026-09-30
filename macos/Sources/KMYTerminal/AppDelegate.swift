@@ -24,7 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in self?.reallyQuit = true }
 
     if offerMoveToApplications() { return }
-    UNUserNotificationCenter.current().delegate = self
+    // Bildirim temsilcisi WebWindowController'da atanır (satır 199): bildirim düğmesine
+    // basıldığında eylemin sayfaya geri dönmesi gerekiyor, bunu yalnız o sınıf yapabilir.
+    // Burada atanırsa hemen ezilir ve aşağıdaki işleyiciler ölü kod olur.
     buildMenu()
     main = WebWindowController(url: nil, main: true)
     main.onClose = { [weak self] in self?.didCloseMain() }
@@ -144,18 +146,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     Gateway.shared.stopChild()
   }
 
-  // Uygulama öndeyken de bildirim göster
-  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-    completionHandler([.banner, .sound])
-  }
-
-  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-    main.showWindow(nil)
-    NSApp.activate(ignoringOtherApps: true)
-    completionHandler()
-  }
-
   // MARK: Menü çubuğu
+
   private func item(_ title: String, _ action: Selector?, _ key: String = "", _ mods: NSEvent.ModifierFlags = .command, target: AnyObject? = nil) -> NSMenuItem {
     let i = NSMenuItem(title: title, action: action, keyEquivalent: key)
     i.keyEquivalentModifierMask = mods

@@ -112,6 +112,13 @@ export default {
   'İzleme listenizdeki hisseler için bildirim yok': 'No disclosures for the stocks in your watchlist',
   'Bildirim yok': 'No disclosures',
   'Daha fazla yükle ({n})': 'Load more ({n})',
+  // KAP görünüm kipleri (sıralama, gün gruplaması, okunmamış süzgeci) ve sembol kipi
+  'TARİH': 'DATE',
+  'SİNYALE': 'SIGNAL',
+  'GÜNLÜK': 'DAILY',
+  'OKUNMAMIŞ': 'UNREAD',
+  'Okunmamış bildirim yok': 'No unread disclosures',
+  'Sembol kipini kaldır': 'Clear symbol lock',
   'Şu KAP bildirimini analiz et (id {id}; tam metin için get_kap_detail aracını kullan):': 'Analyze this KAP disclosure (id {id}; use the get_kap_detail tool for the full text):',
   'Şirket: {company} ({stocks})': 'Company: {company} ({stocks})',
   'Konu: {subject}': 'Subject: {subject}',

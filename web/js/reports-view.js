@@ -8,7 +8,7 @@ const EMPTY_PDF = `<div class="empty" style="margin:auto">${t('Raporlar sekmesin
 const ALL_BROKERS = `<option value="">${t('Tüm kurumlar')}</option>`;
 root.innerHTML = `<div class="reports">
   <div class="report-list">
-    <div class="panel-head"><span>${t('Raporlar')}</span><div class="head-actions"><button class="icon-btn sm" id="rUpload" title="${t('Kurum raporu veya PDF yükle')}">⇪</button><button class="icon-btn sm" id="rRefresh" title="${t('Yenile')}">↻</button></div></div>
+    <div class="panel-head"><span>${t('Raporlar')}</span><div class="head-actions"><button class="symlock" id="rLock" hidden title="${t('Sembol kipini kaldır')}"><span></span><span class="tab-x">✕</span></button><button class="icon-btn sm" id="rUpload" title="${t('Kurum raporu veya PDF yükle')}">⇪</button><button class="icon-btn sm" id="rRefresh" title="${t('Yenile')}">↻</button></div></div>
     <div class="seg" id="rKind" style="margin:8px 8px 0;display:flex"><button data-k="akis" style="flex:1" title="${t('Aracı kurumların yeni yayımladığı şirket raporları')}">${t('Akış')}</button><button data-k="all" style="flex:1">${t('Arşiv')}</button><button data-k="ajan" style="flex:1">${t('Asistan')}</button><button data-k="kurum" style="flex:1">${t('Kurum')}</button></div>
     <div id="feedBox" hidden>
       <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
@@ -222,6 +222,18 @@ $('#fBroker').onchange = loadFeed;
 on('ws:research.updated', () => { if (kind === 'akis' && root.classList.contains('active')) loadFeed(); });
 $('#feedList').addEventListener('click', (e) => { if (e.target.closest('#fMore')) loadFeed(true); });
 on('research:symbol', (s) => { kind = 'akis'; localSet('reportKind', kind); $('#fSym').value = s; emit('rtab', 'reports'); draw(); });
+// Sembol kipi: kap.js seçilen sembolü yayınlar, akış ona kilitlenir (aynı sembol süzgeci, 200'er sayfalama).
+// Sekme pasifken de güncellenir; kullanıcı Raporlar'a geçince hazır bekler.
+const rLock = $('#rLock');
+on('symlock', (sym) => {
+  if ($('#fSym').value === (sym || '')) return;
+  $('#fSym').value = sym || '';
+  rLock.hidden = !sym;
+  if (sym) rLock.firstElementChild.textContent = sym;
+  draw();
+});
+// Rozet kilidi kap.js'de çözer; iki sekme de aynı kip durumunu paylaşır.
+$('#rLock').onclick = () => emit('symlock:off');
 $('#rFilter').addEventListener('input', debounce(draw, 150));
 $('#rBroker').onchange = draw;
 $('#rRefresh').onclick = load;

@@ -54,18 +54,35 @@ export function defaultModels() {
   const omp = readFile(path.join(h, '.omp', 'agent', 'config.yml')).match(/modelRoles:\s*\n(?:\s+\w+:.*\n)*?\s+default:\s*(\S+)/)?.[1]?.replace(/:[a-z]+$/, '') || null;
   return { claude: normClaude(claude) || 'claude-opus-5-5', codex, omp };
 }
-const pretty = (id) => id.replace(/^gpt/i, 'GPT').replace(/-(\w)/g, (_, c) => ` ${c.toUpperCase()}`).replace(/^GPT /, 'GPT-');
+// Model etiketi tek yerden üretilir: sağlayıcı öneki (`openai-codex/gpt-5.5`) atılır,
+// kalan son segment okunur biçime çevrilir. `id` asla değişmez — settings.model,
+// settings.ompModel ve codexModel kayıtlı değerlerini bu id'ler eşler.
+const PREFIX_NAME = { openai: 'OpenAI', 'openai-codex': 'OpenAI', 'xai-oauth': 'xAI', xai: 'xAI', 'opencode-zen': 'openCode', openrouter: 'openRouter', anthropic: 'Anthropic', google: 'Google' };
+// omp alt grubu sağlayıcı önekinden türetilir (bilinmiyorsa null → tek grupta kalır)
+const modelGroup = (id) => {
+  const p = String(id || '').split('/');
+  return p.length > 1 ? PREFIX_NAME[p.slice(0, -1).join('/')] || PREFIX_NAME[p[0]] || null : null;
+};
+function modelLabel(id, name) {
+  const s = String(id || '');
+  const clean = (x) => String(x || '').replace(/\s*\([^()]*\)\s*$/, '').trim();
+  // omp çoğu modele zaten insan okunur ad veriyor ("GPT-5.5", "Grok 4.20 (Reasoning)")
+  const given = clean(name);
+  if (given && !given.includes('/')) return given;
+  return (clean(s.slice(s.lastIndexOf('/') + 1)) || s)
+    .replace(/\bgpt/gi, 'GPT').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').replace(/^./, (c) => c.toUpperCase()).trim();
+}
 const buildProviderModels = (omp) => {
   const d = defaultModels();
-  const codex = d.codex ? [{ id: d.codex, label: pretty(d.codex) }] : [];
+  const codex = d.codex ? [{ id: d.codex, label: modelLabel(d.codex), provider: 'codex', group: modelGroup(d.codex) }] : [];
   // omp: `models --json` yüzlerce modeli elediği için kullanıcının kendi varsayılanı
   // listede çıkmayabilir; seçicide görünmezse o modelle konuşmak imkânsız.
-  let list = (omp || []).filter((x) => x.id);
+  let list = (omp || []).filter((x) => x.id).map((x) => ({ ...x, label: modelLabel(x.id, x.label), provider: 'omp', group: modelGroup(x.id) }));
   // Elle eklenen varsayılanın metadatasını tam katalogdan al: openrouter gibi 40'ın üstünde
   // modeli olan sağlayıcılar seçiciye girmiyor, ama düşünme seviyeleri yine de gerekiyor.
   if (d.omp && !list.some((m) => m.id === d.omp)) {
     const meta = ompModelMeta(d.omp);
-    list = [{ id: d.omp, label: `${pretty(d.omp)} (varsayılan)`, contextWindow: meta?.contextWindow || null, thinking: meta?.thinking || null }, ...list];
+    list = [{ id: d.omp, label: modelLabel(d.omp), provider: 'omp', group: modelGroup(d.omp), contextWindow: meta?.contextWindow || null, thinking: meta?.thinking || null }, ...list];
   }
   return { codex, ...(PROVIDERS.omp ? { omp: list } : {}) };
 };
@@ -78,7 +95,7 @@ export const MODELS = [
   { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
   { id: 'claude-fable-5-1', label: 'Claude Fable 5.1' },
   { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-];
+].map((x) => ({ ...x, label: modelLabel(x.id, x.label), provider: 'claude' }));
 export const CODEX_MODELS = [];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const PERMISSION_MODES = {

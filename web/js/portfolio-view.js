@@ -12,6 +12,9 @@ let holdFilter = '';
 let riskRange = localGet('pfRange', { from: '', to: '' });
 let benchOn = new Set(localGet('pfBench', ['XU100', 'USDTRY', 'GRAM']));
 
+let riskTab = localGet('pfRiskTab', 'perf');
+let taxYear = '';
+
 // Sunucudan gelen dağılım anahtarları (varlık sınıfı, sektör, ülke, "NAKİT USD" gibi nakit satırları) yalnız görüntüde çevrilir
 const keyLabel = (k) => tx(k);
 const trItems = (items) => (items || []).map((x) => ({ ...x, key: keyLabel(x.key) }));
@@ -46,7 +49,17 @@ function emptyState() {
 
 function kpi(l, v, s = '', c = '', title = '') { return `<div class="card kpi" ${title ? `title="${esc(title)}"` : ''}><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`; }
 function warningsHtml() {
-  return data?.warnings?.length ? `<div class="card warn" style="margin-bottom:12px">${data.warnings.map((w) => `<div>⚠ ${esc(tx(w))}</div>`).join('')}</div>` : '';
+  // audit denetimi yeni kaynaktır: aynı olayı taşıyan eski uyarı ikinci kez gösterilmez
+  const a = data?.audit || [];
+  const w = (data?.warnings || []).filter((x) => !a.some((y) => y.detail === x));
+  return w.length ? `<div class="card warn" style="margin-bottom:12px">${w.map((x) => `<div>⚠ ${esc(tx(x))}</div>`).join('')}</div>` : '';
+}
+const SEV_ICON = { kritik: '🔴', uyari: '⚠️', bilgi: 'ℹ️' };
+const SEV_CLS = { kritik: 'down', uyari: '', bilgi: 'dim' };
+function auditHtml() {
+  const a = data?.audit || [];
+  if (!a.length) return '';
+  return `<div class="card warn" style="margin-bottom:12px"><b>${t('Bütünlük denetimi')}</b>${a.map((x) => `<div class="${SEV_CLS[x.severity] || ''}">${SEV_ICON[x.severity] || '⚠'} <b>${esc(tx(x.title))}</b> — ${esc(tx(x.detail))}${x.action ? ` <span class="ghost">${esc(t(x.action))}</span>` : ''}</div>`).join('')}</div>`;
 }
 
 // ── Özet ─────────────────────────────────────────
@@ -56,12 +69,12 @@ function renderSummary() {
   const cashByCur = {};
   for (const c of data.cash) cashByCur[c.currency] = (cashByCur[c.currency] || 0) + c.amount;
   const cashTip = Object.entries(cashByCur).map(([c, a]) => `${money(a, c, 2)}`).join(' · ');
-  body.innerHTML = `${warningsHtml()}
+  body.innerHTML = `${warningsHtml()}${auditHtml()}
   <div class="grid g4">
     ${kpi(t('Toplam değer'), money(tot.value), tot.valueUSD ? `≈ ${money(tot.valueUSD, 'USD')}` : '')}
     ${kpi(t('Günlük değişim'), money(tot.dayChange), t('{pct} · kur etkisi dahil', { pct: pct(tot.dayChangePct) }), cls(tot.dayChange))}
     ${kpi(t('Açık pozisyon K/Z'), money(tot.unrealized), pct(tot.unrealizedPct), cls(tot.unrealized))}
-    ${kpi(t('Toplam K/Z'), money(tot.totalPnl), t('{pct} · net yatırılan {v}', { pct: pct(tot.totalPnlPct), v: money(tot.netInvested) }), cls(tot.totalPnl), t('Toplam değer − net yatırılan (nakit takibi açıksa); değilse açık + gerçekleşen K/Z + gelirler'))}
+    ${kpi(`${t('Toplam K/Z')}${tot.netInvestedEstimated ? ' <span class="down" title="' + esc(t('Net yatırım maliyet esasıyla hesaplandı; başlangıç nakdi kayıtlı değil.')) + '">⚠</span>' : ''}`, money(tot.totalPnl), t('{pct} · net yatırılan {v}', { pct: pct(tot.totalPnlPct), v: money(tot.netInvested) }) + (tot.netInvestedEstimated ? ` · <span class="down">${esc(t('⚠ Net yatırım maliyet esasıyla hesaplandı; başlangıç nakdi kayıtlı değil.'))}</span>` : ''), cls(tot.totalPnl), t('Toplam değer − net yatırılan (nakit takibi açıksa); değilse açık + gerçekleşen K/Z + gelirler'))}
     ${kpi(t('Maliyet'), money(tot.cost), t('{n} pozisyon', { n: tot.positionsCount }))}
     ${kpi(t('Gerçekleşen K/Z'), money(tot.realized), t('komisyon {v}', { v: money(tot.commissions) }), cls(tot.realized))}
     ${kpi(t('Temettü ve faiz'), money(tot.dividends + tot.interest), `${t('temettü {d} · faiz {i}', { d: money(tot.dividends), i: money(tot.interest) })}${tot.staking ? ` · staking ${money(tot.staking)}` : ''}`)}
@@ -351,7 +364,9 @@ async function renderRisk() {
       <span class="mini-head" style="margin:0">${t('Dönem')}</span>
       <input type="date" id="rFrom" value="${esc(riskRange.from)}" title="${esc(t('Başlangıç tarihi'))}"><span>–</span><input type="date" id="rTo" value="${esc(riskRange.to)}" title="${esc(t('Bitiş tarihi'))}">
       <span class="seg" id="rQuick"><button data-q="all">${t('Tümü')}</button><button data-q="ytd" title="${esc(t('Yılbaşından beri'))}">${t('YBB')}</button><button data-q="1y">${t('1Y')}</button><button data-q="6m">${t('6A')}</button><button data-q="3m">${t('3A')}</button></span>
-      <button class="btn sec" id="rApply">${t('Uygula')}</button></div></div><div id="riskBody"><div class="skeleton" style="height:200px"></div></div>`;
+      <button class="btn sec" id="rApply">${t('Uygula')}</button>
+      <span class="seg" id="rTab"><button data-r="perf" class="${riskTab === 'perf' ? 'active' : ''}">${t('Performans')}</button><button data-r="tax" class="${riskTab === 'tax' ? 'active' : ''}">${t('Beyanname')}</button></span></div>
+    <div class="row dim" style="margin-top:6px">${esc(t('Yıllık satış stopajı, komisyon ve BSMV dökümü beyanname için ayrı sütunlardan gelir.'))}</div></div><div id="riskBody"><div class="skeleton" style="height:200px"></div></div>`;
   const setRange = (from, to) => { riskRange = { from, to }; localSet('pfRange', riskRange); renderRisk(); };
   $('#rApply').onclick = () => setRange($('#rFrom').value, $('#rTo').value);
   $('#rQuick').onclick = (e) => {
@@ -361,10 +376,15 @@ async function renderRisk() {
     const map = { all: ['', ''], ytd: [`${d.getFullYear()}-01-01`, ''], '1y': [iso(new Date(Date.now() - 365 * 864e5)), ''], '6m': [iso(new Date(Date.now() - 182 * 864e5)), ''], '3m': [iso(new Date(Date.now() - 91 * 864e5)), ''] };
     setRange(...map[b.dataset.q]);
   };
+  $('#rTab').onclick = (e) => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    riskTab = b.dataset.r; localSet('pfRiskTab', riskTab); renderRisk();
+  };
   let r;
   try { r = await getRisk(riskRange, true); } catch (e) { $('#riskBody').innerHTML = `<div class="card empty">${esc(tx(e.message))}</div>`; return; }
   if (tab !== 'risk') return;
   const rb = $('#riskBody');
+  if (riskTab === 'tax') { renderTaxBody(rb, r); return; }
   if (!r.enough) { rb.innerHTML = `<div class="card empty">${t('Seçili dönem için yeterli veri yok. Risk metrikleri için işlem geçmişi ya da içe aktarılmış geçmiş değerler gerekiyor.')}</div>`; return; }
   const m = r.metrics;
   const f2 = (x) => (x == null ? '—' : num(x, 2));
@@ -409,6 +429,33 @@ async function renderRisk() {
       const yr = vals.filter((v) => v != null).reduce((a, v) => a * (1 + v / 100), 1) - 1;
       return `<div class="h">${y}</div>${vals.map(cell).join('')}${cell(yr * 100)}`;
     }).join('')}</div></div>`;
+}
+
+// ── Risk ▸ Beyanname (yıllık kâr-zarar dökümü) ────────
+const TAX_ROWS = [
+  ['Brüt satış', 'grossSales', 0], ['Alış maliyeti', 'buyCost', 0], ['Gerçekleşen K/Z (net)', 'realized', 1],
+  ['Satış stopajı', 'tax', 0], ['Komisyon', 'commission', 0], ['BSMV', 'bsmv', 0], ['Net nakit çıkışı', 'netOut', 0],
+  ['Temettü brüt', 'dividendGross', 0], ['Temettü stopajı', 'dividendTax', 0],
+];
+function renderTaxBody(rb, r) {
+  const ys = r.tax?.years || [];
+  if (!ys.length) { rb.innerHTML = `<div class="card empty">${esc(t('Bu dönemde satış ya da temettü kaydı yok.'))}</div>`; return; }
+  const sel = () => ys.find((y) => y.year === taxYear) || ys.at(-1);
+  const draw = () => {
+    const y = sel();
+    rb.innerHTML = `<div class="card"><h3>${esc(t('Yıllık kâr-zarar / beyanname'))}</h3>
+      <div class="table-wrap"><table class="t"><thead><tr><th>${esc(t('Kalem'))}</th>${ys.map((z) => `<th class="r"><span class="click" data-y="${z.year}" style="${z.year === y.year ? 'font-weight:700' : ''}">${z.year}</span></th>`).join('')}</tr></thead>
+      <tbody>${TAX_ROWS.map(([l, k, signed]) => `<tr><td>${esc(t(l))}</td>${ys.map((z) => `<td class="r num ${signed ? cls(z[k]) : ''}">${money(z[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <div class="strip" style="margin-top:10px"><b>${esc(t('Bu yılki toplam'))} (${y.year})</b> · ${esc(t('brüt satış {a}', { a: money(y.grossSales) }))} · ${esc(t('alış maliyeti {a}', { a: money(y.buyCost) }))} · <span class="${cls(y.realized)}">${esc(t('gerçekleşen K/Z {a}', { a: money(y.realized) }))}</span> · ${esc(t('stopaj {a}', { a: money(y.tax) }))} · ${esc(t('komisyon {a}', { a: money(y.commission) }))} · ${esc(t('BSMV {a}', { a: money(y.bsmv) }))} · <b>${esc(t('net nakit çıkışı {a}', { a: money(y.netOut) }))}</b> · ${esc(t('temettü {a} / stopaj {b}', { a: money(y.dividendGross), b: money(y.dividendTax) }))}</div></div>
+      <div class="grid g4" style="margin-top:12px">
+        ${kpi(t('Brüt satış'), money(y.grossSales), y.year)}
+        ${kpi(t('Gerçekleşen K/Z (net)'), money(y.realized), y.realizedPct == null ? y.year : pct(y.realizedPct), cls(y.realized))}
+        ${kpi(t('Vergi toplamı'), money(y.tax + y.bsmv), t('stopaj {a} · BSMV {b}', { a: money(y.tax), b: money(y.bsmv) }))}
+        ${kpi(t('Net nakit çıkışı'), money(y.netOut), t('komisyon düşülmüş {a}', { a: money(y.commission) }))}
+      </div>`;
+    $$('[data-y]', rb).forEach((b) => { b.onclick = () => { taxYear = b.dataset.y; draw(); }; });
+  };
+  draw();
 }
 
 // ── İçe / dışa aktarma ────────────────────────────
@@ -566,6 +613,8 @@ export async function openTxModal(init = {}) {
       <div class="field" data-f="qty"><label id="qtyLbl">${t('Miktar')}</label><input type="number" step="any" name="quantity" value="${v.quantity ?? ''}"></div>
       <div class="field" data-f="price"><label id="priceLbl">${t('Birim fiyat')}</label><input type="number" step="any" name="price" value="${v.price != null ? Math.round(v.price * 1e6) / 1e6 : ''}"></div>
       <div class="field" data-f="fee"><label id="feeLbl">${t('Komisyon')}</label><input type="number" step="any" name="fee" value="${v.fee ?? 0}"></div>
+      <div class="field" data-f="tax"><label>${t('Stopaj')}</label><input type="number" step="any" name="tax" value="${v.tax ?? 0}"></div>
+      <div class="field" data-f="other"><label>${t('BSMV / diğer ücret')}</label><input type="number" step="any" name="other_fee" value="${v.other_fee ?? 0}"></div>
       <div class="field" data-f="cur"><label id="curLbl">${t('Para birimi')}</label><select name="currency"><option value="">${t('Otomatik')}</option>${CUR.map((c) => `<option ${v.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
       <div class="field" data-f="fx"><label>${t('İşlem günü kuru (₺)')}</label><input type="number" step="any" name="fx_rate" value="${v.currency && v.currency !== 'TRY' ? v.fx_rate ?? '' : ''}" placeholder="${esc(t('Boş bırakılırsa işlem günü TCMB döviz satış kuru'))}"></div>
       <div class="field" data-f="toCur"><label>${t('Hedef para birimi')}</label><select name="to_currency">${CUR.map((c) => `<option ${v.to_currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
@@ -614,15 +663,17 @@ export async function openTxModal(init = {}) {
     $('#symLbl', f).textContent = ty === 'TRANSFER' ? t('Sembol (nakit için boş bırakın)') : ty === 'INTEREST' ? t('Sembol (isteğe bağlı)') : t('Sembol');
     $('#qtyLbl', f).textContent = ty === 'SPLIT' ? t('Bölünme oranı') : t('Miktar (adet)');
     $('#priceLbl', f).textContent = amount || (ty === 'TRANSFER' && !f.symbol.value) ? (ty === 'DIVIDEND' ? t('Brüt tutar') : ty === 'FX_CONVERT' ? t('Kaynak tutar') : t('Tutar')) : ty === 'STAKING' ? t('Birim değer (isteğe bağlı)') : t('Birim fiyat');
-    $('#feeLbl', f).textContent = ty === 'DIVIDEND' ? t('Stopaj / kesinti') : t('Komisyon');
+    $('#feeLbl', f).textContent = t('Komisyon');
+    show('tax', ['SELL', 'DIVIDEND'].includes(ty)); show('other', ty === 'SELL');
     $('#curLbl', f).textContent = ty === 'FX_CONVERT' ? t('Kaynak para birimi') : t('Para birimi');
     $('#platLbl', f).textContent = ty === 'TRANSFER' ? t('Kaynak platform') : t('Platform');
     const q = Number(f.quantity.value || 0), p = Number(f.price.value || 0), fee = Number(f.fee.value || 0);
     const curTxt = f.currency.value || '';
     let total = '';
-    if (['BUY', 'SELL'].includes(ty) && q && p) total = t('Toplam: {v} {cur}', { v: num(q * p + (ty === 'BUY' ? fee : -fee), 2), cur: curTxt });
+    const tax = Number(f.tax?.value || 0), other = Number(f.other_fee?.value || 0);
+    if (['BUY', 'SELL'].includes(ty) && q && p) total = t('Toplam: {v} {cur}', { v: num(q * p + (ty === 'BUY' ? fee + tax + other : -(fee + tax + other)), 2), cur: curTxt });
     if (ty === 'DRIP' && q && p) total = t('Yeniden yatırılan temettü: {v} {cur}', { v: num(q * p, 2), cur: curTxt });
-    if (ty === 'DIVIDEND' && p) total = t('Net temettü: {v} {cur}', { v: num(p - fee, 2), cur: curTxt });
+    if (ty === 'DIVIDEND' && p) total = t('Net temettü: {v} {cur}', { v: num(p - fee - tax, 2), cur: curTxt });
     if (ty === 'FX_CONVERT' && p && Number(f.to_amount.value)) total = t('Uygulanan kur: 1 {to} = {rate} {from}', { to: f.to_currency.value, rate: num(p / Number(f.to_amount.value), 4), from: f.currency.value || 'TRY' });
     $('#txTotal', f).textContent = total.trim();
     // Platform nakit bakiyesi ve yetersiz bakiye uyarısı (nakit takibi açıksa)
@@ -643,7 +694,7 @@ export async function openTxModal(init = {}) {
   });
   $('#txSave', m.el).onclick = async () => {
     const o = Object.fromEntries(new FormData(f));
-    for (const k of ['quantity', 'price', 'fee', 'fx_rate', 'to_amount']) o[k] = o[k] === '' || o[k] == null ? undefined : Number(o[k]);
+    for (const k of ['quantity', 'price', 'fee', 'tax', 'other_fee', 'fx_rate', 'to_amount']) o[k] = o[k] === '' || o[k] == null ? undefined : Number(o[k]);
     for (const k of ['currency', 'asset_type', 'to_currency', 'to_platform', 'symbol', 'platform', 'strategy']) if (!o[k]) delete o[k];
     if (o.type !== 'FX_CONVERT') { delete o.to_currency; delete o.to_amount; }
     if (o.type !== 'TRANSFER') delete o.to_platform;

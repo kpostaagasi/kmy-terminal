@@ -2,6 +2,7 @@
 // Kaynak: TEFAS'ın kendi sitesinin kullandığı herkese açık JSON arayüzü (www.tefas.gov.tr/api/funds/*).
 // Fon fiyatları günde bir kez (akşam) açıklanır; önbellek buna göre tutulur. İstekler sıraya alınır (TEFAS 429 döner).
 import { cacheGet, cachePut } from './db.js';
+import { trFold, trScore } from './fold.js';
 
 const BASE = 'https://www.tefas.gov.tr/api/funds';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36';
@@ -52,14 +53,17 @@ export async function fundName(code) {
   return hit?.name || null;
 }
 
-/** Fon adıyla / koduyla arama (yerel liste üzerinden) */
+/** Fon adıyla / koduyla arama (yerel liste üzerinden). Puan evrenle aynı ölçekte. */
 export async function searchFunds(q, limit = 8) {
-  const needle = String(q || '').toLocaleUpperCase('tr').trim();
+  const needle = trFold(q).trim();
   if (needle.length < 2) return [];
   const list = await fundList().catch(() => []);
-  const exact = list.filter((x) => x.code === needle);
-  const rest = list.filter((x) => x.code !== needle && (x.code.startsWith(needle) || x.name.toLocaleUpperCase('tr').includes(needle)));
-  return [...exact, ...rest].slice(0, limit);
+  const out = [];
+  for (const x of list) {
+    const score = trScore(x.code, x.name, needle);
+    if (score) out.push({ ...x, score });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 /** Geçmiş birim fiyatlar (eskiden yeniye): [{ t, c }] */

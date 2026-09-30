@@ -111,6 +111,10 @@ export default {
   '{n} sn çalıştı': 'Ran for {n}s',
   '{n} sn': '{n}s',
   '{n} araç': (v) => pl(v.n, 'tool', 'tools'),
+  '×{n} daha': (v) => `+${v.n} more`,
+  'Girdi': 'Input',
+  '{n} satır daha': (v) => pl(v.n, 'more row', 'more rows'),
+  'Değer': 'Value',
   '{n} hata': (v) => pl(v.n, 'error', 'errors'),
   'Görevler ({done}/{total})': 'Tasks ({done}/{total})',
   'Görev': 'Task',
@@ -148,6 +152,30 @@ export default {
   'Atla': 'Skip',
   'Atlandı': 'Skipped',
   'Her soru için bir seçim yapın veya cevap yazın': 'Pick an option or type an answer for each question',
+
+  // Tur bitişi bildirimleri (arka plan işleri, izin ve soru istekleri)
+  'Asistan bitti: {title}': 'The assistant finished: {title}',
+  'Tamamlandı · {info}': 'Done · {info}',
+  'Sonucu aç': 'Open result',
+  'Sessize al': 'Dismiss',
+  'Sistem bildirimleri kapalı: biten işler yalnız uygulama içinde görünür. Sistem Ayarları › Bildirimler › kmy terminal':
+    'System notifications are off: finished jobs are only visible inside the app. System Settings › Notifications › kmy terminal',
+  'Uygulama köprüsüne mesaj iletilemedi': "Couldn't reach the app bridge",
+
+  // Nereye harcadım
+  'Nereye harcadım': 'Where the money went',
+  'Toplam (tüm oturumlar): {cost}': 'Total (all sessions): {cost}',
+  '7 gün': '7 days',
+  '30 gün': '30 days',
+  'Son {n} gün: {cost}': 'Last {n} days: {cost}',
+  'Son hareket': 'Last activity',
+  'Maliyet kaydı olan oturum yok.': 'No sessions with recorded cost.',
+  'Günlük dağılım oturumların son güncelleme tarihine göre hesaplanır; tur sayısı yalnız açık oturum için kesindir.':
+    'The daily breakdown is derived from each session\'s last update time; the turn count is only exact for the open session.',
+
+  // Bağlam göstergesi
+  'bilinmiyor': 'unknown',
+  'Son turün bağlam kullanımı kayıtlı değil': "The last turn's context usage isn't recorded",
 
   // Çalışma göstergesi ve bağlam
   'Çalışıyor…': 'Working…',
@@ -290,6 +318,8 @@ export default {
     'Screen context (selected symbol, open report or KAP disclosure) will be added to messages',
   'Ekran bağlamı kapatıldı': 'Screen context turned off',
   'Modeller': 'Models',
+  'Seçili': 'Selected',
+  'Bazı modellerin adı aynı; ayırt etmek için /model komutuyla ad yazın': 'Some models share a name; type a name with the /model command to pick one',
   'varsayılan': 'default',
   'Kullanım: {usage}': 'Usage: {usage}',
   'Düşünme seviyesi: {level}': 'Thinking level: {level}',

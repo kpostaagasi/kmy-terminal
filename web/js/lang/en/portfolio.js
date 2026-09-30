@@ -271,11 +271,54 @@ export default {
   'Yıl': 'Year',
   'Yıllık': 'Full year',
 
+  // ── Bütünlük denetimi (0.14.1) ──
+  'Bütünlük denetimi': 'Integrity audit',
+  'Net yatırım maliyet esasıyla hesaplandı; başlangıç nakdi kayıtlı değil.':
+    'Net investment is computed on a cost basis; the starting cash is not recorded.',
+  '⚠ Net yatırım maliyet esasıyla hesaplandı; başlangıç nakdi kayıtlı değil.':
+    '⚠ Net investment computed on a cost basis; starting cash not recorded',
+  'Nakit girişi ekle': 'Add cash deposit',
+  'Fiyat güncelle': 'Update price',
+  'Kur kaydı ekle': 'Add FX rate',
+  'Geçmiş değer ekle': 'Add past value',
+  'Transfer miktarını düzelt': 'Fix transfer quantity',
+  'İşlem kaydını düzelt': 'Fix transaction',
+  'BSMV / diğer ücret': 'BSMV / other fee',
+
+  // ── Risk ▸ Beyanname ──
+  'Performans': 'Performance',
+  'Beyanname': 'Tax report',
+  'Yıllık satış stopajı, komisyon ve BSMV dökümü beyanname için ayrı sütunlardan gelir.':
+    'Annual withholding, commission and BSMV breakdown comes from the dedicated columns.',
+  'Bu dönemde satış ya da temettü kaydı yok.': 'No sale or dividend record in this period.',
+  'Yıllık kâr-zarar / beyanname': 'Annual P&L / tax report',
+  'Kalem': 'Item',
+  'Brüt satış': 'Gross sales',
+  'Alış maliyeti': 'Cost of purchases',
+  'Gerçekleşen K/Z (net)': 'Realized P&L (net)',
+  'Satış stopajı': 'Withholding tax',
+  'BSMV': 'BSMV',
+  'Net nakit çıkışı': 'Net cash out',
+  'Temettü brüt': 'Gross dividend',
+  'Temettü stopajı': 'Dividend withholding',
+  'Bu yılki toplam': 'This year total',
+  'brüt satış {a}': 'gross sales {a}',
+  'alış maliyeti {a}': 'cost of purchases {a}',
+  'gerçekleşen K/Z {a}': 'realized P&L {a}',
+  'stopaj {a}': 'withholding {a}',
+  'komisyon {a}': 'commission {a}',
+  'BSMV {a}': 'BSMV {a}',
+  'net nakit çıkışı {a}': 'net cash out {a}',
+  'temettü {a} / stopaj {b}': 'dividends {a} / withholding {b}',
+  'Vergi toplamı': 'Tax total',
+  'stopaj {a} · BSMV {b}': 'withholding {a} · BSMV {b}',
+  'komisyon düşülmüş {a}': 'after commission {a}',
+
   // ── İçe / dışa aktarma ──
   'İşlemleri CSV ile içe aktar': 'Import transactions from CSV',
   'Sütun başlıkları Türkçe ya da İngilizce olabilir: {cols}.': 'Column headers can be in English or Turkish: {cols}.',
   'tarih, işlem, sembol, adet, fiyat, komisyon, para birimi, kur, platform, hedef platform, hedef para birimi, hedef tutar, varlık tipi, strateji, not':
-    'date, type, symbol, quantity, price, fee, currency, fx_rate, platform, to_platform, to_currency, to_amount, asset_type, strategy, notes',
+    'date, type, symbol, quantity, price, fee, tax, other_fee, currency, fx_rate, platform, to_platform, to_currency, to_amount, asset_type, strategy, notes',
   'İşlem türleri: Alış, Satış, Temettü, DRIP, Bölünme/Bedelsiz, Maliyetsiz, Staking, Transfer, Döviz çevrimi, Yatırma, Çekme, Masraf, Faiz. İngilizce işlem kodları da tanınır (CASH_IN, CASH_OUT, CASH_DIVIDEND, COMMISSION…).':
     'Transaction types: buy, sell, dividend, drip, split, free, staking, transfer, fx_convert, deposit, withdraw, fee, interest. Turkish names and broker codes (CASH_IN, CASH_OUT, CASH_DIVIDEND, COMMISSION…) also work.',
   'Sayılar 1.234,56 ya da 1234.56; tarihler GG.AA.YYYY ya da YYYY-AA-GG biçiminde olabilir.':

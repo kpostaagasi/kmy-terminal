@@ -343,6 +343,13 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     showView(['agent', 'market', 'portfolio'][Number(e.key) - 1]);
   }
+  // ⌘\ sağ paneli aç/kapat (macOS menüsünde de tanımlı); ⇧⌘\ KAP ↔ Raporlar
+  if ((e.metaKey || e.ctrlKey) && (e.key === '\\' || e.code === 'Backslash')) {
+    e.preventDefault();
+    const cur = $('.right-tabs button.active')?.dataset.rtab;
+    if (e.shiftKey) showRightTab(cur === 'reports' ? 'kap' : 'reports');
+    else toggleRight();
+  }
 });
 
 // ── Başlangıç ─────────────────────────────────────

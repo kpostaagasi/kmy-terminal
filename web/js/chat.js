@@ -24,7 +24,7 @@ root.innerHTML = `
         <label class="cm-chip model" title="${t('Model')}"><select id="optModel" aria-label="${t('Model')}"></select></label>
         <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
         <span class="spacer"></span>
-        <span class="cm-stat">${t('Maliyet')} <b id="stCost">$0,00</b></span>
+        <span class="cm-stat" id="stCostBtn" role="button" tabindex="0" style="cursor:pointer" title="${t('Nereye harcadım')}">${t('Maliyet')} <b id="stCost">$0,00</b></span>
         <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
         <span class="cm-stat" title="${t('Model bağlam kullanımı')}">ctx <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
       </div>
@@ -89,7 +89,8 @@ function toolName(n) {
 export function toolLabel(n) { const k = toolName(n); const l = TOOL_LABELS[k] || TOOL_LABELS[n]; return l ? t(l) : k; }
 function toolSummary(i) {
   if (!i) return '';
-  return i.command || i.symbol || i.symbols?.join(', ') || i.query || i.url || i.file_path || i.pattern || i.title || i.description || i.skill || i.id || i.prompt?.slice(0, 80) || '';
+  // symbols araçtan bağımlı olarak dizi ya da tek metin geliyor; join diziye özgü
+  return i.command || i.symbol || (Array.isArray(i.symbols) ? i.symbols.join(', ') : i.symbols) || i.query || i.url || i.file_path || i.pattern || i.title || i.description || i.skill || i.id || i.prompt?.slice(0, 80) || '';
 }
 
 // Sağlayıcı adları: Claude (API maliyeti), Codex ve omp (abonelik / kendi hesabı)
@@ -127,6 +128,8 @@ async function openSession(id) {
   sessCost = s.cost_usd || 0;
   ctxWindow = s.contextWindow || null;
   const evs = s.events.map((e) => ({ type: e.kind, ...e.data, replay: true, ts: e.ts }));
+  // Canlı 'usage' olayı gelmeden oturum yeniden açılırsa gösterge '–'e düşüyordu; son kayıtlı turu geri yükle
+  for (let i = evs.length - 1; i >= 0; i--) if (evs[i].type === 'usage' && evs[i].ctx) { lastCtx = evs[i].ctx; ctxWindow = evs[i].window || ctxWindow; break; }
   if (evs.length > OLD_EVENTS_PAGE) {
     pendingEvents = evs.slice(0, evs.length - OLD_EVENTS_PAGE);
     const more = h(`<button class="ghost load-older">${t('Önceki mesajları yükle ({n})', { n: pendingEvents.length })}</button>`);
@@ -145,6 +148,8 @@ async function openSession(id) {
   scrollEnd(true);
 }
 on('agent:open', (id) => { emit('view', 'chat'); openSession(id); });
+// Menü çubuğu ve bildirim eylemleri bu olayı kullanır
+addEventListener('kmy:session', (e) => focusSession(String(e.detail || '')));
 on('chat:new', () => { if (!running) openSession(null); else toast(t('Asistan çalışıyor; önce durdurun (Esc)'), 'err'); });
 
 // Eski olayları başa ekle (kaydırma konumu korunur)
@@ -236,6 +241,37 @@ function exportChat(id = current) {
   const a = h('<a download></a>'); a.href = `/api/sessions/${id}/export`; a.click();
   toast(t('Sohbet JSON olarak indiriliyor'));
 }
+
+// ── Nereye harcadım ─────────────────────────────────
+// Yeni sunucu ucu yok: /api/sessions'taki oturum toplamları (cost_usd) ve updated_at tarihleriyle günlük dağılım türetilir.
+// Tur sayısı yalnız açık oturum için kesindir; olmayan yerde '–' gösterilir (sahte değer yok).
+function costPanel() {
+  const day = (n) => new Date(Date.now() - (n - 1) * 864e5).toISOString().slice(0, 10);
+  const byDay = new Map();
+  for (const s of sessions) { const d = String(s.updated_at || '').slice(0, 10); if (d) byDay.set(d, (byDay.get(d) || 0) + (s.cost_usd || 0)); }
+  const total = sessions.reduce((a, x) => a + (x.cost_usd || 0), 0);
+  const m = modal({ title: t('Nereye harcadım'), wide: true, body: `<div>
+    <div class="cm-top" style="border:0;padding:0 0 6px"><b>${esc(t('Toplam (tüm oturumlar): {cost}', { cost: `$${num(total, 2)}` }))}</b><span class="spacer"></span>
+      <span class="seg" id="cRange"><button data-n="7" class="active">${t('7 gün')}</button><button data-n="30">${t('30 gün')}</button></span></div>
+    <div id="cDays"></div><div id="cSess" class="table-wrap" style="max-height:320px"></div>
+    <div class="dim" style="margin-top:8px">${esc(t('Günlük dağılım oturumların son güncelleme tarihine göre hesaplanır; tur sayısı yalnız açık oturum için kesindir.'))}</div></div>` });
+  const rows = sessions.filter((x) => (x.cost_usd || 0) > 0 || x.id === current);
+  $('#cSess', m.el).innerHTML = rows.length
+    ? `<table class="t"><thead><tr><th>${t('Oturum')}</th><th>${t('Model')}</th><th class="r">${t('Tur')}</th><th class="r">${t('Maliyet')}</th><th class="r">${t('Son hareket')}</th></tr></thead><tbody>${rows.map((x) => `<tr class="click" data-s="${esc(x.id)}"><td>${esc(sessTitle(x))}</td><td class="dim">${esc(x.model || t('varsayılan'))}</td><td class="r">${x.id === current ? sessTurns : '–'}</td><td class="r">${x.cost_usd ? `$${num(x.cost_usd, 3)}` : t('abonelik')}</td><td class="r">${esc(dateTR(sqlDate(x.updated_at), true))}</td></tr>`).join('')}</tbody></table>`
+    : `<div class="dim" style="padding:12px">${esc(t('Maliyet kaydı olan oturum yok.'))}</div>`;
+  $$('[data-s]', m.el).forEach((r) => { r.onclick = () => { m.close(); openSession(r.dataset.s); }; });
+  const drawDays = (n) => {
+    const days = [];
+    for (let i = n - 1; i >= 0; i--) { const d = day(i + 1); const c = byDay.get(d) || 0; if (c) days.push([d, c]); }
+    const sum = days.reduce((a, [, c]) => a + c, 0), max = Math.max(...days.map(([, c]) => c), 0.0001);
+    $('#cDays', m.el).innerHTML = `<div class="dim" style="padding:4px 0">${esc(t('Son {n} gün: {cost}', { n, cost: `$${num(sum, 2)}` }))}</div>`
+      + (sum ? `<table class="t"><tbody>${days.reverse().map(([d, c]) => `<tr><td style="width:104px">${esc(dateTR(sqlDate(d), true))}</td><td><i style="display:block;height:8px;border-radius:2px;background:var(--accent);width:${Math.max(1, (c / max) * 100).toFixed(1)}%"></i></td><td class="r">$${num(c, 3)}</td></tr>`).join('')}</tbody></table>` : '');
+  };
+  drawDays(7);
+  $$('#cRange [data-n]', m.el).forEach((b) => b.onclick = () => { $$('#cRange [data-n]', m.el).forEach((x) => x.classList.toggle('active', x === b)); drawDays(Number(b.dataset.n)); });
+}
+$('#stCostBtn').onclick = costPanel;
+$('#stCostBtn').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); costPanel(); } };
 
 // ── Karşılama ve bağlama göre hızlı istemler ─────────────
 // Görünüme göre hızlı başlangıç istemleri (sohbet sağ panele taşındığında da geçerli)
@@ -374,7 +410,65 @@ function drawRun(run) {
   const busy = tools.some((x) => x.querySelector('.st .spinner'));
   const errs = tools.filter((x) => x.classList.contains('err')).length;
   const sec = Math.max(1, Math.round((Number(run.dataset.end) - Number(run.dataset.start)) / 1000));
-  $('.tr-t', run).innerHTML = `${busy && running ? `<span class="spinner"></span> ${t('çalışıyor')}` : t('{n} sn çalıştı', { n: sec })} <span class="caret">▸</span> · ${t('{n} araç', { n: tools.length })}${errs ? ` · <span class="down">${t('{n} hata', { n: errs })}</span>` : ''}`;
+  // Hangi araçlar çalıştı: tekrarlar sayıyla toplanır, en fazla 4 etiket + kalan sayısı
+  const count = new Map();
+  for (const x of tools) { const k = x.dataset.tool; if (k) count.set(k, (count.get(k) || 0) + 1); }
+  const tags = [...count].map(([k, n]) => `${esc(toolLabel(k))}${n > 1 ? ` <span class="dim">×${n}</span>` : ''}`);
+  const more = tags.length - 4;
+  const names = tags.length ? ` · ${tags.slice(0, 4).join(' · ')}${more > 0 ? ` · ${esc(t('×{n} daha', { n: more }))}` : ''}` : '';
+  $('.tr-t', run).innerHTML = `${busy && running ? `<span class="spinner"></span> ${t('çalışıyor')}` : t('{n} sn çalıştı', { n: sec })} <span class="caret">▸</span> · ${t('{n} araç', { n: tools.length })}${names}${errs ? ` · <span class="down">${t('{n} hata', { n: errs })}</span>` : ''}`;
+}
+
+// ── Araç çıktısı: JSON ise tablo, değilse ham metin ──────
+// Borsa araçları JSON.stringify ile döner; 100 satırlık tarama sonucunu <pre> içinde kaybetmek yerine tablo çiz.
+const OUT_ROWS = 20, OUT_COLS = 8;
+const cellTxt = (v) => {
+  if (v == null) return '';
+  if (typeof v === 'object') { const s = JSON.stringify(v); return s.length > 120 ? `${s.slice(0, 120)}…` : s; }
+  return String(v);
+};
+const isRow = (r) => r && typeof r === 'object' && !Array.isArray(r);
+function rowsTable(rows) {
+  const cols = [];
+  for (const r of rows) for (const k of Object.keys(r)) if (!cols.includes(k)) cols.push(k);
+  cols.length = Math.min(cols.length, OUT_COLS);
+  const probe = rows.slice(0, 40);
+  const numeric = new Set(cols.filter((c) => probe.filter((r) => typeof r[c] === 'number').length >= Math.min(3, rows.length)));
+  const wrap = h(`<div><div class="table-wrap" style="max-height:260px"><table class="t"><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody></tbody></table></div><button class="ghost xs" hidden></button></div>`);
+  const tb = $('tbody', wrap), more = $('button', wrap);
+  let drawn = 0;
+  const draw = (n) => {
+    for (const r of rows.slice(drawn, drawn + n)) tb.insertAdjacentHTML('beforeend', `<tr>${cols.map((c) => `<td class="${numeric.has(c) ? 'r' : ''}">${esc(cellTxt(r[c]))}</td>`).join('')}</tr>`);
+    drawn += n;
+    more.hidden = drawn >= rows.length;
+    more.textContent = t('{n} satır daha', { n: rows.length - drawn });
+  };
+  draw(OUT_ROWS);
+  more.onclick = () => draw(OUT_ROWS);
+  return wrap;
+}
+function objTable(o) {
+  const flat = Object.entries(o).filter(([, v]) => v == null || typeof v !== 'object');
+  const use = (flat.length ? flat : Object.entries(o)).slice(0, 4);
+  if (!use.length) return null;
+  return h(`<table class="t"><tbody>${use.map(([k, v]) => `<tr><td class="dim">${esc(k)}</td><td>${esc(cellTxt(v))}</td></tr>`).join('')}</tbody></table>`);
+}
+function toolOut(text) {
+  const raw = String(text ?? '');
+  const pre = () => { const p = h('<pre></pre>'); p.textContent = raw; return p; };
+  let d;
+  try { d = JSON.parse(raw); } catch { return pre(); }
+  if (Array.isArray(d) && d.length) {
+    const objs = d.every(isRow) ? d : d.map((v) => ({ [t('Değer')]: v }));
+    if (objs.some((r) => Object.keys(r).length)) return rowsTable(objs);
+  }
+  if (d && typeof d === 'object') {
+    // Araçlar çoğunlukla { ok, data: [...] } sarar; tarama sonucu gömülü dizi
+    const arr = ['data', 'items', 'results', 'rows'].map((k) => d[k]).find((v) => Array.isArray(v) && v.length && v.every(isRow) && v.some((r) => Object.keys(r).length));
+    if (arr) return rowsTable(arr);
+    return objTable(d) || pre();
+  }
+  return pre();
 }
 
 function todoCard(inp) {
@@ -387,8 +481,9 @@ function todoCard(inp) {
 function subCard(from, to, body, meta, id) {
   const who = (n) => (n === 'main' ? t('Ana asistan') : n);
   const el = h(`<div class="sub-card"${id ? ` data-sa="${esc(id)}"` : ''}><div class="sc-head">➤ ${esc(who(from))} → ${esc(who(to))}</div><div class="sc-body note-body clamp"></div><div class="sc-meta">${meta}</div></div>`);
-  $('.sc-body', el).innerHTML = md(body || '');
-  requestAnimationFrame(() => { const b = $('.sc-body', el); if (b.scrollHeight <= b.clientHeight + 4) b.classList.remove('clamp'); else b.title = t('Tamamını görmek için tıklayın'); });
+  const b = $('.sc-body', el), out = toolOut(body);
+  if (out.tagName === 'PRE') { b.innerHTML = md(body || ''); requestAnimationFrame(() => { if (b.scrollHeight <= b.clientHeight + 4) b.classList.remove('clamp'); else b.title = t('Tamamını görmek için tıklayın'); }); }
+  else { b.classList.remove('clamp'); b.append(out); } // tablo zaten kendi kaydırmasına sahip
   $('.sc-body', el).onclick = (ev) => { if (!ev.target.closest('a')) ev.currentTarget.classList.remove('clamp'); };
   return el;
 }
@@ -447,7 +542,9 @@ function renderEvent(e) {
         add(subCard('main', kind, `**${e.input?.description || t('Görev')}**\n\n${e.input?.prompt || ''}`, `${timeTR(tsOf(e))} · ${esc(e.name)} <span class="sc-live"><span class="spinner"></span></span>`, e.id));
         break;
       }
-      const el = h('<details class="tool"><summary><span class="tl"></span><span class="tn"></span><span class="ti"></span><span class="st"><span class="spinner"></span></span></summary><pre class="in"></pre></details>');
+      // Girdi küçük ve katlanmış, çıktı aşağıda açık durur (ikisi iç içe geçmişti)
+      const el = h(`<details class="tool"><summary><span class="tl"></span><span class="tn"></span><span class="ti"></span><span class="st"><span class="spinner"></span></span></summary><details class="thinking"><summary>${t('Girdi')}</summary><pre class="in"></pre></details></details>`);
+      el.dataset.tool = name;
       $('.tl', el).textContent = toolLabel(e.name);
       $('.tn', el).textContent = name !== toolLabel(e.name) ? name : '';
       $('.ti', el).textContent = toolSummary(e.input);
@@ -475,7 +572,9 @@ function renderEvent(e) {
       if (!el) break;
       $('.st', el).innerHTML = e.isError ? '<span class="down">✗</span>' : '<span class="up">✓</span>';
       if (e.isError) el.classList.add('err');
-      const out = h('<pre></pre>'); out.textContent = e.text; el.append(out);
+      const box = h('<div class="to"></div>'); // girdi katlanmış kalsın, çıktı altta
+      box.append(toolOut(e.text));
+      el.append(box);
       const run = el.closest('.tool-run');
       if (run) { run.dataset.end = tsOf(e); drawRun(run); }
       break;
@@ -491,19 +590,23 @@ function renderEvent(e) {
       const el = h(`<div class="perm" data-req="${esc(e.reqId)}"><b>${t('İzin isteniyor:')}</b> <span class="mono">${esc(toolLabel(e.tool))}</span> <span class="dim mono">${esc(toolName(e.tool))}</span><pre></pre>
         <div class="row" style="margin-top:6px"><button class="btn" data-d="allow">${t('İzin ver')}</button>${e.canAlways ? `<button class="btn sec" data-d="always">${t('Hep izin ver')}</button>` : ''}<button class="btn danger" data-d="deny">${t('Reddet')}</button></div></div>`);
       $('pre', el).textContent = JSON.stringify(e.input, null, 2);
-      $$('[data-d]', el).forEach((b) => b.onclick = async () => {
-        await wsCall({ t: 'perm.reply', sessionId: current, reqId: e.reqId, decision: b.dataset.d }).catch((x) => toast(tx(x.message), 'err'));
-        el.innerHTML = `<span class="dim">${esc(t(b.dataset.d === 'deny' ? 'Reddedildi: {tool}' : 'İzin verildi: {tool}', { tool: toolLabel(e.tool) }))}</span>`;
-      });
+      $$('[data-d]', el).forEach((b) => b.onclick = () => permReply(e, b.dataset.d, el));
       add(el);
-      notify(t('Asistan izin istiyor: {tool}', { tool: toolLabel(e.tool) }));
+      // 40 dakikalık iş "izin ver"e basıp kaldığın yere dönmek zorunda kalmasın
+      notify(t('Asistan izin istiyor: {tool}', { tool: toolLabel(e.tool) }), [
+        { label: t('İzin ver'), run: () => permReply(e, 'allow') },
+        { label: t('Reddet'), run: () => permReply(e, 'deny') },
+      ], sessNameOf(e.sessionId || current));
       break;
     }
     case 'question': {
       if (e.replay) break;
       stream = null;
       add(questionCard(e));
-      notify(t('Asistan bir soru soruyor'));
+      notify(t('Asistan bir soru soruyor'), [
+        { label: t('Yanıtla'), run: () => focusSession(e.sessionId || current, `[data-req="${CSS.escape(e.reqId)}"]`) },
+        { label: t('Atla'), run: () => skipQuestion(e) },
+      ], sessNameOf(e.sessionId || current));
       break;
     }
     case 'permission.resolved': {
@@ -562,20 +665,93 @@ function questionCard(e) {
       answers[q.question] = free || picked.join(', ');
     });
     if (Object.values(answers).some((v) => !v)) { toast(t('Her soru için bir seçim yapın veya cevap yazın'), 'err'); return; }
-    await wsCall({ t: 'question.reply', sessionId: current, reqId: e.reqId, answers }).catch((x) => toast(tx(x.message), 'err'));
+    await wsCall({ t: 'question.reply', sessionId: e.sessionId || current, reqId: e.reqId, answers }).catch((x) => toast(tx(x.message), 'err'));
     el.innerHTML = `<span class="dim">${t('Yanıtlandı ✓')} ${esc(Object.values(answers).join(' · '))}</span>`;
   };
-  $('[data-a=skip]', el).onclick = async () => {
-    await wsCall({ t: 'question.reply', sessionId: current, reqId: e.reqId, skip: true }).catch(() => {});
-    el.innerHTML = `<span class="dim">${t('Atlandı')}</span>`;
-  };
+  $('[data-a=skip]', el).onclick = () => skipQuestion(e);
   return el;
 }
 
-function notify(text) {
-  toast(text);
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('kmy terminal', { body: text });
+// ── Zorunlu bildirim ────────────────────────────────
+// Tek yol: her zaman toast + (izin varsa) masaüstü bildirimi.
+// document.hidden koşulu kaldırıldı: WKWebView'de uygulama arka plandayken de false kalır, yani macOS bildirimi hiç gitmiyordu.
+const notifyActions = new Map();      // bildirim anahtarı → eylem işlevleri (macOS'ta düğmeye basılınca çağrılır)
+addEventListener('kmy:notify-action', (ev) => {
+  const [key, i] = String(ev.detail || '').split(':');
+  const fns = notifyActions.get(key);
+  if (!fns) return;
+  notifyActions.delete(key);
+  fns[Number(i)]?.();
+});
+function notify(body, actions = [], title) {
+  toast(body, '', 9000);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const key = Date.now().toString(36);
+  if (actions.length) { notifyActions.set(key, actions.map((a) => a.run)); setTimeout(() => notifyActions.delete(key), 300000); }
+  new Notification(title || 'kmy terminal', { body, actions: actions.map((a, i) => ({ id: `${key}:${i}`, label: a.label })) });
 }
+
+// macOS bildirim izni artık gerçek sistem değerini Swift'ten alır; reddedildiyse sessizce düşmeyelim
+addEventListener('kmy:notifperm', (e) => {
+  if (e.detail === 'denied') toast(t('Sistem bildirimleri kapalı: biten işler yalnız uygulama içinde görünür. Sistem Ayarları › Bildirimler › kmy terminal'), 'err', 12000);
+  else if (e.detail === 'default') Notification.requestPermission().catch(() => {});
+});
+// Köprü mesajı iletilemedi: kısa uyarı göster (sessiz yutmayalım)
+let bridgeWarned = 0;
+addEventListener('kmy:bridge-error', () => { if (bridgeWarned++ < 3) toast(t('Uygulama köprüsüne mesaj iletilemedi'), 'err', 8000); });
+
+// ── Tur takibi ──────────────────────────────────────
+// Arka plandaki oturumların olayları çizilmez; süre / araç sayısı / maliyet ve son mesaj burada biriktirilir.
+const turnInfo = new Map();            // sessionId → { start, tools, cost, text }
+function trackTurn(e) {
+  let ti = e.sessionId ? turnInfo.get(e.sessionId) : null;
+  if (e.type === 'run.start') { ti = { start: e.startedAt || Date.now(), tools: 0, cost: 0, text: '' }; if (e.sessionId) turnInfo.set(e.sessionId, ti); }
+  if (!ti) return null;
+  if (e.type === 'tool_use') ti.tools++;
+  else if (e.type === 'result' && !e.replay) ti.cost += e.cost || 0;
+  else if (e.type === 'text' && e.text) ti.text = e.text;
+  return ti;
+}
+const turnBits = (ti) => [t('{n} sn', { n: Math.max(1, Math.round((Date.now() - ti.start) / 1000)) }), ti.tools ? t('{n} araç', { n: ti.tools }) : '', ti.cost ? `$${num(ti.cost, 2)}` : ''].filter(Boolean).join(' · ');
+const snip = (x) => String(x || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+const sessNameOf = (sid) => sessTitle(sessions.find((s) => s.id === sid));
+
+// Tur bitti: ön plandaysa mesajın altında ince şerit, arka plandaysa toast + rozet + bildirim
+function finishRun(sid, ti) {
+  if (!ti) return;
+  const bits = turnBits(ti), head = snip(ti.text);
+  if (sid === current) {
+    if (!head && !bits) return;
+    add(h(`<div class="msg notice">✓ ${esc(t('Tamamlandı · {info}', { info: bits }))}${head ? ` <span class="dim">— ${esc(head)}…</span>` : ''}</div>`));
+    return;
+  }
+  const msg = t('Asistan bitti: {title}', { title: sessNameOf(sid) });
+  toast(`${msg} — ${head || bits}`, '', 9000);
+  const card = add(h(`<div class="msg notice"><button class="ghost xs" data-fin="${esc(sid)}">✓ ${esc(msg)} · ${esc(bits)}${head ? ` — ${esc(head)}…` : ''}</button></div>`));
+  const open = () => { card.remove(); focusSession(sid); };
+  $('[data-fin]', card).onclick = open;
+  notify(msg, [head, bits].filter(Boolean).join(' — '), [
+    { label: t('Sonucu aç'), run: open },
+    { label: t('Sessize al'), run: () => card.remove() },
+  ], sessNameOf(sid));
+}
+
+// Bildirim eylemi: oturumu aç, sohbeti öne getir, son mesaja kay
+async function focusSession(sid, anchor) {
+  emit('view', 'chat');
+  if (sid && sid !== current) await openSession(sid);
+  stick = true;
+  const el = anchor ? $(anchor, log) : null;
+  if (el) el.scrollIntoView({ block: 'center' }); else scrollEnd(true);
+}
+
+// İzin / soru cevapları: karttan da bildirim eyleminden de aynı yol
+const permReply = (e, d, el) => wsCall({ t: 'perm.reply', sessionId: e.sessionId || current, reqId: e.reqId, decision: d })
+  .catch((x) => toast(tx(x.message), 'err'))
+  .then(() => { const c = el || $(`[data-req="${CSS.escape(e.reqId)}"]`, log); if (c) c.innerHTML = `<span class="dim">${esc(t(d === 'deny' ? 'Reddedildi: {tool}' : 'İzin verildi: {tool}', { tool: toolLabel(e.tool) }))}</span>`; });
+const skipQuestion = (e) => wsCall({ t: 'question.reply', sessionId: e.sessionId || current, reqId: e.reqId, skip: true })
+  .catch(() => {})
+  .then(() => { const c = $(`[data-req="${CSS.escape(e.reqId)}"]`, log); if (c) c.innerHTML = `<span class="dim">${esc(t('Atlandı'))}</span>`; });
 
 // ── Çalışma göstergesi ───────────────────────────
 let workingEl = null;
@@ -609,7 +785,9 @@ function updateStats() {
   $('#stCost').textContent = !paid(sessionProvider) && !sessCost ? t('abonelik') : `$${num(sessCost, 2)}`;
   $('#stTurns').textContent = sessTurns;
   const p = lastCtx && ctxWindow ? (lastCtx / ctxWindow) * 100 : null;
-  $('#stCtx').textContent = lastCtx ? `${kTok(lastCtx)}${ctxWindow ? `/${kTok(ctxWindow)} (${num(p, 0)}%)` : ''}` : '–';
+  // Oturum yeniden açıldığında canlı 'usage' olayı gelmemiş olabilir; o durumda sahte değer yerine dürüstçe "bilinmiyor"
+  $('#stCtx').textContent = lastCtx ? `${kTok(lastCtx)}${ctxWindow ? `/${kTok(ctxWindow)} (${num(p, 0)}%)` : ''}` : (current ? t('bilinmiyor') : '–');
+  $('#stCtx').title = lastCtx ? '' : t('Son turün bağlam kullanımı kayıtlı değil');
   const bar = $('#stCtxBar');
   bar.style.width = `${Math.min(p || 0, 100)}%`;
   bar.className = p >= 90 ? 'hi' : p >= 50 ? 'mid' : '';
@@ -621,14 +799,16 @@ function updateStats() {
 // ── Canlı olaylar ─────────────────────────────────
 let awaitingNew = false;
 on('ws:agent', (e) => {
+  const ti = trackTurn(e); // arka plandaki oturumlar da çizilmediği için tur bilgisi her olayda burada toplanır
   if (e.type === 'session.created' && awaitingNew && !current) { awaitingNew = false; current = e.sessionId; localSet('session', current); }
   if (e.type === 'session.created' || e.type === 'run.end') loadSessions();
+  if (e.type === 'run.end' && e.sessionId !== current) finishRun(e.sessionId, ti);
   if (e.sessionId !== current) {
     if (e.type === 'permission.request' || e.type === 'question') toast(t('Başka bir oturum yanıt bekliyor: {what}', { what: e.tool ? toolLabel(e.tool) : t('soru') }));
     return;
   }
   if (e.type === 'run.start') { running = true; runStart = e.startedAt; showWorking(); return; }
-  if (e.type === 'run.end') { running = false; hideWorking(); for (const r of $$('.tool-run', log).slice(-3)) drawRun(r); return; }
+  if (e.type === 'run.end') { running = false; hideWorking(); for (const r of $$('.tool-run', log).slice(-3)) drawRun(r); finishRun(e.sessionId, ti); return; }
   if (e.type === 'user') return;
   renderEvent(e);
   if (workingEl) log.append(workingEl);
@@ -740,7 +920,7 @@ const SLASH = [
   { c: '/think', arg: 'low|medium|high|xhigh|max', d: 'Düşünme seviyesi', tr: ['/efor'] },
   { c: '/compact', d: 'Bağlamı özetleyerek küçült (Claude)' },
   { c: '/context', d: 'Bağlam kullanımını göster (Claude)' },
-  { c: '/cost', d: 'Oturum maliyeti', tr: ['/maliyet'] },
+  { c: '/cost', d: 'Nereye harcadım', tr: ['/maliyet'] },
   { c: '/status', d: 'Oturum durumu ve istatistikler', tr: ['/durum'] },
   { c: '/rename', arg: 'yeni ad', d: 'Oturumu yeniden adlandır', tr: ['/adlandir'] },
   { c: '/export', d: 'Sohbeti JSON olarak indir', tr: ['/indir'] },
@@ -770,10 +950,17 @@ async function handleSlash(text) {
     case '/durdur': if (current) wsCall({ t: 'chat.stop', sessionId: current }).catch(() => {}); return true;
     case '/ekran': ctxScreen = !ctxScreen; localSet('ctxScreen', ctxScreen); if (arg) { ctxScreen = true; send(arg); } else toast(t(ctxScreen ? 'Ekran bağlamı (seçili sembol, açık rapor veya KAP bildirimi) mesajlara eklenecek' : 'Ekran bağlamı kapatıldı')); return true;
     case '/model': {
-      const opts = [...$('#optModel').options];
-      const hit = arg && opts.find((o) => o.value.toLowerCase().includes(arg.toLowerCase()) || o.textContent.toLowerCase().includes(arg.toLowerCase()));
-      if (hit && !hit.disabled) { $('#optModel').value = hit.value; toast(`${t('Model')}: ${hit.textContent}`); }
-      else systemCard(`<b>${t('Modeller')}</b><br>${opts.map((o) => `${esc(o.textContent)} <span class="dim mono">${esc(o.value || t('varsayılan'))}</span>`).join('<br>')}<br><span class="dim">${t('Kullanım: {usage}', { usage: '/model sonnet' })}</span>`);
+      // Arama yüzeyi: select'in native type-ahead'ı büyüyen listede yetmez,
+      // tek eşleşmede doğrudan seçer, çokta eşleşmede listeyi daraltır
+      const sel = $('#optModel');
+      const all = [...sel.options].filter((o) => o.value && !o.disabled);
+      const q = (arg || '').toLowerCase();
+      const hits = q ? all.filter((o) => `${o.textContent} ${o.dataset.id}`.toLowerCase().includes(q)) : [];
+      if (hits.length === 1) { sel.value = hits[0].value; sel.dispatchEvent(new Event('change')); toast(`${t('Model')}: ${hits[0].textContent}`); }
+      else {
+        const rows = (q ? hits : all).slice(0, 30);
+        systemCard(`<b>${t('Modeller')}</b>${q ? ` <span class="dim">${rows.length}/${hits.length}</span>` : ''}<br>${rows.map((o) => `${esc(o.textContent)} <span class="dim mono">${esc(o.dataset.id)}</span>`).join('<br>') || ''}${hits.length > 30 ? '<br><span class="dim">…</span>' : ''}<br><span class="dim">${t('Kullanım: {usage}', { usage: '/model sonnet' })}</span>`);
+      }
       return true;
     }
     case '/think': {
@@ -786,11 +973,7 @@ async function handleSlash(text) {
       if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; }
       if (!paid(sessionProvider)) { toast(t('Bu komut yalnızca Claude oturumlarında çalışır'), 'err'); return true; }
       return false; // send() olduğu gibi iletir
-    case '/cost': {
-      const s = sessions.find((x) => x.id === current);
-      systemCard(`<b>${t('Oturum maliyeti')}</b><br>${esc(t('Sağlayıcı: {name}', { name: provName(sessionProvider) }))}<br>${esc(t('Bu oturum: {cost}', { cost: paid(sessionProvider) || sessCost ? '$' + num(s?.cost_usd ?? sessCost, 4) : t('aboneliğe veya kendi hesabınıza dahil') }))}<br>${t('Tüm oturumlar (Claude): {cost}', { cost: `$${num(sessions.reduce((a, x) => a + (x.cost_usd || 0), 0), 3)}` })}`);
-      return true;
-    }
+    case '/cost': costPanel(); return true;
     case '/status': {
       const s = sessions.find((x) => x.id === current);
       const ctxTxt = !lastCtx ? '—' : ctxWindow
@@ -921,19 +1104,38 @@ function pickModel() {
 }
 function fillModels() {
   const m = state.meta, s = state.settings, d = m.defaultModels || {};
-  const listOf = (p) => {
-    const base = (p === 'claude' ? m.models : m.providerModels?.[p] || (p === 'codex' ? m.codexModels : []) || []).filter((x) => x.id);
-    const extra = [s[p === 'claude' ? 'model' : `${p}Model`], d[p]].map(baseId).filter((id) => id && !base.some((x) => x.id === id));
-    return [...base, ...[...new Set(extra)].map((id) => ({ id, label: id }))];
-  };
+  const provs = Object.keys(m.providers || { claude: 1 });
   const prov = sessionProvider || s.provider || 'claude';
   const sess = sessions.find((x) => x.id === current);
   // Açık oturumun kaydettiği model > ayar > sağlayıcı varsayılanı
   const sessModel = sess && (sess.provider || 'claude') === prov ? baseId(sess.model) : '';
   const want = sessModel || baseId(prov === 'claude' ? s.model : s[`${prov}Model`]) || baseId(d[prov]);
-  const short = (x) => x.label.replace(/^Claude /, '').replace(/\s*\([^)]*\)$/, '');
-  const group = (p) => `<optgroup label="${esc(provName(p))}">${listOf(p).map((x) => `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.label)}" ${sessionProvider && sessionProvider !== p ? 'disabled' : ''} ${p === prov && (x.id === want || want.startsWith(x.id)) ? 'selected' : ''}>${esc(short(x))}</option>`).join('')}</optgroup>`;
-  $('#optModel').innerHTML = Object.keys(m.providers || { claude: 1 }).map(group).join('');
+  const base = (p) => (p === 'claude' ? m.models : m.providerModels?.[p] || (p === 'codex' ? m.codexModels : []) || []).filter((x) => x.id);
+  const off = (p) => (sessionProvider && sessionProvider !== p ? ' disabled' : '');
+  const labels = [];
+  const opt = (p, x) => {
+    // Grup başlığı zaten sağlayıcıyı söylüyor; etikette tekrarlanmasın
+    const label = x.label.replace(/^Claude /, '');
+    labels.push(label.toLowerCase());
+    return `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.id)}"${off(p)}${p === prov && (x.id === want || want.startsWith(x.id)) ? ' selected' : ''}>${esc(label)}</option>`;
+  };
+  const grp = (label, list, p) => (list.length ? `<optgroup label="${esc(label)}">${list.map((x) => opt(p, x)).join('')}</optgroup>` : '');
+  // Seçili model sağlayıcının listesinde yoksa (omp yüzlerce modeli eler) başa konur: 0.13 regresyonu
+  const known = (id) => provs.some((p) => base(p).some((x) => x.id === id || id.startsWith(x.id)));
+  const picked = want && !known(want) ? grp(t('Seçili'), [{ id: want, label: want }], prov) : '';
+  const body = provs.map((p) => {
+    const list = base(p);
+    if (!list.length) return '';
+    // omp modelleri sağlayıcı önekinden gelen alt gruplara ayrılır (openai-codex → OpenAI)
+    const sub = new Map();
+    for (const x of list) { const k = x.group || ''; if (!sub.has(k)) sub.set(k, []); sub.get(k).push(x); }
+    if (sub.size < 2) return grp(provName(p), list, p);
+    return [...sub].map(([g, xs]) => grp(g || provName(p), xs, p)).join('');
+  }).join('');
+  // Aynı etiket iki modelde geçiyorsa listede ayırt edilemiyor (gerçek kimlikler yalnız title'da)
+  const dup = labels.length !== new Set(labels).size;
+  const note = dup ? `<option disabled>${esc(t('Bazı modellerin adı aynı; ayırt etmek için /model komutuyla ad yazın'))}</option>` : '';
+  $('#optModel').innerHTML = note + picked + body;
   $('#optModel').title = t(sessionProvider ? 'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)' : 'Model');
   syncEffort();
   requestAnimationFrame(fitSelects);

@@ -154,6 +154,11 @@ route('POST', '/api/watchlist', async ({ body }) => { const w = store.addWatch(b
 route('PUT', '/api/watchlist', async ({ body }) => { const w = store.reorderWatch(body.symbols || []); broadcast({ t: 'watchlist', symbols: w }); return w; });
 route('DELETE', '/api/watchlist/:symbol', async ({ p }) => { const w = store.removeWatch(p.symbol); broadcast({ t: 'watchlist', symbols: w }); return w; });
 
+// Eşikler (fiyat · temettü · KAP): kontrol scheduler.start() dakikalık döngüsünde
+route('GET', '/api/alerts', async ({ q }) => scheduler.listAlerts(q.get('symbol') || null));
+route('POST', '/api/alerts', async ({ body }) => scheduler.saveAlert(body));
+route('DELETE', '/api/alerts/:id', async ({ p }) => scheduler.removeAlert(Number(p.id)));
+
 // KAP
 route('GET', '/api/kap', async ({ q }) => {
   const scope = q.get('scope') || 'watchlist';
@@ -576,7 +581,7 @@ listenWithRetry(reportServer, REPORT_PORT);
 listenWithRetry(server, PORT, () => {
   console.log(`\n  kmy terminal v${VERSION}${gw.isDaemon() ? ' (Gateway servisi)' : ''}\n  → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}\n  Veri: ${DATA_DIR}\n  Raporlar: ${REPORTS_DIR}\n  Gateway anahtarı: ${gw.TOKEN_FILE}\n`);
   restartTimers();
-  scheduler.start(agent, (s) => broadcast({ t: 'schedule.ran', name: s.name }));
+  scheduler.start(agent, (s) => broadcast({ t: 'schedule.ran', name: s.name }), (a) => broadcast({ t: 'alerts.fired', alert: a }));
   // Kurum raporu akışını arka planda hazır tut (ilk açılışta beklemeyi önler)
   // Kurum raporu klasör izleme (varsayılan açık; Ayarlar › Veri'den kapatılabilir)
   setInterval(() => inbox.scan({ notify: inboxNotify }).catch((e) => console.error('[klasör izleme]', e.message)), 60_000);

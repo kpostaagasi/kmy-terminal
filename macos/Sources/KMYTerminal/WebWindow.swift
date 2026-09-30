@@ -8,7 +8,13 @@ import UserNotifications
 private var bridgeJS: String { "window.__kmySystemLang = \"\(L10n.systemCode.replacingOccurrences(of: "\"", with: ""))\";\n" + bridgeBody }
 private let bridgeBody = """
 (() => {
-  const post = (m) => { try { window.webkit.messageHandlers.borsa.postMessage(m); } catch (e) {} };
+  const post = (m) => {
+    try { window.webkit.messageHandlers.borsa.postMessage(m); }
+    catch (e) {
+      console.error('[kmy] köprü: mesaj iletilemedi', m && m.type, e);
+      dispatchEvent(new CustomEvent('kmy:bridge-error', { detail: String((e && e.message) || e) }));
+    }
+  };
   window.borsaNative = { platform: 'macos' };
   const mark = () => document.documentElement && document.documentElement.classList.add('native-mac');
   mark();
@@ -37,13 +43,29 @@ private let bridgeBody = """
     if (e.defaultPrevented || e.target.closest('input, textarea, [contenteditable]') || String(getSelection() || '').trim()) return;
     e.preventDefault();
   });
+  // Bildirim izni gerçek sistem değerini Swift'ten alır; önceden hep 'granted' dönüyordu
+  let perm = 'default';
+  const setPerm = (s) => {
+    perm = s === 'granted' || s === 'denied' ? s : 'default';
+    dispatchEvent(new CustomEvent('kmy:notifperm', { detail: perm }));
+  };
+  window.__kmyNotifPerm = setPerm;
   class NativeNotification {
-    constructor(title, opts = {}) { post({ type: 'notify', title: String(title || ''), body: String(opts.body || '') }); }
-    static get permission() { return 'granted'; }
-    static requestPermission() { return Promise.resolve('granted'); }
+    constructor(title, opts = {}) {
+      post({ type: 'notify', title: String(title || ''), body: String(opts.body || ''), actions: (opts.actions || []).map((a) => ({ id: String(a.id || ''), label: String(a.label || '') })) });
+    }
+    static get permission() { return perm; }
+    static requestPermission() {
+      return new Promise((res) => {
+        const h = (e) => { if (e.detail === 'granted' || e.detail === 'denied') { removeEventListener('kmy:notifperm', h); res(e.detail); } };
+        addEventListener('kmy:notifperm', h);
+        post({ type: 'notifreq' });
+      });
+    }
     close() {}
   }
   window.Notification = NativeNotification;
+  addEventListener('load', () => post({ type: 'notifperm?' }));
   let last = '';
   const sync = () => {
     const root = document.documentElement;
@@ -118,7 +140,7 @@ final class KMYWindow: NSWindow {
   }
 }
 
-final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
+final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate, UNUserNotificationCenterDelegate {
   let webView: WKWebView
   private let isMain: Bool
   private var popups: [WebWindowController] = []
@@ -173,6 +195,8 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     webView.uiDelegate = self
     // Açılır pencereler ana pencerenin yapılandırmasını paylaşır; işleyici bir kez eklenir
     if configuration == nil { webView.configuration.userContentController.add(WeakHandler(self), name: "borsa") }
+    // Bildirim temsilcisi ana pencerede: düğmeye basıldığında eylemi sayfaya geri gönderebilmeliyiz
+    if main { UNUserNotificationCenter.current().delegate = self }
     if let url { webView.load(URLRequest(url: url)) }
   }
 
@@ -215,7 +239,17 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     guard let m = message.body as? [String: Any], let type = m["type"] as? String else { return }
     switch type {
     case "notify":
-      notify(title: m["title"] as? String ?? "kmy terminal", body: m["body"] as? String ?? "")
+      notify(title: m["title"] as? String ?? "kmy terminal", body: m["body"] as? String ?? "",
+        actions: (m["actions"] as? [[String: Any]] ?? []).compactMap { a in
+          guard let id = a["id"] as? String, !id.isEmpty else { return nil }
+          return ["id": id, "label": (a["label"] as? String) ?? id]
+        })
+    case "notifperm?":
+      reportNotificationPermission()
+    case "notifreq":
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { ok, _ in
+        self.reportNotificationPermission(granted: ok)
+      }
     case "badge":
       NSApp.dockTile.badgeLabel = (m["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
     case "drag":
@@ -239,7 +273,17 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     }
   }
 
-  private func notify(title: String, body: String) {
+  /// Gerçek sistem bildirim izni (sayfa artık 'granted' varsaymıyor); reddedilmişse JS uyarı gösteriyor
+  private func reportNotificationPermission(granted: Bool? = nil) {
+    if let g = granted { return DispatchQueue.main.async { self.js("window.__kmyNotifPerm(\(g ? "\"granted\"" : "\"denied\""))") } }
+    UNUserNotificationCenter.current().getNotificationSettings { s in
+      let v = (s.authorizationStatus == .authorized || s.authorizationStatus == .provisional) ? "granted" : (s.authorizationStatus == .denied ? "denied" : "default")
+      DispatchQueue.main.async { self.js("window.__kmyNotifPerm(\"\(v)\")") }
+    }
+  }
+
+  /// Eylemli bildirim: "Sonucu aç" / "İzin ver" gibi düğmeler yalnız bir kategoriyle görünür
+  private func notify(title: String, body: String, actions: [[String: String]] = []) {
     let center = UNUserNotificationCenter.current()
     center.requestAuthorization(options: [.alert, .sound, .badge]) { ok, _ in
       guard ok else { return }
@@ -247,9 +291,32 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
       c.title = title
       c.body = body
       c.sound = .default
+      let acts = actions.compactMap { a -> UNNotificationAction? in
+        guard let id = a["id"], !id.isEmpty else { return nil }
+        return UNNotificationAction(identifier: id, title: a["label"] ?? id, options: [.foreground])
+      }
+      if !acts.isEmpty {
+        center.setNotificationCategories([UNNotificationCategory(identifier: "kmy", actions: acts, intentIdentifiers: [], options: [])])
+        c.categoryIdentifier = "kmy"
+      }
       center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
     }
     if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+  }
+
+  // Bildirim düğmesi JS'e geri döner (bildirim köprüsü AppDelegate'in bildirim temsilcisinden devralındı)
+  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    completionHandler([.banner, .sound])
+  }
+
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    (NSApp.delegate as? AppDelegate)?.showMain()
+    let id = response.actionIdentifier
+    if id != UNNotificationDefaultActionIdentifier {
+      let quoted = (try? JSONSerialization.data(withJSONObject: [id])).flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+      js("window.dispatchEvent(new CustomEvent('kmy:notify-action',{detail:\(quoted)}))")
+    }
+    completionHandler()
   }
 
   // MARK: Gezinme: yerel sunucu uygulama içinde, dış siteler varsayılan tarayıcıda
@@ -381,7 +448,12 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   }
 
   // Sayfadaki uygulama kancalarını çağır (menü komutları)
-  func js(_ code: String) { webView.evaluateJavaScript(code, completionHandler: nil) }
+  func js(_ code: String) {
+    webView.evaluateJavaScript(code) { _, e in
+      guard let e else { return }
+      NSLog("[kmy] js hatası: \(e.localizedDescription) — \(code.prefix(160))")
+    }
+  }
 }
 
 /// WKUserContentController betik işleyicisini güçlü tutar; döngüyü kırmak için zayıf aracı

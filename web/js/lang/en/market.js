@@ -31,6 +31,36 @@ export default {
   'BB alt': 'BB lower',
   Sinyal: 'Signal',
 
+
+  // ÖZET alt sekmeleri
+  'FİYAT · RAKAMLAR': 'PRICE · NUMBERS',
+  'HABER AKIŞI': 'NEWS FEED',
+  'AJAN · BELGE · TEMETTÜ': 'ASSISTANT · DOCS · DIVIDENDS',
+  'Bu aralıkta yeterli veri yok': 'Not enough data for this range',
+  'Uzun aralıklarda (5Y, Tümü) ölçüt verisi haftalık/aylık geldiği için referans çizgisi gizlenir; yanlış karşılaştırma göstermemek için.':
+    'On long ranges (5Y, All) benchmark data arrives weekly/monthly, so the reference line is hidden rather than showing a wrong comparison.',
+  'Gün içi aralıklarda ölçüt verisi günlük geldiği için referans çizgisi çizilmez.':
+    'On intraday ranges the benchmark arrives daily, so the reference line is not drawn.',
+  '{v} puan': '{v} pts',
+  'Gri çizgi: başlangıcı 100’e normalize edilmiş {b} referansı.': 'Grey line: {b} reference, normalized to 100 at the start.',
+
+  // Eşikler (fiyat · temettü · KAP)
+  'Fiyat, temettü ve KAP eşikleri': 'Price, dividend and KAP alerts',
+  Eşikler: 'Alerts',
+  'Fiyat üstü': 'Price above',
+  'Fiyat altı': 'Price below',
+  'Temettü ≥ (₺/hisse)': 'Dividend ≥ (TRY/share)',
+  'KAP bildirimi geldi': 'KAP disclosure arrives',
+  'Bu sembol için eşik yok.': 'No alerts for this symbol.',
+  'fiyat (₺)': 'price (₺)',
+  'tetiklendi {d}': 'fired {d}',
+  '🔔 {s}: {c}': '🔔 {s}: {c}',
+  'Hisse eşikleri BIST seansında değerlendirilir; tetiklenen eşik koşul bozulana kadar tekrar etmez.':
+    'Stock price alerts are evaluated during BIST trading hours; a fired alert does not repeat until the condition clears.',
+  // Eşik doğrulama hataları (server/scheduler.js)
+  'Sembol zorunlu': 'Symbol is required',
+  'Geçersiz eşik türü': 'Invalid alert type',
+  'Eşik değeri pozitif bir sayı olmalı': 'Alert value must be a positive number',
   // Kart başlıkları
   'İstatistikler': 'Statistics',
   'Teknik görünüm': 'Technicals',

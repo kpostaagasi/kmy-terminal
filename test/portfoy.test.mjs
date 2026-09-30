@@ -35,6 +35,10 @@ function check(name, got, want, tol) {
   ok ? pass++ : fail++;
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}: ${got} (beklenen ${want})`);
 }
+function assert(name, cond, detail = '') {
+  cond ? pass++ : fail++;
+  console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${detail ? `: ${detail}` : ''}`);
+}
 
 const L = pf.computeLedger();
 const T = L.totals;
@@ -112,6 +116,38 @@ const c1 = await pf.commitCsv(csv);
 check('CSV: içe aktarılan', c1.imported, 2);
 const p2 = pf.previewCsv(csv);
 check('CSV: aynı dosya tekrar yüklenince mükerrer', p2.duplicates, 2);
+
+// Denetim dizisi: her madde tam bir sözleşme taşır (arayüz alanları doğrudan okur).
+// Sıralama önemli: CSV içe aktarımı yukarıda ASELS ekledi, bu yüzden özet ve seri aynı
+// durumdan okunmalı — önceki S/t içe aktarımdan önce alınmıştı ve %1,09'luk sapma
+// gerçek bir hata değil, karşılaştırılan iki farklı portföydü.
+const S2 = await pf.summary();
+const VS = await pf.valueSeries();
+const lpt = VS.at(-1);
+const drift = Math.abs(lpt.value - S2.totals.value) / S2.totals.value;
+assert('Denetim: audit dizisi ve zorunlu alanlar', Array.isArray(S2.audit) && S2.audit.every((a) => a.code && ['kritik', 'uyari', 'bilgi'].includes(a.severity) && a.title && a.action !== undefined), `${S2.audit.length} madde`);
+assert('Seri son noktası ≈ bugünkü değer (%1)', drift < 0.01, `seri ${lpt.date} ${Math.round(lpt.value)} vs özet ${Math.round(S2.totals.value)} (%${(drift * 100).toFixed(2)})`);
+assert('Serideki döviz varlık sıfıra düşmüyor', S2.holdings.filter((h) => h.currency !== 'TRY').every((h) => h.value > 0), S2.holdings.filter((h) => h.currency !== 'TRY').map((h) => `${h.symbol}:${Math.round(h.value)}`).join(' '));
+
+// Beyanname: stopaj, komisyon ve BSMV ayrı sütunlarda
+await pf.addTransaction({ date: '2025-10-01', platform: 'Kurum A', type: 'SELL', symbol: 'CEYREK', quantity: 1, price: 7000, fee: 20, tax: 700, other_fee: 14 });
+const TR = pf.taxReport();
+const y25 = TR.years.find((x) => x.year === '2025');
+check('Beyanname 2025: brüt satış − stopaj − komisyon − BSMV = net nakit çıkışı', y25.grossSales - y25.tax - y25.commission - y25.bsmv, y25.netOut, 0.01);
+check('Beyanname 2025: brüt satış (19200 + 325 + 7000)', y25.grossSales, 26525, 0.01);
+check('Beyanname 2025: satış stopajı', y25.tax, 700, 0.01);
+check('Beyanname 2025: BSMV', y25.bsmv, 14, 0.01);
+check('Beyanname 2025: eski kayıtta temettü stopajı fee içinde', y25.dividendTax, 135, 0.01);
+check('Beyanname toplam stopaj = defter stopajı', TR.total.tax, pf.computeLedger().totals.tax, 0.01);
+check('Beyanname 2025: komisyon (AAPL ücreti 41 TL kuruyla)', y25.commission, 113, 0.01);
+
+// Geriye uyum: tax/other_fee sütunu olmayan eski bir satır yazıldığında okuma patlamıyor
+const { db } = await import('../server/db.js');
+db.prepare("INSERT INTO transactions(date, type, symbol, asset_type, quantity, price, fee, currency, fx_rate) VALUES('2025-11-01','BUY','ASELS','stock',1,10,1,'TRY',1)").run();
+const oldRow = db.prepare("SELECT tax, other_fee FROM transactions WHERE date = '2025-11-01'").get();
+let oldOk = true, oldErr = '';
+try { const L2 = pf.computeLedger(); oldOk = L2.totals.tax >= 700 && pf.taxReport().years.length > 0; } catch (e) { oldOk = false; oldErr = e.message; }
+assert('Eski şema satırı (tax/other_fee sütunu yok) okunuyor', oldOk && oldRow.tax === 0 && oldRow.other_fee === 0, `tax=${oldRow.tax} other_fee=${oldRow.other_fee} ${oldErr}`);
 
 console.log(`\n${pass}/${pass + fail} kontrol geçti`);
 fs.rmSync(dir, { recursive: true, force: true });

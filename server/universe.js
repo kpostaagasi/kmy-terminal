@@ -7,6 +7,7 @@
 //   - Sermaye artırımları ve temettüler (geçmiş + ilan edilmiş gelecek tarihler)
 //   - BIST 100 / BIST 30 üyelikleri
 import { cacheGet, cachePut } from './db.js';
+import { trScore } from './fold.js';
 
 const URL = 'https://www.isyatirim.com.tr/tr-tr/analiz/hisse/Sayfalar/Temel-Degerler-Ve-Oranlar.aspx';
 const TTL = 12 * 3600_000;
@@ -134,19 +135,16 @@ export async function corporateActions({ symbols = null, from = null, to = null 
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Ad veya kod ile yerel arama (Türkçe karakter duyarsız)
-const fold = (s) => String(s || '').toLocaleUpperCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/İ/g, 'I').replace(/I/g, 'I');
+// Ad veya kod ile yerel arama. Katlama ve puan market.js ile aynı yardımcılardan gelir.
 export function searchLocal(q, limit = 10) {
   ensure();
   if (!mem) return [];
-  const Q = fold(q);
   const out = [];
   for (const s of Object.values(mem.stocks)) {
-    const code = s.code, name = fold(s.name);
-    const score = code === Q ? 3 : code.startsWith(Q) ? 2 : name.startsWith(Q) ? 1.5 : name.includes(Q) ? 1 : 0;
-    if (score) out.push({ score, s });
+    const score = trScore(s.code, s.name, q);
+    if (score) out.push({ ...s, score });
   }
-  return out.sort((a, b) => b.score - a.score || (b.s.mcapTL || 0) - (a.s.mcapTL || 0)).slice(0, limit).map(({ s }) => s);
+  return out.sort((a, b) => b.score - a.score || (b.mcapTL || 0) - (a.mcapTL || 0)).slice(0, limit);
 }
 
 // İlk açılışta arka planda yükle
