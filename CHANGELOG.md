@@ -1,8 +1,9 @@
 # Sürüm Notları
 
-## 0.16.2 — 30 Eylül 2026 (canlı yeniden yükleme)
+## 0.16.2 — 30 Eylül 2026 (canlı yeniden yükleme, statik önbellek)
 
-### Yeni
+### Düzeltilen
+- **Yol üstünde bulunan kusur: statik dosyalarda doğrulayıcı eksikti.** Sunucu `Cache-Control: no-cache` gönderiyordu ama `ETag`/`Last-Modified` **yoktu**; doğrulayacak bir şeyi olmayan istemci (özellikle macOS uygulamasının WKWebView'i) dosyayı yeniden almadan önbellekten sunuyordu. Sonucu: uygulama güncellemesinden sonra **eski CSS ile açılabiliyor** — sohbet bestecisi hizası düzeltmesi JS olarak gitti (`TUR` göstergesi gitti) ama CSS eski kaldı (ayırıcılar tırtıklı kaldı). Artık her statik dosya `ETag` + `Last-Modified` gönderiyor ve `If-None-Match` / `If-Modified-Since` eşleşirse `304 Not Modified` dönüyor; dosya değiştiyse `200` ile taze içerik gidiyor. Bu yalnız geliştirme rahatsızlığı değil, dağıtılmış uygulamanın güncelleme sonrası eski dosya göstermesini de engelliyor.
 - **Kod değişince uygulama kendiliğinden güncelleniyor.** Kaynak ağacında çalışırken sunucu `web/` klasörünü izliyor; bir dosya değiştiğinde açık tüm istemcilere haber veriyor. macOS uygulaması, tarayıcı — hepsi aynı anda güncelleniyor, elle `⌘R` gerekmiyor.
   - **CSS değişikliği**: yalnız stil dosyası yeniden isteniyor. Sayfa yenilenmiyor, yazma kutusundaki metin ve kaydırma konumu olduğu gibi kalıyor.
   - **JS / HTML değişikliği**: tam yenileme yapılıyor; yazma kutusu taslağı, adres çubuğu hash'i ve kaydırma konumu geri yükleniyor.
