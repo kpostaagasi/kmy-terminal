@@ -17,8 +17,13 @@ final class Gateway {
   private var loginPath: String?
 
   var baseURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
-  var dataDir: URL { bundled ? supportDir.appendingPathComponent("data") : projectRoot.appendingPathComponent("data") }
-  var workspaceDir: URL { bundled ? supportDir.appendingPathComponent("workspace") : projectRoot.appendingPathComponent("workspace") }
+  // Veri ve çalışma alanı daima uygulama dizininde (~/Library/Application Support/kmy terminal);
+  // sunucu tarafındaki çözümleme sırası: BORSA_DATA_DIR → uygulama dizini → depo data/
+  private func appDir(_ name: String) -> URL {
+    FileManager.default.fileExists(atPath: supportDir.path) ? supportDir.appendingPathComponent(name) : projectRoot.appendingPathComponent(name)
+  }
+  var dataDir: URL { appDir("data") }
+  var workspaceDir: URL { appDir("workspace") }
   var logURL: URL { dataDir.appendingPathComponent("logs/gateway.log") }
   var plistPath: String { NSHomeDirectory() + "/Library/LaunchAgents/com.kmyterminal.gateway.plist" }
   /// Kurulu launchd servisi bu uygulamanın sunucusunu mu çalıştırıyor? (başka bir kopyaya / proje klasörüne ait servis sayılmaz)

@@ -96,6 +96,43 @@ export default {
   'Çalışma alanı': 'Workspace',
   'Asistanın kalıcı talimatları, becerileri ve bilgi dosyaları: {files}': 'The assistant’s standing instructions, skills and knowledge files: {files}',
 
+  // Yolo (tam otomatik izin)
+  'Ajana tam otomatik izin (yolo)': 'Full automatic permission for the agent (yolo)',
+  'Açıkken ajan hiçbir araç için onay istemez; seçilen süre dolunca kendiliğinden kapanır.': 'While on, the agent never asks for approval; it switches itself off when the chosen period ends.',
+  'şu an: SOR': 'now: ASK',
+  'şu an: YOLO (tüm araçlara izin)': 'now: YOLO (all tools allowed)',
+  '30 dakika': '30 minutes',
+  '2 saat': '2 hours',
+  'Bu oturum': 'This session',
+  'Yolo modunu aç': 'Turn on yolo',
+  'Ajan artık portföyüne işlem ekleyebilir, hafıza ve rapor dosyası yazabilir, izleme listeni değiştirebilir. Her yaptığı iş denetim kaydına yazılır. Kapatmak için aynı anahtara tekrar bas.':
+    'The agent can now add transactions to your portfolio, write memory and report files, and change your watchlist. Everything it does is written to the audit log. Press the same switch again to turn it off.',
+  'Yolo modunun süresi doldu; ajan yeniden onay istiyor.': 'Yolo mode has expired; the agent asks for approval again.',
+
+  // Sağlayıcı yetenek matrisi
+  'Sağlayıcı yetenekleri': 'Provider capabilities',
+  'Alt asistan': 'Sub-agent',
+  'Bypass / yolo': 'Bypass / yolo',
+  'destekleniyor': 'supported',
+  '{name} düşünme seviyesini desteklemiyor.': '{name} does not support thinking levels.',
+  '{name} alt asistan başlatmayı desteklemiyor.': '{name} does not support starting sub-agents.',
+  'Maliyet yalnızca tahmini (estCost).': 'Cost is an estimate only (estCost).',
+  'yalnızca tahmini (estCost)': 'estimate only (estCost)',
+  '{name} gerçek maliyeti ölçemiyor.': '{name} cannot measure real cost.',
+  '{name} tüm araçlara otomatik izin verilmesini desteklemiyor.': '{name} does not support automatic permission for all tools.',
+
+  // Ajan işlem kaydı (denetim)
+  'Ajan işlem kaydı': 'Agent tool audit log',
+  'Bugün {n} araç çağrısına izin verildi, {m} tanesi reddedildi.': 'Today {n} tool calls were allowed and {m} were denied.',
+  'Zaman': 'Time',
+  'Oturum': 'Session',
+  'Mod': 'Mode',
+  'İzin': 'Allowed',
+  'Gerekçe': 'Reason',
+  'Denetim kaydı yok': 'No audit records',
+  'Kaydı temizle': 'Clear log',
+  'Tüm ajan işlem kaydı silinsin mi?': 'Delete the whole agent tool audit log?',
+
   // Sağlayıcı kartları
   'Kurulu değil': 'Not installed',
   'Kurulumu başlat': 'Install',

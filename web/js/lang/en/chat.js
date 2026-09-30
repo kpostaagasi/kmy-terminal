@@ -22,6 +22,12 @@ export default {
   'Bağlam': 'Context',
   'abonelik': 'subscription',
 
+  // Yolo şeridi
+  '⚡ YOLO — ajan tüm araçlara izinli': '⚡ YOLO — the agent may use every tool',
+  'Yolo modu kapatılsın mı? Ajan bundan sonra araç kullanmadan önce onay isteyecek.': 'Turn yolo mode off? The agent will ask for approval before using a tool again.',
+  'Yolo modunu kapat': 'Turn off yolo',
+  'Yolo modu kapatıldı': 'Yolo mode turned off',
+
   // Oturumlar
   'Oturum': 'Session',
   'Oturumlar': 'Sessions',

@@ -68,5 +68,7 @@ say "Hazır: http://127.0.0.1:$PORT"
 if command -v borsa >/dev/null 2>&1; then CLI="borsa"; else CLI="$DIR/bin/kmy"; fi
 echo "  Durum : $CLI gateway status"
 echo "  Loglar: $CLI gateway logs -f"
+# Veri dizini kuralı tek yerde: server/paths.js (BORSA_DATA_DIR → uygulama dizini → depo data/)
+echo "  Veri  : $(node -e 'import("./server/paths.js").then(m=>process.stdout.write("\n"+m.DATA_DIR))' 2>/dev/null | tail -n 1)"
 echo "  Aç    : $CLI gateway open"
 [ "$SERVICE" = "1" ] || echo "  Servis kurulmadı; elle başlatmak için: npm start"

@@ -222,3 +222,11 @@
 /* Tek satırlık komut kutusu (tam metin ipucunda, Kopyala ile alınır) */
 .stg .stg-code.sm { width: min(340px, 100%); padding: 3px 3px 3px 10px; gap: 6px; }
 .stg .stg-code.sm code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; font-size: 11px; color: var(--text-2); }
+
+/* Durum rozeti: yeşil (--up) = onay ister, kırmızı (--down) = tüm araçlara izin */
+.stg-pill.yolo { background: color-mix(in srgb, var(--down) 16%, transparent); color: var(--down); font-weight: 600; }
+.stg-pill.yolo::before { background: var(--down); box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 22%, transparent); }
+/* Sohbet durum çubuğu şeridi: yalnız yolo modundayken görünür */
+.cm-yolo { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border: 1px solid color-mix(in srgb, var(--down) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--down) 14%, transparent); color: var(--down); font: 600 10.5px var(--mono); letter-spacing: .03em; cursor: pointer; white-space: nowrap; }
+.cm-yolo:hover { background: color-mix(in srgb, var(--down) 24%, transparent); }
+.cm-yolo[hidden] { display: none; }

@@ -1,5 +1,6 @@
 // Ayarlar penceresi: Bağlantı, Görünüm, Veri, Sistem, Hakkında (stil: settings.css, kök .stg)
-import { state, api, wsCall, emit, $, $$, esc, toast, modal, confirmBox, md, dateTR, connect, debounce } from './core.js';
+import { state, on, api, wsCall, emit, $, $$, esc, toast, modal, confirmBox, md, dateTR, connect, debounce, sqlDate, today } from './core.js';
+import { toolLabel } from './chat.js';
 import { t, tx, locale, LANGS, systemLang } from './i18n.js';
 
 // Kenar çubuğu simgeleri (24×24, çizgi)
@@ -35,6 +36,18 @@ const PROV = {
   codex: { cli: 'Codex CLI', desc: t('ChatGPT aboneliğinizle çalışır; terminal araçlarına MCP üzerinden erişir'), pkg: '@openai/codex', login: ['sLoginX', t('ChatGPT ile giriş'), 'codex login', 'codex login', t('ChatGPT hesabınızla giriş yapın')] },
   omp: { cli: 'oh-my-pi CLI (omp)', desc: t('omp komut satırı kodlama asistanı'), pkg: '@oh-my-pi/pi-coding-agent', alt: 'brew install can1357/tap/omp' },
 };
+// Yolo geri sayımı: süre dolunca mod 'default'a döner; sunucunun settings yayını şeridi de kapatır.
+// Tek nokta burada: yolo yalnız Ayarlar'dan açılır, kapanışı buradan ve sohbet şeridinden yapılır.
+const yoloDone = (st = state.settings) => st.permissionMode !== 'bypassPermissions' || !st.yoloUntil || st.yoloUntil > Date.now();
+async function checkYolo() {
+  if (yoloDone()) return;
+  try {
+    await api('/settings', { method: 'PUT', body: { permissionMode: 'default', yoloUntil: 0 } });
+    toast(t('Yolo modunun süresi doldu; ajan yeniden onay istiyor.'), '', 8000);
+  } catch { /* sunucu yoksa bir sonraki tikte tekrar denenir */ }
+}
+setInterval(checkYolo, 30000);
+on('settings', checkYolo);
 
 export function openSettings(section = 'genel') {
   const focus = isSec(section) ? null : section; // eski anahtar → ilgili bloğa kaydır
@@ -155,15 +168,42 @@ export function openSettings(section = 'genel') {
     async ajan(el, stale, health) {
       const h = await health();
       if (stale()) return;
+      const yolo = () => s.permissionMode === 'bypassPermissions';
+      // Yolo anahtarı ve izin modu seçici aynı alanı paylaşır: ikisi de markYolo ile eşitlenir
+      const markYolo = () => {
+        const b = $('#sYoloBadge');
+        if (b) b.innerHTML = yolo() ? pill('yolo', t('şu an: YOLO (tüm araçlara izin)')) : pill('ok', t('şu an: SOR'));
+        const sw = $('#sYolo');
+        if (sw) sw.checked = yolo();
+        const md = $('#sMode');
+        if (md) md.value = s.permissionMode || 'default';
+      };
       el.innerHTML = card(
         row(t('Varsayılan model'), t('Yeni Claude oturumları bu modelle başlar'), sel('sModel', state.meta.models.map((x) => [x.id, x.label]), s.model || String(state.meta.defaultModels?.claude || '').replace(/\[.*\]$/, '')))
         + row(t('Düşünme düzeyi'), t('Yeni oturumların varsayılan düşünme düzeyi'), state.meta.efforts.length <= 4 ? seg('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort) : sel('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort))
         + row(t('İzin modu'), t('Asistanın bir aracı kullanmadan önce ne zaman onay isteyeceği'), sel('sMode', Object.entries(state.meta.permissionModes).map(([k, v]) => [k, tx(v)]), s.permissionMode))
+        + row(t('Ajana tam otomatik izin (yolo)'), t('Açıkken ajan hiçbir araç için onay istemez; seçilen süre dolunca kendiliğinden kapanır.'),
+          `<span id="sYoloBadge"></span>${sel('sYoloDur', [[1800, t('30 dakika')], [7200, t('2 saat')], [0, t('Bu oturum')]], 1800)}${toggle('sYolo', yolo())}`, { wide: true })
         + row(t('Çalışma alanı'), t('Asistanın kalıcı talimatları, becerileri ve bilgi dosyaları: {files}', { files: '<span class="mono">CLAUDE.md · .claude/skills · knowledge/</span>' }), `<span class="stg-path mono">${esc(h.workspace)}</span>`, { wide: true }));
       if ($('#sEffort').tagName === 'SELECT') $('#sEffort').onchange = (e) => save({ effort: e.target.value });
       else onSeg('sEffort', (v) => save({ effort: v }));
       $('#sModel').onchange = (e) => save({ model: e.target.value });
-      $('#sMode').onchange = (e) => save({ permissionMode: e.target.value });
+      // 0 = bu oturum (süre yok); yoloUntil 0 olunca otomatik kapanma yok (bkz. checkYolo)
+      const until = () => { const d = Number($('#sYoloDur').value) * 1000; return d ? Date.now() + d : 0; };
+      $('#sMode').onchange = async (e) => {
+        const v = e.target.value;
+        await save({ permissionMode: v, yoloUntil: v === 'bypassPermissions' ? until() : 0 });
+        markYolo();
+      };
+      $('#sYolo').onchange = async (e) => {
+        if (e.target.checked) {
+          const okYolo = await confirmBox(t('Ajan artık portföyüne işlem ekleyebilir, hafıza ve rapor dosyası yazabilir, izleme listeni değiştirebilir. Her yaptığı iş denetim kaydına yazılır. Kapatmak için aynı anahtara tekrar bas.'), { danger: true, ok: t('Yolo modunu aç') });
+          if (!okYolo) { markYolo(); return; }
+          await save({ permissionMode: 'bypassPermissions', yoloUntil: until() });
+        } else await save({ permissionMode: 'default', yoloUntil: 0 });
+        markYolo();
+      };
+      markYolo();
     },
     async saglayici(el, stale, health) {
       const h = await health();
@@ -188,12 +228,36 @@ export function openSettings(section = 'genel') {
         return `<div class="stg-card" data-prov="${esc(key)}"><div class="stg-card-h"><span class="stg-dot ${v ? 'ok' : 'bad'}"></span>${esc(name)}<span class="stg-badge" ${key === def ? '' : 'hidden'}>${t('Varsayılan')}</span></div>${rows}</div>`;
       };
       const mcpCmd = `claude mcp add borsa -- node ${h.workspace.replace(/workspace$/, 'server/mcp-stdio.js')}`;
+      // Yetenek matrisi: /api/meta capabilities yoksa (eski sunucu) kart hiç çizilmez
+      const caps = state.meta.capabilities;
+      // [anahtar, etiket, desteklenmeyen gerekçesi, kısmi destek notu]
+      // Kısmi not etiketi tekrarlamamalı: sütun zaten etiketi gösteriyor.
+      const CAP_ROWS = [
+        ['effort', t('Düşünme düzeyi'), t('{name} düşünme seviyesini desteklemiyor.'), ''],
+        ['subagent', t('Alt asistan'), t('{name} alt asistan başlatmayı desteklemiyor.'), ''],
+        ['cost', t('Maliyet'), t('{name} gerçek maliyeti ölçemiyor.'), t('yalnızca tahmini (estCost)')],
+        ['bypass', t('Bypass / yolo'), t('{name} tüm araçlara otomatik izin verilmesini desteklemiyor.'), ''],
+      ];
+      const capTable = (key) => {
+        const c = caps?.[key] || {};
+        const nm = PROV[key]?.cli || state.meta.providers?.[key] || key;
+        return card(`<div class="stg-scroll"><table class="stg-tbl"><tbody>${CAP_ROWS.map(([k, label, why, partial]) => {
+          // true → tam destek, 'est' gibi bir dize → destekli ama kısmi, false → yok
+          const v = c[k];
+          const on = !!v && v !== false;
+          if (v === true) return `<tr><td><b>✓</b> ${esc(label)}</td><td class="r dim">${esc(t('destekleniyor'))}</td></tr>`;
+          const r = v && typeof v === 'object' && v.why ? tx(v.why) : (on ? partial : why.replace('{name}', nm));
+          return `<tr><td><b${on ? '' : ' class="dim"'}>${on ? '✓' : '✗'}</b> <span${on ? '' : ' class="dim"'}>${esc(label)}</span></td><td class="r dim" title="${esc(r)}">${esc(r)}</td></tr>`;
+        }).join('')}</tbody></table></div>`, t('Sağlayıcı yetenekleri'));
+      };
       el.innerHTML = card(row(t('Varsayılan sağlayıcı'), t('Yeni oturumlar bu sağlayıcıyla başlar; sohbet panelinden de değiştirebilirsiniz'), sel('sProv', provs, def)))
+        + (caps ? `<div id="sCapBox">${capTable(def)}</div>` : '')
         + provs.map(provCard).join('')
         + card(row(t('Harici MCP erişimi'), t('Terminal araçlarını başka Claude Code veya Codex oturumlarına ekler'), `<div class="stg-code sm" title="${esc(mcpCmd)}"><code>${esc(mcpCmd)}</code><button class="ghost xs" data-copy="mcp">${t('Kopyala')}</button></div>`));
       $('#sProv').onchange = (e) => {
         save({ provider: e.target.value });
         $$('[data-prov]', el).forEach((c) => { $('.stg-badge', c).hidden = c.dataset.prov !== e.target.value; });
+        if (caps) $('#sCapBox').innerHTML = capTable(e.target.value);
       };
       $('#sCodexModel')?.addEventListener('change', (e) => save({ codexModel: e.target.value.trim() }));
       for (const [key] of provs) {
@@ -304,7 +368,35 @@ export function openSettings(section = 'genel') {
         [t('Veri klasörü'), esc(h.dataDir), true], [t('Çalışma alanı'), esc(h.workspace), true],
       ]), `${t('Sunucu')} ${h.ok ? pill('ok', t('Çalışır durumda')) : pill('bad', t('Sorun var'))}`)
         + card(row(t('Bağlantı'), t('WebSocket bağlantısını yeniden kurar'), `<button class="btn sec" id="sReconnect">${t('Yeniden bağlan')}</button>`)
-          + row(t('Sunucuyu yeniden başlat'), t('Açık kabukları ve çalışan asistan işlerini kapatır'), `<button class="btn danger" id="sRestart">${t('Yeniden başlat')}</button>`));
+          + row(t('Sunucuyu yeniden başlat'), t('Açık kabukları ve çalışan asistan işlerini kapatır'), `<button class="btn danger" id="sRestart">${t('Yeniden başlat')}</button>`))
+        + (s.permissionMode === 'bypassPermissions' ? '<div id="sAudit"></div>' : '');
+      // Denetim kaydı yalnız yolo modundayken anlamlı; yolo kapanınca kart da kaybolur
+      if ($('#sAudit')) {
+        const drawAudit = async () => {
+          const box = $('#sAudit');
+          if (!box) return;
+          const r = await api('/tool-audit?limit=200').catch(() => null);
+          if (stale() || !$('#sAudit')) return;
+          const rows = Array.isArray(r) ? r : r?.rows || r?.items || [];
+          const day = today(); // İstanbul günü; kayıt UTC yazılıyor
+          const td = rows.filter((x) => { const d = sqlDate(x.at); return d && d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' }) === day; });
+          box.innerHTML = card(`<p class="stg-note">${t('Bugün {n} araç çağrısına izin verildi, {m} tanesi reddedildi.', { n: td.filter((x) => x.allowed).length, m: td.filter((x) => !x.allowed).length })}</p>
+            <div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>${t('Zaman')}</th><th>${t('Araç')}</th><th>${t('Oturum')}</th><th>${t('Mod')}</th><th class="r">${t('İzin')}</th><th>${t('Gerekçe')}</th></tr></thead><tbody>${rows.map((x) => `<tr>
+              <td class="mono">${esc(dateTR(sqlDate(x.at), true))}</td>
+              <td title="${esc(x.tool || '')}">${esc(toolLabel(x.tool))}</td>
+              <td class="mono dim">${esc((x.session_id || '').slice(0, 8) || '—')}</td>
+              <td class="dim">${esc(x.mode || '—')}</td>
+              <td class="r">${x.allowed ? '<b class="up">✓</b>' : '<b class="down">✗</b>'}</td>
+              <td class="dim">${esc(x.reason || '')}</td></tr>`).join('') || `<tr><td colspan="6" class="dim">${t('Denetim kaydı yok')}</td></tr>`}</tbody></table></div>`,
+            `${t('Ajan işlem kaydı')}<button class="ghost" id="sAuditClear">${t('Kaydı temizle')}</button>`);
+          $('#sAuditClear').onclick = async () => {
+            if (!(await confirmBox(t('Tüm ajan işlem kaydı silinsin mi?'), { danger: true, ok: t('Kaydı temizle') }))) return;
+            await api('/tool-audit/clear', { method: 'POST', body: {} }).catch(() => null);
+            drawAudit();
+          };
+        };
+        await drawAudit();
+      }
       $('#sReconnect').onclick = () => { connect(); toast(t('Yeniden bağlanılıyor…')); };
       $('#sRestart').onclick = async () => {
         if (!(await confirmBox(t('Sunucu yeniden başlatılsın mı? Açık kabuklar ve çalışan asistan işleri kapanır.'), { danger: true, ok: t('Yeniden başlat') }))) return;

@@ -50,6 +50,8 @@ export function close(id) {
   const t = terms.get(id);
   if (t) { try { t.p.kill(); } catch { /* zaten kapalı */ } terms.delete(id); }
 }
+// Sahiplik denetimi: kabuk yalnız açan WebSocket istemcisine aittir
+export function owned(id, owner) { return !!owner && terms.get(id)?.owner === owner; }
 export function closeOwned(owner) {
   for (const [id, t] of terms) if (t.owner === owner) close(id);
 }

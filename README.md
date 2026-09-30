@@ -1,6 +1,6 @@
 # kmy terminal
 
-Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda (`data/borsa.db`) tutulur.
+Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
 
 ## Hızlı başlangıç
 
@@ -13,7 +13,7 @@ Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tara
 
 Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı), `omp` CLI ve omp içinde `/login` (oh-my-pi sağlayıcısı; CLI bulunursa model seçicide görünür).
 
-Portföy hesaplarını doğrulamak için: `npm test` (geçici veritabanında 30 kontrol; gerçek verinize dokunmaz).
+Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 87 kontrol: portföy 52, güvenlik 19, hata senaryoları 16; gerçek verinize dokunmaz).
 
 ## Kurulum (DMG)
 
@@ -22,7 +22,7 @@ Hazır paket: GitHub › Releases › `kmy-terminal-<sürüm>-arm64.dmg`. DMG'yi
 - Gereksinimler: Apple Silicon (M1+) Mac, macOS 14+. Yapay zekâ ajanı için **Claude Code** kurulu ve giriş yapılmış olmalı (https://claude.com/download); Codex ve oh-my-pi isteğe bağlı. Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.
 - Uygulama Apple Developer ID ile imzalı değildir; ilk açılışta macOS uyarı verirse Sistem Ayarları › Gizlilik ve Güvenlik › **Yine de Aç**.
 - İlk açılışta uygulama Uygulamalar klasörüne taşımayı önerir. Claude Code PATH'te olmasa da resmî kurulum, Homebrew, npm, nvm, volta ve bun konumlarında bulunur; bulunamazsa sohbet ekranı kurulum adımlarını gösterir.
-- Veriler: `~/Library/Application Support/kmy terminal` (uygulamayı silmek verileri silmez).
+- Veri: `BORSA_DATA_DIR` tanımlıysa o, yoksa `~/Library/Application Support/kmy terminal` (uygulamayı silmek verileri silmez). Bu dizin henüz yoksa depo içindeki `data/` kullanılır ve varsa uygulama dizinine taşınır. Hangi dizinin kullanıldığını `bin/kmy gateway status` her an gösterir.
 - Paketi yeniden üretmek için: `npm run dmg` → `dist/kmy-terminal-<sürüm>-arm64.dmg`.
 
 ## macOS uygulaması
@@ -59,6 +59,8 @@ sh scripts/install.sh            # npm install + servis kurulumu (tekrar çalı�
 
 `npm link` ile (veya `sh scripts/install.sh --link`) `kmy` komutu PATH'e eklenir. Durum, anahtar ve yeniden başlatma/durdurma Ayarlar › SİSTEM › Gateway bölümünde de bulunur. Port `BORSA_PORT` (rapor portu `BORSA_REPORT_PORT`, varsayılan port+1), veri klasörü `BORSA_DATA_DIR` ile değiştirilebilir; kurulum sırasında tanımlıysa servise aktarılır.
 
+Veri dizini tek kaynaktan çözülür: `BORSA_DATA_DIR` → `~/Library/Application Support/kmy terminal/data` (macOS) → depodaki `data/`. Uygulama ile `npm start` böylece aynı veritabanını görür; eski depo kopyası varsa doğrulanarak (boyut ve tablo sayısı) uygulama dizinine taşınır. `bin/kmy gateway status` (veya `--json`) etkin veri dizinini gösterir.
+
 **Erişim anahtarı.** İlk çalıştırmada `data/gateway.json` dosyasında (izin 0600) 32 baytlık rastgele bir anahtar oluşur. Tüm `/api/*` istekleri ve WebSocket bağlantısı bu anahtarı ister; yoksa `401 {"error":"Gateway anahtarı gerekli"}` döner. Tarayıcı anahtarı arayüz yüklenirken verilen `borsa_gw` çerezi (HttpOnly, SameSite=Strict) ile otomatik gönderir. Betikler ve harici istemciler başlıkla gönderir:
 
 ```bash
@@ -75,6 +77,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
 - Rapor sunucusu (7421) rapor dosyalarında aynı çerezi veya uygulama kökenini ister. Uygulama içi rapor çerçeveleri çalışmaya devam eder.
 - Anahtarı yenilemek (`gateway token --rotate` veya Ayarlar › Yenile) eski anahtarla bağlanan harici istemcileri düşürür. Açık arayüz sekmeleri kendini tazeler.
 - `data/gateway.json` dosyası parola gibidir: paylaşmayın, yedeklere dikkat edin. Aynı kullanıcı hesabındaki yerel programlar bu dosyayı okuyabilir. Anahtar bu programlara karşı değil, tarayıcıdaki diğer sitelere ve ağa karşı korur.
+- Ajan alt süreçlerine (Claude / Codex / omp) **master anahtar verilmez**. Onlara imzalı, süreli ve oturum+kip taşıyan bir kapsamlı jeton verilir; bu jeton yalnız `/api/tools/` rotasında geçerlidir, `/api/settings` 401 döner. Yolo kipi açık olsa bile ajan tüm API'ye erişemez.
 - Ağdan erişim varsayılan olarak kapalıdır. `HOST=0.0.0.0` ile açarsanız izin verilen adları `BORSA_ALLOWED_HOSTS` ile ekleyin; bağlantı şifresiz (HTTP) olur.
 
 ## Özellikler
@@ -104,8 +107,17 @@ Kısayollar: `⌘K` sembol ara, `⌘1–3` sekmeler (TERMINAL, DASHBOARD, PORTF�
   - `scripts/dcf_excel.py`: formüllü DCF Excel modeli.
   - `knowledge/`: değerleme, makro, risk ve kalite notları.
 - Terminal araçları (32 adet) ajana `mcp__borsa__*` olarak bağlıdır. Claude Code'daki diğer MCP bağlayıcılarınız (ör. Borsa MCP, Matriks) da ajanda kullanılabilir.
-- Portföye işlem ekleme her seferinde onay ister. Diğer araçlar otomatik çalışır.
-- oh-my-pi (omp): terminal araçları `workspace/.omp/mcp.json` üzerinden aynı stdio köprüsüyle bağlanır (sunucu bu dosyayı ilk omp çalışmasında yazar; omp araçları `xd://mcp__borsa_<araç>` olarak görür). İzin modları: Sor → `always-ask` (onay kartı arayüzde), Düzenlemeleri onayla → `write`, Otomatik → `yolo`, Plan → onay gerektiren her araç reddedilir. Maliyet omp tarafından API fiyatıyla tahmin edilir (`estCost`); abonelik hesaplarında oturum maliyeti "abonelik" görünür.
+- **İzin kipi sunucu tarafında uygulanır** ve dört seçenekten birini alır:
+
+  | Kip | Davranış |
+  |---|---|
+  | Sor (varsayılan) | Veritabanına veya dosyaya yazan her araç onay ister; salt okunur araçlar sorusuz çalışır |
+  | Dosya düzenlemelerini onayla | Dosya araçları serbest; portföye/ayara/izleme listesine yazan araçlar onay ister |
+  | Sadece plan | Yazan her araç reddedilir |
+  | Otomatik (yolo) | Her araç izinli; her karar `tool_audit` tablosuna yazılır |
+
+  Ayarlar › Bağlantı'daki "Ajana tam otomatik izin (yolo)" anahtarı 30 dakika / 2 saat / bu oturum seçeneğiyle açar ve seçilen süre dolunca kipi kendiliğinden "Sor"a döndürür. Bu kip yalnız ajanın kendi oturumuna ait; ana anahtarla yapılan doğrudan `POST /api/tools/...` çağrıları her zaman onay kapısından geçer.
+- oh-my-pi (omp): terminal araçları `workspace/.omp/mcp.json` üzerinden aynı stdio köprüsüyle bağlanır (sunucu bu dosyayı ilk omp çalışmasında yazar; omp araçları `xd://mcp__borsa_<araç>` olarak görür). İzin kipleri: Sor → `always-ask` (onay kartı arayüzde), Düzenlemeleri onayla → `write`, Otomatik → `yolo`, Plan → yazan her araç reddedilir. Maliyet omp tarafından API fiyatıyla tahmin edilir (`estCost`); abonelik hesaplarında oturum maliyeti "abonelik" görünür.
 - Aynı araçları başka bir Claude Code / Codex oturumuna eklemek için:
 
 ```bash

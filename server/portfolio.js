@@ -5,6 +5,7 @@
 //   Toplam değer − Net yatırılan = Açık poz. K/Z + Gerçekleşen K/Z + Temettü + Faiz − Masraf + Kur farkı (gerçekleşen + açık)
 import { db, tx, getSettings } from './db.js';
 import { getQuotes, getHistory, getDividends, normalize, sectorOf, currencyOf, SPECIAL, priceOnDate, isBist } from './market.js';
+import { annualization } from './indicators.js';
 import * as universe from './universe.js';
 import { tcmbRates, tlrefStats, tlrefIndex } from './feeds.js';
 
@@ -218,11 +219,16 @@ function allTx() {
   return db.prepare(`${TX_SELECT} ORDER BY t.date, t.id`).all();
 }
 
+// Bölünme yalnız ilgili platformdaki pozisyonlara uygulanır; platform boşsa sembolün tamamına.
+// Defter (pozisyonlar) ve tarihsel seri (sembol|platform kovaları) aynı kuralı kullanmalı.
+export const splitAppliesTo = (splitTx, platform) => !splitTx.platform || splitTx.platform === platform;
+
 export function computeLedger(txs = allTx()) {
   const pos = new Map();   // sembol|platform
   const cash = new Map();  // platform|para birimi → { amount, cost (TRY) }
   const T = { realized: 0, dividends: 0, interest: 0, staking: 0, fees: 0, commissions: 0, deposits: 0, withdrawals: 0, bought: 0, sold: 0, fxRealized: 0 };
   const realizedBySym = {}, dividendsBySym = {};
+  const warnings = [];
   const flows = []; // yatırımcı nakit akışları (XIRR ve TWR için): { date, amount (TRY, yatırıma giren +) }
 
   const getPos = (sym, plat, t) => {
@@ -298,14 +304,19 @@ export function computeLedger(txs = allTx()) {
       }
       case 'SPLIT': {
         // Platform belirtilmemişse sembolün tüm pozisyonlarına uygulanır
-        for (const q of pos.values()) if (q.symbol === t.symbol && (!t.platform || q.platform === plat)) { q.qty *= t.quantity; if (q.lastPrice) q.lastPrice /= t.quantity; }
+        for (const q of pos.values()) if (q.symbol === t.symbol && splitAppliesTo(t, q.platform)) { q.qty *= t.quantity; if (q.lastPrice) q.lastPrice /= t.quantity; }
         break;
       }
       case 'TRANSFER': {
         const to = t.to_platform || '—';
         if (t.symbol) {
           const from = getPos(t.symbol, plat, t), dst = getPos(t.symbol, to, t);
-          const q = Math.min(t.quantity, Math.max(from.qty, 0)) || t.quantity;
+          // Kaynakta olmayan miktar hedefte hayalet pozisyon doğuruyordu (istenen miktarın tamamı yazılıyordu).
+          const available = Math.max(from.qty, 0);
+          const want = Math.max(t.quantity, 0);
+          const q = Math.min(want, available);
+          if (want > available + 1e-9) warnings.push(`${t.date} ${t.symbol}: transfer kaynağında yeterli miktar yok (${plat} → ${to}; istenen ${want}, kaynakta ${available}, taşınan ${q})`);
+          if (!(q > 1e-9)) break;
           const avg = from.qty > 1e-12 ? from.cost / from.qty : 0, avgN = from.qty > 1e-12 ? from.costNative / from.qty : 0;
           from.qty -= q; from.cost -= avg * q; from.costNative -= avgN * q;
           dst.qty += q; dst.cost += avg * q; dst.costNative += avgN * q; dst.lastPrice = from.lastPrice; dst.firstDate = dst.firstDate || t.date;
@@ -351,6 +362,7 @@ export function computeLedger(txs = allTx()) {
     shorts: [...pos.values()].filter((p) => p.qty < -1e-9),
     cash: [...cash.values()].filter((c) => Math.abs(c.amount) > 1e-6),
     cashTracking,
+    warnings,
     totals: T,
     realizedBySym, dividendsBySym, flows,
   };
@@ -370,6 +382,15 @@ function manualPrices() {
   return Object.fromEntries(db.prepare('SELECT symbol, manual_price, manual_price_at FROM symbols WHERE manual_price IS NOT NULL').all().map((r) => [r.symbol, r]));
 }
 
+// Kullanıcının sembol tablosunda tanımladığı enstrüman tipi (varsa elle fiyat da buradan gelir)
+function symbolMeta() {
+  return Object.fromEntries(db.prepare('SELECT symbol, asset_type FROM symbols WHERE asset_type IS NOT NULL').all().map((r) => [r.symbol, r.asset_type]));
+}
+
+// Satış stopajına tabi enstrümanlar: yalnız BIST hisse ve ETF. Fon, tahvil, mevduat, altın,
+// döviz, kripto ve yurt dışı hisseler muaftır — sembol biçiminden tahmin etmek tahvile %10 kesiyordu.
+const TAXABLE = new Set(['stock', 'etf']);
+
 const COUNTRY_BY_CUR = { USD: 'ABD', EUR: 'Euro bölgesi', GBP: 'Birleşik Krallık', CHF: 'İsviçre', JPY: 'Japonya' };
 function countryOf(sym, type, cur) {
   if (sym.endsWith('.US')) return 'ABD';
@@ -387,8 +408,10 @@ export async function summary() {
   const symbols = L.holdings.map((h) => h.symbol);
   const [quotes, fx] = await Promise.all([getQuotes(symbols).catch(() => ({})), fxRates().catch(() => ({ TRY: { now: 1, prev: 1 } }))]);
   const manual = manualPrices();
+  const userTypes = symbolMeta();
   let value = 0, cost = 0, dayChange = 0;
   const sellRate = Number(getSettings().sellTaxRate ?? 0.10);
+  const unknownTax = [];
   const holdings = L.holdings.map((h) => {
     const q = quotes[h.symbol];
     const m = manual[h.symbol];
@@ -403,8 +426,12 @@ export async function summary() {
     const dc = q?.prevClose != null && rate ? h.qty * (price * rate.now - q.prevClose * rate.prev) : 0;
     if (v != null) { value += v; cost += h.cost; dayChange += dc; }
     // "Bugün satarsam" senaryosu: brüt satış tutarı, stopaj kesintisi ve elde kalan net tutar.
-    // BIST hisselerinde stopaj uygulanır; yurt dışı varlıklar ve fonlar muaftır.
-    const sellTax = isBist(h.symbol) ? sellRate : 0;
+    // Kapsam enstrüman tipine göre belirlenir: kullanıcı sembol tablosunda tip tanımladıysa o,
+    // yoksa işlem kaydındaki tip esas. Tip belirsizse muaf kabul edilip uyarıya düşülür.
+    const instType = userTypes[h.symbol] || h.asset_type;
+    const typeKnown = !!userTypes[h.symbol] || (!!h.asset_type && h.asset_type !== 'other');
+    const sellTax = typeKnown && TAXABLE.has(instType) && isBist(h.symbol) && qCur === 'TRY' ? sellRate : 0;
+    if (isBist(h.symbol) && !typeKnown) unknownTax.push(h.symbol);
     const gross = v == null ? null : v;
     const tax = gross == null ? null : gross * sellTax;
     const netSell = gross == null ? null : gross - tax;
@@ -448,11 +475,18 @@ export async function summary() {
 
   const T = L.totals;
   const unrealized = value - cost;
-  const netInvested = L.cashTracking ? T.deposits - T.withdrawals : T.bought - T.sold;
+  // Nakit takibi açıkken net yatırım = para girişi − para çıkışıdır. Ancak başlangıç nakdi hiç
+  // DEPOSIT olarak kaydedilmemişse bu sayı sıfıra yakın kalır ve "Toplam K/Z" portföyün tamamını
+  // kâr gibi gösterir. Savunulabilir tek maliyet esası pozisyon maliyetidir: kayıtlı nakit
+  // maliyeti karşılamıyorsa maliyet esas alınır ve uyarı üretilir.
+  const cashIn = T.deposits - T.withdrawals;
+  const cashShort = L.cashTracking && cost > cashIn + 0.01;
+  const netInvested = L.cashTracking ? Math.max(cashIn, cost) : T.bought - T.sold;
   const totalPnl = L.cashTracking
     ? total - netInvested
     : unrealized + T.realized + T.dividends + T.interest - T.fees + T.fxRealized + kurFarki;
   const warnings = [];
+  if (cashShort) warnings.push(`Kayıtlı nakit girişi (${Math.round(cashIn).toLocaleString('tr-TR')} ₺) pozisyon maliyetini (${Math.round(cost).toLocaleString('tr-TR')} ₺) karşılamıyor — başlangıç nakdi DEPOSIT olarak kaydedilmedi. Net yatırım maliyet esasıyla hesaplandı; "Toplam K/Z" güvenilmez.`);
   const negCash = cashRows.filter((c) => c.amount < -0.01);
   if (L.cashTracking && negCash.length) warnings.push(`Eksi nakit: ${negCash.map((c) => `${c.platform} ${c.currency}`).join(', ')} — nakit girişi kaydı eksik olabilir`);
   if (L.shorts.length) warnings.push(`Eldekinden fazla satış: ${L.shorts.map((p) => `${p.symbol} (${p.platform})`).join(', ')}`);
@@ -469,6 +503,8 @@ export async function summary() {
       realized: T.realized, dividends: T.dividends, interest: T.interest, staking: T.staking, fees: T.fees, commissions: T.commissions,
       fxRealized: T.fxRealized, fxUnrealized: kurFarki, kurFarki: T.fxRealized + kurFarki,
       netInvested, totalPnl, totalPnlPct: netInvested > 0 ? (totalPnl / netInvested) * 100 : null,
+      // true olduğunda net yatırım maliyet esasıyla hesaplandı; arayüz "Toplam K/Z" kartını işaretlemeli
+      netInvestedEstimated: cashShort,
       valueUSD: fx.USD?.now ? total / fx.USD.now : null,
       positionsCount: holdings.length,
       // Tüm portföyü bugün satma senaryosu (stopaj sonrası)
@@ -550,7 +586,8 @@ export async function dividendReport() {
     bySymbol[it.symbol] = (bySymbol[it.symbol] || 0) + it.amount;
   }
   const s = await summary();
-  const taxRate = Number(getSettings().dividendTaxRate ?? 0.15);
+  // BIST hisse senetlerinde uygulanan temettü stopajı %10'dur. Kullanıcı ayarlardan değiştirebilir.
+  const taxRate = Number(getSettings().dividendTaxRate ?? 0.10);
   const today = new Date().toISOString().slice(0, 10);
   // İlan edilmiş gelecek temettüler (İş Yatırım) — yalnızca BIST
   const bistHoldings = s.holdings.filter((h) => isBist(h.symbol));
@@ -647,6 +684,9 @@ export async function valueSeries() {
   const futureSplit = (sym, date) => splits.filter((s) => s.symbol === sym && s.date > date).reduce((a, s) => a * s.quantity, 1);
 
   const qty = {}; const lastPx = {}; const lastFx = { TRY: 1 };
+  // Seride hiç bulunamayan kurlar için son bilinen kuru geriye doğru taşı: aksi hâlde o gün
+  // döviz varlığı 0 sayılır ve Özet ile Risk grafiği birbirini tutmaz (60.000 TL ↔ 0).
+  for (const c of curs) { const firstRate = fxm[c].values().next().value; if (firstRate != null) lastFx[c] = firstRate; }
   const cashAmt = {}; // para birimi → tutar (tüm platformlar)
   const addCash = (c, a) => { cashAmt[c] = (cashAmt[c] || 0) + a; };
   let ti = 0;
@@ -784,8 +824,11 @@ export async function risk({ from = null, to = null } = {}) {
   const total = idx.at(-1).level / 100 - 1;
   const cagr = days >= 365 ? (1 + total) ** (365 / days) - 1 : null; // bir yıldan kısa dönemde yıllıklandırma yanıltıcıdır
   const annRet = (1 + total) ** (365 / days) - 1;
-  const vol = std(r) * Math.sqrt(252);
-  const downside = Math.sqrt(mean(r.map((x) => Math.min(x, 0) ** 2))) * Math.sqrt(252);
+  // Yıllıklandırma sabit 252 değil: takvim BIST hisseleriyle birlikte fon/kripto günlerini de içerir.
+  // Gerçek işlem günü sayısından türetmek volatiliteyi ~%20 düzeltir (annualization 60-365 aralığına kırpılır).
+  const annFactor = Math.sqrt(annualization(idx.length, days));
+  const vol = std(r) * annFactor;
+  const downside = Math.sqrt(mean(r.map((x) => Math.min(x, 0) ** 2))) * annFactor;
   let peak = -Infinity, maxDD = 0; const dd = [];
   for (const p of idx) { peak = Math.max(peak, p.level); const d = p.level / peak - 1; maxDD = Math.min(maxDD, d); dd.push({ date: p.date, dd: d * 100 }); }
   const curDD = dd.at(-1).dd / 100;
