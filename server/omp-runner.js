@@ -34,7 +34,7 @@ export const OMP_DEFAULT_MODELS = [
   { id: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5 (anthropic)' },
   { id: 'openai-codex/gpt-5.5', label: 'GPT-5.5 (openai-codex)' },
 ];
-let models = null, modelsAt = 0, loading = null;
+let models = null, modelsAt = 0, loading = null, catalog = new Map(); // catalog: elenen sağlayıcıların modeli de (id → metadata)
 const MODELS_TTL = 30 * 60_000;
 
 function loadModels() {
@@ -48,8 +48,11 @@ function loadModels() {
       const count = {};
       for (const m of all) count[m.provider] = (count[m.provider] || 0) + 1;
       // Yüzlerce model listeleyen toplayıcılar (nous, nvidia…) seçiciyi boğar: yalnız küçük sağlayıcılar, tarihli kopyalar hariç
-      const list = all.filter((m) => count[m.provider] <= 40 && m.reasoning && !/-\d{8}$|embed/i.test(m.id))
-        .map((m) => ({ id: m.selector || `${m.provider}/${m.id}`, label: `${m.name || m.id} (${m.provider})`, contextWindow: m.contextWindow || null, thinking: Array.isArray(m.thinking) ? m.thinking : null }));
+      const pick = (m) => ({ id: m.selector || `${m.provider}/${m.id}`, label: `${m.name || m.id} (${m.provider})`, contextWindow: m.contextWindow || null, thinking: Array.isArray(m.thinking) ? m.thinking : null });
+      // Elenen sağlayıcıların modeli de (kullanıcının varsayılanı çoğu kez burada) metadatasıyla
+      // saklanır: seçiciye elle eklenirken bağlam penceresi ve düşünme seviyeleri de bilinsin.
+      catalog = new Map(all.map((m) => [pick(m).id, pick(m)]));
+      const list = all.filter((m) => count[m.provider] <= 40 && m.reasoning && !/-\d{8}$|embed/i.test(m.id)).map(pick);
       if (list.length) models = list;
     } catch (e) {
       console.error('[omp] model listesi alınamadı:', String(e.message || e).slice(0, 200));
@@ -64,6 +67,10 @@ export function ompModels() {
   if (!models || Date.now() - modelsAt > MODELS_TTL) loadModels();
   return models || OMP_DEFAULT_MODELS;
 }
+
+// Elenen bir sağlayıcının modeli için metadatası (kullanıcının varsayılanı çoğu kez openrouter'da,
+// 560 modeli yüzünden seçici dışı kalıyor). Seçiciye elle eklenirken kullanılır.
+export function ompModelMeta(id) { return catalog.get(id) || null; }
 
 // Meta isteği senkron yanıt verdiği için model listesi hazır olana kadar bekleriz:
 // aksi hâlde ilk /api/meta çağrısı yalnız OMP_DEFAULT_MODELS döner ve seçici eksik kalır.

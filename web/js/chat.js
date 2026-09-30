@@ -941,10 +941,15 @@ function fillModels() {
 function syncEffort() {
   const sel = $('#optEffort'), box = sel.parentElement;
   const p = pickModel().provider;
-  const model = (state.meta?.providerModels?.[p] || []).find((x) => x.id === baseId(pickModel().model));
+  // pickModel() varsayılan modelde boş id döner ("sağlayıcının kendi varsayılanını kullan" kuralı,
+  // Claude'da doğru). omp'de her model adıyla seçilir; boş id ile arama bulamazdı.
+  const selId = pickModel().model || $('#optModel').selectedOptions[0]?.dataset.id || '';
+  const model = (state.meta?.providerModels?.[p] || []).find((x) => x.id === baseId(selId));
   const list = p === 'claude' ? (state.meta?.efforts || []) : (model?.thinking || null);
-  box.hidden = p !== 'claude' && !list?.length;
-  if (box.hidden) return;
+  // Gizliyken eski seçenekleri temizle: gizli bir <select> dolu kalırsa model değişince
+  // yanlış seviye gönderilir ve kullanıcı seçiciyi görüp "seçemiyorum" der.
+  if (p !== 'claude' && !list?.length) { box.hidden = true; sel.innerHTML = ''; return; }
+  box.hidden = false;
   const cur = sel.value || state.settings.effort || 'medium';
   sel.innerHTML = (list || []).map((x) => `<option value="${x}" ${x === cur ? 'selected' : ''} title="${EFFORT_TIP[x] ? t(EFFORT_TIP[x]) : ''}">${esc(effortName(x))}</option>`).join('');
 }
