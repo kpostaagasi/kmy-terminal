@@ -82,6 +82,18 @@ export function atr(bars, n = 14) {
   return out;
 }
 
+// Yıllıklandırma faktörü: sabit 252 yerine serinin kendi takviminden türetilir.
+// BIST hisseleri ~252, kripto/fon 365 gün işler; ikisi birlikteyse takvim birleşimi kullanılır.
+export function annualization(points, days) {
+  if (!(points > 1) || !(days > 0)) return 365;
+  return Math.min(365, Math.max(60, (points - 1) / (days / 365)));
+}
+
+// Göreli yuvarlama: 6 anlamlı basamak. Mutlak 2 ondalık TEFAS fonlarını bozuyordu
+// (birim fiyat 0,072083 → 0,07 = %2,9 hata). 4 basamak da yetersiz: 83.147,6 → 83.150.
+export const sig6 = (x) => (x == null || !Number.isFinite(x) ? null : parseFloat(Number(x).toPrecision(6)));
+
+
 const last = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return arr[i]; return null; };
 
 // Ajan ve arayüz için özet teknik görünüm
@@ -98,7 +110,8 @@ export function technicalSummary(bars) {
   const dailyRets = c.slice(1).map((v, i) => Math.log(v / c[i]));
   const recent = dailyRets.slice(-60);
   const mean = recent.reduce((x, y) => x + y, 0) / recent.length;
-  const vol = Math.sqrt(recent.reduce((x, y) => x + (y - mean) ** 2, 0) / (recent.length - 1)) * Math.sqrt(252) * 100;
+  const spanDays = (bars[bars.length - 1].t - bars[0].t) / 864e5;
+  const vol = Math.sqrt(recent.reduce((x, y) => x + (y - mean) ** 2, 0) / (recent.length - 1)) * Math.sqrt(annualization(c.length, spanDays)) * 100;
   // 52 hafta: gün içi en yüksek / en düşük (son 252 işlem günü)
   const win = bars.slice(-252);
   const hi = Math.max(...win.map((b) => b.h ?? b.c)), lo = Math.min(...win.map((b) => b.l ?? b.c));
@@ -112,12 +125,14 @@ export function technicalSummary(bars) {
   if (bu && price > bu) signals.push('Fiyat üst Bollinger bandının üzerinde');
   if (bl && price < bl) signals.push('Fiyat alt Bollinger bandının altında');
   const round = (x, d = 2) => (x == null ? null : Math.round(x * 10 ** d) / 10 ** d);
+  // Fiyat ve fiyattan türeyen değerler göreli yuvarlanır (TEFAS fonu 0,072083 mutlak 2 ondalıkta %2,9 bozulurdu);
+  // oran ve yüzde değerleri mutlak ondalık kalır (RSI 55,4324 · MACD 0,000123)
   return {
-    price: round(price), sma20: round(s20), sma50: round(s50), sma200: round(s200), rsi14: round(r, 1),
+    price: sig6(price), sma20: sig6(s20), sma50: sig6(s50), sma200: sig6(s200), rsi14: round(r, 1),
     macd: round(last(m.line), 3), macdSignal: round(last(m.signal), 3), macdHist: round(mh, 3),
-    bollingerUpper: round(bu), bollingerLower: round(bl), atr14: round(a),
+    bollingerUpper: sig6(bu), bollingerLower: sig6(bl), atr14: sig6(a),
     return1w: round(ret(5)), return1m: round(ret(21)), return3m: round(ret(63)), return1y: round(ret(252)),
-    volatility60dAnnualPct: round(vol), high52w: round(hi), low52w: round(lo),
+    volatility60dAnnualPct: round(vol), high52w: sig6(hi), low52w: sig6(lo),
     distFromHigh52wPct: round((price / hi - 1) * 100), signals,
   };
 }

@@ -8,7 +8,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn, execFile } from 'node:child_process';
 import { WORKSPACE_DIR, ROOT } from './paths.js';
-import { AUTO_TOOLS } from './agent-tools.js';
+import { AUTO_TOOLS, mintScopedToken } from './agent-tools.js';
 
 const MCP_STDIO = path.join(ROOT, 'server', 'mcp-stdio.js');
 const MCP_FILE = path.join(WORKSPACE_DIR, '.omp', 'mcp.json');
@@ -83,10 +83,10 @@ export async function ompModelsReady() {
 // ── workspace/.omp/mcp.json: borsa stdio MCP sunucusu (varsa diğer sunucular korunur) ──
 // Proje klasörü taşınırsa buradaki yol eskir ve MCP köprüsü sessizce ölür; bu yüzden sunucu
 // açılışında bir kez çağrılır (runOmp ayrıca her turda doğrular).
-export function ensureOmpMcp() {
+export function ensureOmpMcp(env = {}) {
   let cur = {};
   try { cur = JSON.parse(fs.readFileSync(MCP_FILE, 'utf8')); } catch { /* yok */ }
-  const want = { command: process.execPath, args: [MCP_STDIO] };
+  const want = { command: process.execPath, args: [MCP_STDIO], ...(Object.keys(env).length ? { env } : {}) };
   if (JSON.stringify(cur.mcpServers?.borsa) === JSON.stringify(want)) return false;
   // Eski yol bir başka projeyi gösteriyorsa kullanıcıyı bilgilendir: borsa araçları çalışmayacak
   const stale = cur.mcpServers?.borsa && JSON.stringify(cur.mcpServers.borsa) !== JSON.stringify(want);
@@ -98,8 +98,9 @@ export function ensureOmpMcp() {
 }
 
 // omp MCP araçlarını xd:// aygıtı olarak sunar: write(xd://mcp__borsa_get_quotes, JSON) → mcp__borsa__get_quotes
-// Sunucu adı ayraç olarak geçer; alt çizgi içereyen adlar (borsa, my_server) doğru bölünür.
-const XD_MCP = /^xd:\/\/mcp__(.+)_(\w+)$/i;
+// Sunucu adı beyaz listeye göre eşleştirilir (borsa, context7, claude_ai_*); ayraç olarak bölmek
+// "mcp__borsa_get_quotes"ı sunucu=borsa_get, araç=quotes diye ayırıyordu (açgözlü .+). Eşleşmezse null.
+export const XD_MCP = /^xd:\/\/mcp__(borsa|context7|claude_ai_Borsa_MCP|claude_ai_Matriks_MCP)_(\w+)$/i;
 function toolView(name, args = {}) {
   const p = typeof args.path === 'string' ? args.path : '';
   const m = XD_MCP.exec(p);
@@ -123,7 +124,9 @@ const text = (content) => (Array.isArray(content) ? content.map((c) => (c.type =
 
 // io: { record, emit, jobs, ask(tool, input, signal, canAlways) → Promise<{behavior, updatedInput, updatedPermissions}>, setSdkSession, setCtxWindow, contextNote(), end() }
 export function runOmp({ run, session, prompt, model, effort, permissionMode, sys, io }, fresh = false) {
-  try { ensureOmpMcp(); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
+  // Köprüye master gateway anahtarı değil kapsamlı jeton + izin modu verilir (yolo modunda bile anahtar sızmaz)
+  const bridgeEnv = { KMY_PERMISSION_MODE: permissionMode || 'default', KMY_SCOPED_TOKEN: mintScopedToken({ sessionId: session.id, mode: permissionMode || 'default' }) };
+  try { ensureOmpMcp(bridgeEnv); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
   const approval = permissionMode === 'bypassPermissions' ? 'yolo' : permissionMode === 'acceptEdits' ? 'write' : 'always-ask';
   const plan = permissionMode === 'plan';
   const resume = !fresh && session.sdk_session_id;
@@ -136,6 +139,7 @@ export function runOmp({ run, session, prompt, model, effort, permissionMode, sy
 
   const started = Date.now();
   const env = { ...process.env };
+  Object.assign(env, bridgeEnv);
   delete env.CLAUDECODE;
   const child = spawn(ompBin() || 'omp', args, { cwd: WORKSPACE_DIR, env, stdio: ['pipe', 'pipe', 'pipe'] });
   const send = (o) => { if (child.stdin.writable) child.stdin.write(JSON.stringify(o) + '\n'); };
@@ -166,11 +170,16 @@ export function runOmp({ run, session, prompt, model, effort, permissionMode, sy
     const xd = XD_MCP.exec(/Path: (xd:\/\/\S+)/.exec(req.title || '')?.[1] || '');
     const xdTool = xd?.[2];
     const answer = (ok) => send({ type: 'extension_ui_response', id: req.id, value: ok ? 'Approve' : 'Deny' });
-    if (xd && xd[1] === 'borsa' && AUTO_TOOLS.includes(xdTool)) return answer(true); // salt okunur terminal araçları onaysız; başka MCP sunucuları sorulur
     if (plan) return answer(false); // plan modu: değişiklik yapan araç yok
+    if (permissionMode === 'bypassPermissions') return answer(true); // yolo: soru kartı üretme (kayıt tool_use'da zaten yazıldı)
+    if (xd && xd[1].toLocaleLowerCase('tr') === 'borsa' && AUTO_TOOLS.includes(xdTool)) return answer(true); // salt okunur terminal araçları onaysız
     if (st.always.has(tool)) return answer(true);
-    const last = [...(st.pendingTools?.values() || [])].filter((t) => t.name === tool).at(-1);
-    const v = last ? toolView(last.name, last.args) : { name: tool, input: { istek: req.title } };
+    // Onay kartı gerçek isteğin girdisini göstermeli: aynı araç adlı başka bir çağrının argümanlarıyla onaylamak yanlış.
+    const same = [...(st.pendingTools?.entries() || [])].filter(([, t]) => t.name === tool);
+    const want = String(req.toolCallId || req.targetId || '');
+    const call = same.find(([id]) => String(id) === want) || (same.length === 1 ? same[0] : null); // tek eşleşme belirsizlik yok
+    const v = call ? toolView(call[1].name, call[1].args) : { name: tool, input: { istek: req.title } };
+    if (!call) io.emit('notice', { message: 'Onay kartındaki girdi ayrıştırılamadı; isteği elle doğrula.' });
     const ctl = new AbortController();
     st.ui.set(req.id, ctl);
     const r = await io.ask(v.name, v.input, ctl.signal, true);

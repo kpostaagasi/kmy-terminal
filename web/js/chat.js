@@ -37,6 +37,7 @@ root.innerHTML = `
     </div>
     <div class="cm-status">
       <button class="cm-jobs" id="chipJobs" title="${t('Arka planda süren asistan işleri')}"><i></i><span id="chipJobsText">${t('{n} arka plan işi', { n: 0 })}</span></button>
+      <button class="cm-yolo" id="cmYolo" hidden>${t('⚡ YOLO — ajan tüm araçlara izinli')}</button>
       <span class="spacer"></span>
       <span class="cm-hint" id="cmHint">${t('↵ gönder · / komutlar')}</span>
     </div>
@@ -85,7 +86,7 @@ function toolName(n) {
   if (n.startsWith('mcp__')) return n.split('__').slice(1).join(' › ');
   return n;
 }
-function toolLabel(n) { const k = toolName(n); const l = TOOL_LABELS[k] || TOOL_LABELS[n]; return l ? t(l) : k; }
+export function toolLabel(n) { const k = toolName(n); const l = TOOL_LABELS[k] || TOOL_LABELS[n]; return l ? t(l) : k; }
 function toolSummary(i) {
   if (!i) return '';
   return i.command || i.symbol || i.symbols?.join(', ') || i.query || i.url || i.file_path || i.pattern || i.title || i.description || i.skill || i.id || i.prompt?.slice(0, 80) || '';
@@ -1009,12 +1010,19 @@ $('#sessSel').addEventListener('change', fitSelects);
 const EFFORT_NAME = { low: 'Düşük', medium: 'Orta', high: 'Yüksek', xhigh: 'Çok yüksek', max: 'En yüksek' };
 const EFFORT_TIP = { low: 'Kısa işler, düşük maliyet', medium: 'Dengeli', high: 'Karmaşık analiz', xhigh: 'Zor işler', max: 'Tüm düşünme bütçesi' };
 const effortName = (x) => (EFFORT_NAME[x] ? t(EFFORT_NAME[x]) : x);
+// Yolo şeridi: izin modu bypassPermissions iken görünür, kapanınca DOM'dan da düşer
+function markYolo() { $('#cmYolo').hidden = permMode !== 'bypassPermissions'; }
+$('#cmYolo').onclick = async () => {
+  if (!(await confirmBox(t('Yolo modu kapatılsın mı? Ajan bundan sonra araç kullanmadan önce onay isteyecek.'), { ok: t('Yolo modunu kapat') }))) return;
+  try { await api('/settings', { method: 'PUT', body: { permissionMode: 'default', yoloUntil: 0 } }); toast(t('Yolo modu kapatıldı'), 'ok'); } catch (e) { toast(tx(e.message), 'err'); }
+};
 function fillOptions() {
   const m = state.meta, s = state.settings;
   if (!m) return;
   syncProvider();
   syncEffort();
   permMode = s.permissionMode || 'default';
+  markYolo();
 }
 on('settings', fillOptions);
 

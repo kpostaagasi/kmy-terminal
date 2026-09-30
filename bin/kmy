@@ -40,7 +40,7 @@ ${bold('Kullanım')}
 ${bold('Seçenekler')}
   --dry-run                  install/uninstall/start/stop/restart: dosyaları ve komutları yazdır, çalıştırma
   BORSA_PORT=7420            Arayüz portu (rapor portu: BORSA_REPORT_PORT, varsayılan port+1)
-  BORSA_DATA_DIR=…           Veri klasörü (varsayılan: ${home(path.join(ROOT, 'data'))})
+  BORSA_DATA_DIR=…           Veri klasörü (varsayılan: uygulama dizini, yoksa depodaki data/; ${home(DATA_DIR)})
 `;
 
 // ── Yardımcılar ───────────────────────────────────────────
@@ -213,6 +213,7 @@ async function install() {
   console.log(`${green('✓')} kmy gateway servis olarak kuruldu (${SVC.manager}).`);
   console.log(`  Arayüz : ${bold(URL_UI)}`);
   console.log(`  Log    : ${home(gw.LOG_FILE)}   (./bin/kmy gateway logs -f)`);
+  console.log(`  Veri   : ${home(DATA_DIR)}`);
   if (SVC.manager === 'systemd') console.log(dim('  Oturum kapalıyken de çalışması için: loginctl enable-linger $USER'));
 }
 
@@ -266,7 +267,7 @@ async function status() {
   const h = await callApi('/api/health');
   const g = h.ok ? h.data?.gateway || {} : null;
   if (flags.has('--json')) {
-    console.log(JSON.stringify({ manager: SVC.manager, serviceFile: SVC.file, installed, service: st, url: URL_UI, responding: !!h.ok, authorized: h.up ? h.status !== 401 : null, health: h.ok ? { version: h.data.version, uptimeSec: h.data.uptimeSec, pid: h.data.pid, gateway: g } : null }, null, 2));
+    console.log(JSON.stringify({ manager: SVC.manager, serviceFile: SVC.file, installed, dataDir: DATA_DIR, service: st, url: URL_UI, responding: !!h.ok, authorized: h.up ? h.status !== 401 : null, health: h.ok ? { version: h.data.version, uptimeSec: h.data.uptimeSec, pid: h.data.pid, dataDir: h.data.dataDir || DATA_DIR, gateway: g } : null }, null, 2));
     return;
   }
   const row = (k, v) => console.log(`  ${k.padEnd(18)} ${v}`);
@@ -286,6 +287,7 @@ async function status() {
     row('Oturum / istemci', `${g.activeSessions ?? h.data.runningSessions ?? 0} aktif ajan oturumu · ${g.clients ?? h.data.clients ?? 0} bağlı istemci`);
   }
   row('Log', home(gw.LOG_FILE));
+  row('Veri dizini', `${home(h.up ? (h.data?.dataDir || DATA_DIR) : DATA_DIR)}${h.up ? '' : dim(' (sunucuya ulaşılamadı)')}`);
 }
 
 function logs() {

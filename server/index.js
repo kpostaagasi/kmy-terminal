@@ -6,15 +6,15 @@ import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { WebSocketServer } from 'ws';
 import { ROOT, WEB_DIR, DATA_DIR, WORKSPACE_DIR, REPORTS_DIR } from './paths.js';
-import { db, getSettings, putSettings } from './db.js';
+import { db, getSettings, putSettings, restoreBackup, BACKUP_TABLES } from './db.js';
 import * as market from './market.js';
 import * as kap from './kap.js';
 import * as pf from './portfolio.js';
 import * as store from './store.js';
 import * as term from './terminal.js';
 import { technicalSummary, indicatorSeries } from './indicators.js';
-import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, providerModelsReady, claudeExecutable, defaultModels } from './agent.js';
-import { runTool, screen } from './agent-tools.js';
+import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, CAPABILITIES, providerModelsReady, claudeExecutable, defaultModels } from './agent.js';
+import { runTool, screen, authorizeTool, verifyScopedToken } from './agent-tools.js';
 import { radar } from './radar.js';
 import * as universe from './universe.js';
 import * as scheduler from './scheduler.js';
@@ -68,7 +68,11 @@ function serveFile(res, file, extraHeaders = {}) {
 
 async function readBody(req, limit = 20 * 1024 * 1024) {
   const chunks = []; let size = 0;
-  for await (const c of req) { size += c.length; if (size > limit) throw new Error('İstek çok büyük'); chunks.push(c); }
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) { const e = new Error('İstek çok büyük'); e.status = 413; throw e; }
+    chunks.push(c);
+  }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw) return {};
   if ((req.headers['content-type'] || '').includes('application/json')) return JSON.parse(raw);
@@ -77,10 +81,11 @@ async function readBody(req, limit = 20 * 1024 * 1024) {
 
 // ── Yönlendirme ───────────────────────────────────────────
 const routes = [];
-const route = (method, pattern, handler) => {
+// limit: bu rotanın gövde üst sınırı (varsayılan 20 MB; yedek içe aktarımı 32 MB)
+const route = (method, pattern, handler, limit = 20 * 1024 * 1024) => {
   const keys = [];
   const re = new RegExp('^' + pattern.replace(/:(\w+)/g, (_, k) => { keys.push(k); return '([^/]+)'; }) + '$');
-  routes.push({ method, re, keys, handler });
+  routes.push({ method, re, keys, handler, limit });
 };
 
 route('GET', '/api/health', async () => ({
@@ -90,7 +95,7 @@ route('GET', '/api/health', async () => ({
   gateway: { daemon: gw.isDaemon(), pid: process.pid, startedAt: new Date(startedAt).toISOString(), port: PORT, reportPort: REPORT_PORT, activeSessions: agent.running.size, clients: wss?.clients.size || 0 },
 }));
 route('GET', '/api/meta', async () => ({
-  reportPort: REPORT_PORT, providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: await providerModelsReady(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES,
+  reportPort: REPORT_PORT, providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: await providerModelsReady(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES, capabilities: CAPABILITIES,
   txTypes: pf.TX_TYPES, txMeta: pf.TX_META, assetTypes: pf.ASSET_TYPES, currencies: pf.CURRENCIES, benchmarks: pf.reference().benchmarks,
   kapClasses: kap.CLASS_LABELS, kapSignals: kap.SIGNALS, indices: market.INDICES, indexNames: market.INDEX_NAMES,
   special: Object.fromEntries(Object.entries(market.SPECIAL).map(([k, v]) => [k, v.name])),
@@ -122,7 +127,17 @@ route('GET', '/api/dividends/:symbol', async ({ p }) => market.getDividends(p.sy
 route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(), items: await market.overview() }));
 route('GET', '/api/market/movers', async () => market.movers());
 route('GET', '/api/market/radar', async ({ q }) => radar((q.get('symbols') || '').split(',').filter(Boolean)));
-route('POST', '/api/tools/:name', async ({ p, body }) => runTool(p.name, body, notifyUi));
+// Araç çağrısı sunucu tarafında izin kapısından geçer; onay yalnız Claude SDK'sının canUseTool'unda değil.
+// Alt süreç imzalı kapsamlı jetonla gelirse izin kipi ve oturum jetondan okunur, gövdeden gelen `mode`a güvenilmez.
+route('POST', '/api/tools/:name', async ({ p, body, req, res }) => {
+  const sc = req.scoped;
+  const mode = sc ? sc.mode : typeof body.mode === 'string' && Object.hasOwn(PERMISSION_MODES, body.mode) ? body.mode : 'default';
+  const sessionId = sc ? sc.sessionId : typeof body.sessionId === 'string' ? body.sessionId : null;
+  const v = authorizeTool(p.name, { mode, sessionId, via: sc ? 'scoped' : 'http' }); // audit satırını authorizeTool yazar
+  if (!v.allow) { send(res, 403, { error: v.reason }); return undefined; }
+  broadcast({ t: 'agent.audit', tool: p.name, mode, at: Date.now() });
+  return runTool(p.name, body, notifyUi);
+});
 route('GET', '/api/fundamentals/:symbol', async ({ p }) => market.fundamentals(p.symbol));
 route('GET', '/api/corporate-actions', async ({ q }) => universe.corporateActions({ symbols: q.get('symbols') ? q.get('symbols').split(',').map(market.normalize) : null, from: q.get('from'), to: q.get('to') }));
 route('GET', '/api/universe/status', async () => universe.status());
@@ -278,28 +293,22 @@ route('GET', '/api/terminals', async () => term.list());
 route('GET', '/api/export/transactions.csv', async ({ res }) => { send(res, 200, pf.exportCsv(), { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="islemler.csv"' }); return undefined; });
 route('GET', '/api/export/backup.json', async ({ res }) => {
   const dump = {};
-  for (const t of ['settings', 'watchlist', 'symbols', 'platforms', 'strategies', 'transactions', 'snapshots', 'schedules']) dump[t] = db.prepare(`SELECT * FROM ${t}`).all();
+  for (const t of BACKUP_TABLES) dump[t] = db.prepare(`SELECT * FROM ${t}`).all();
   send(res, 200, JSON.stringify({ version: VERSION, exportedAt: new Date().toISOString(), tables: dump }, null, 1), { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="kmy-terminal-yedek.json"' });
   return undefined;
 });
 route('POST', '/api/import/backup', async ({ body }) => {
-  const tables = body.tables;
-  if (!tables) throw new Error('Geçersiz yedek dosyası');
-  const order = ['settings', 'watchlist', 'symbols', 'platforms', 'strategies', 'transactions', 'snapshots', 'schedules'];
-  db.exec('BEGIN');
-  try {
-    for (const t of [...order].reverse()) db.exec(`DELETE FROM ${t}`);
-    for (const t of order) {
-      for (const row of tables[t] || []) {
-        const cols = Object.keys(row);
-        db.prepare(`INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`).run(...cols.map((c) => row[c]));
-      }
-    }
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  const r = restoreBackup(body.tables); // sütun adları şemaya göre doğrulanır, gövde üst sınırı 32 MB
   broadcast({ t: 'portfolio.changed' }); broadcast({ t: 'watchlist', symbols: store.watchlist() });
-  return { ok: true };
+  return r;
+}, 32 * 1024 * 1024);
+
+// Araç izin denetimi
+route('GET', '/api/tool-audit', async ({ q }) => {
+  const limit = Math.max(1, Math.min(1000, Number(q.get('limit')) || 200));
+  return db.prepare('SELECT * FROM tool_audit ORDER BY id DESC LIMIT ?').all(limit);
 });
+route('POST', '/api/tool-audit/clear', async () => { db.exec('DELETE FROM tool_audit'); return { ok: true }; });
 route('POST', '/api/cache/clear', async () => { db.exec('DELETE FROM http_cache'); return { ok: true }; });
 
 // ── Gateway: servis durumu, erişim anahtarı, yeniden başlatma ──
@@ -371,13 +380,17 @@ const server = http.createServer(async (req, res) => {
     const pathname = decodeURIComponent(url.pathname);
     if (pathname.startsWith('/api/')) {
       if (!originOk(req) || gw.crossSite(req)) return send(res, 403, { error: 'Yasak köken' });
-      if (!gw.authorize(req)) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
+      if (!gw.authorize(req)) {
+        // Alt süreçlere (Codex/omp/Claude) master anahtar verilmez; imzalı kapsamlı jeton yalnız araç rotasında geçerli
+        req.scoped = pathname.startsWith('/api/tools/') ? verifyScopedToken(/^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1]) : null;
+        if (!req.scoped) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
+      }
       for (const r of routes) {
         if (r.method !== req.method) continue;
         const m = r.re.exec(url.pathname);
         if (!m) continue;
         const p = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
-        const body = ['POST', 'PUT', 'PATCH'].includes(req.method) && !/^\/api\/(reports|chat)\/upload/.test(url.pathname) ? await readBody(req) : {};
+        const body = ['POST', 'PUT', 'PATCH'].includes(req.method) && !/^\/api\/(reports|chat)\/upload/.test(url.pathname) ? await readBody(req, r.limit) : {};
         const out = await r.handler({ req, res, p, q: url.searchParams, body });
         if (out !== undefined && !res.headersSent) send(res, 200, out ?? null);
         return;
@@ -393,7 +406,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/' || pathname === '/index.html') res.setHeader('Set-Cookie', gw.cookie()); // arayüz kabuğu: tarayıcıya erişim çerezi
     return serveFile(res, file);
   } catch (e) {
-    if (!res.headersSent) send(res, 400, { error: e.message });
+    if (!res.headersSent) send(res, e.status || 400, { error: e.message });
   }
 });
 
@@ -441,12 +454,14 @@ function notifyUi(type, data) {
 }
 agent.on('notify', ({ type, data }) => notifyUi(type, data));
 
-const onTermData = (id, data) => { const s = JSON.stringify({ t: 'term.data', id, data }); for (const c of wss.clients) if (c.readyState === 1) c.send(s); };
+// Kabuk çıktısı yalnız sahibine gider: başka istemci birbirinin terminalini okuyamaz
+const onTermData = (id, data) => { const s = JSON.stringify({ t: 'term.data', id, data }); for (const c of wss.clients) if (c.readyState === 1 && term.owned(id, c.clientId)) c.send(s); };
 const onTermExit = (id, code) => broadcast({ t: 'term.exit', id, code });
 
 wss.on('connection', (ws, req) => {
   ws.subs = new Set(); // canlı fiyat abonelikleri (hangi sembol ekranda açık)
   ws.gwVia = req.gwVia;
+  ws.clientId = crypto.randomUUID(); // terminal sahipliği bu kimliğe bağlıdır
   ws.send(JSON.stringify({ t: 'hello', version: VERSION, settings: getSettings(), jobs: agent.backgroundJobs(), terminals: term.list(), market: market.marketStatus() }));
   ws.on('message', async (raw) => {
     let m;
@@ -460,11 +475,11 @@ wss.on('connection', (ws, req) => {
         case 'chat.stop': reply({ t: 'chat.stopped', ok: agent.stop(m.sessionId) }); break;
         case 'perm.reply': reply({ t: 'perm.ack', ok: agent.replyPermission(m.sessionId, m.reqId, m.decision) }); break;
         case 'question.reply': reply({ t: 'question.ack', ok: agent.replyQuestion(m.sessionId, m.reqId, m.answers, !!m.skip) }); break;
-        case 'term.open': reply({ t: 'term.opened', ...term.open({ owner: 'ui', cols: m.cols, rows: m.rows, command: m.command, cwd: m.cwd, onData: onTermData, onExit: onTermExit }) }); break;
-        case 'term.attach': reply({ t: 'term.buffer', id: m.id, data: termBuffer(m.id) }); break;
-        case 'term.input': term.write(m.id, m.data); break;
-        case 'term.resize': term.resize(m.id, m.cols, m.rows); break;
-        case 'term.close': term.close(m.id); break;
+        case 'term.open': reply({ t: 'term.opened', ...term.open({ owner: ws.clientId, cols: m.cols, rows: m.rows, command: m.command, cwd: m.cwd, onData: onTermData, onExit: onTermExit }) }); break;
+        case 'term.attach': ownTerm(ws, m.id); reply({ t: 'term.buffer', id: m.id, data: termBuffer(m.id) }); break;
+        case 'term.input': ownTerm(ws, m.id); term.write(m.id, m.data); break;
+        case 'term.resize': ownTerm(ws, m.id); term.resize(m.id, m.cols, m.rows); break;
+        case 'term.close': ownTerm(ws, m.id); term.close(m.id); break;
         case 'log.get': reply({ t: 'log', entries: wsLog }); break;
         case 'sub': ws.subs = new Set((m.symbols || []).filter(Boolean).slice(0, 20)); break;
         default: reply({ t: 'error', message: `Bilinmeyen mesaj: ${m.t}` });
@@ -473,7 +488,13 @@ wss.on('connection', (ws, req) => {
       reply({ t: 'error', message: e.message, for: m.t });
     }
   });
+  // Sekme kapanınca kabuk süreci arka planda takılı kalmasın
+  ws.on('close', () => term.closeOwned(ws.clientId));
 });
+
+function ownTerm(ws, id) {
+  if (!term.owned(id, ws.clientId)) throw new Error('Terminal bulunamadı');
+}
 
 function termBuffer(id) {
   return term.bufferOf(id);

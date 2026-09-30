@@ -15,6 +15,9 @@ import * as memory from './memory.js';
 import * as documents from './documents.js';
 import * as research from './research.js';
 import * as feeds from './feeds.js';
+import crypto from 'node:crypto';
+import { db } from './db.js';
+import { readToken } from './gateway.js';
 
 const r2 = (x) => (typeof x === 'number' ? Math.round(x * 100) / 100 : x);
 const noSpark = ({ spark, sparkTimes, ...x }) => x;
@@ -237,8 +240,45 @@ export function toolSpecs(notify = () => {}) {
   ];
 }
 
-// Onay istemeden çalışabilecek araçlar (add_transaction hariç: portföye yazar)
-export const AUTO_TOOLS = toolSpecs().filter((t) => t.name !== 'add_transaction').map((t) => t.name);
+// ── Araç sınıflandırması ve izin kapısı ──────────────────────
+// Kalan her şey salt okunur (readOnly: true).
+// WRITE_TOOLS: veritabanına/portföye/ayara/izleme listesine yazanlar (her zaman onay ister).
+export const WRITE_TOOLS = ['add_transaction', 'set_manual_price', 'update_watchlist', 'save_memory', 'save_report', 'read_broker_report', 'save_kap_attachment'];
+// FILE_TOOLS: yalnız dosya sistemine yazanlar (WRITE_TOOLS'ın alt kümesi; "düzenlemeleri onayla" modunda serbest).
+export const FILE_TOOLS = ['save_kap_attachment', 'read_broker_report', 'save_report'];
+const WRITES = new Set(WRITE_TOOLS), FILES = new Set(FILE_TOOLS);
+// Onay istemeden çalışanlar: yalnız salt okunur araçlar (eskiden add_transaction dışında her şey otomatikti).
+export const AUTO_TOOLS = toolSpecs().filter((t) => t.readOnly).map((t) => t.name);
+
+// Sunucu tarafı izin kapısı. Claude SDK'nın canUseTool'ı yalnız süreç içi araçları korur;
+// stdio köprüsünden (Codex/omp) gelen hiçbir araç oradan geçmez, burası tek kapıdır.
+//   default            → yazma araçları onay ister (etkileşimli akış kendi sorusunu sorar)
+//   acceptEdits        → dosya yazanlar serbest, portföy/ayar yazanlar onay ister
+//   plan               → yazan hiçbir araç çalışmaz
+//   bypassPermissions  → her şey serbest, tool_audit tablosuna kaydedilir
+export function authorizeTool(name, { mode = 'default', sessionId = null, via = 'http' } = {}) {
+  const write = WRITES.has(name), file = FILES.has(name);
+  const allow = mode === 'bypassPermissions' || (!write && !file) || (mode === 'acceptEdits' && file);
+  const reason = allow ? null : mode === 'plan' ? 'plan modunda dosya/veri değiştirilemez' : 'onay gerekiyor';
+  const r = { allow, audit: !allow || mode === 'bypassPermissions', reason, sessionId, via, mode };
+  if (r.audit) { // kayıt asla aracı bozmasın
+    try { db.prepare('INSERT INTO tool_audit(tool, session_id, via, mode, allowed, reason) VALUES(?,?,?,?,?,?)').run(name, sessionId, via, mode, allow ? 1 : 0, reason); } catch { /* denetim kaydı yazılamadı */ }
+  }
+  return r;
+}
+
+// Alt süreçlere verilen kısa ömürlü kapsamlı yetki: yalnız araç çağrısı, master gateway
+// anahtarı hiçbir çocuk sürece geçmez (bu jeton anahtarın HMAC özeti, geri döndürülemez).
+const sigOf = (payload) => crypto.createHmac('sha256', readToken() || 'kmy-terminal').update(payload).digest('hex');
+export function mintScopedToken({ sessionId = null, mode = 'default', ttlMs = 6 * 3600_000 } = {}) {
+  const p = Buffer.from(JSON.stringify({ s: sessionId, m: mode, e: Date.now() + ttlMs })).toString('base64url');
+  return `s.${p}.${sigOf(p)}`;
+}
+export function verifyScopedToken(tok) {
+  const m = /^s\.([\w-]+)\.([0-9a-f]{64})$/.exec(String(tok || ''));
+  if (!m || !crypto.timingSafeEqual(Buffer.from(sigOf(m[1]), 'hex'), Buffer.from(m[2], 'hex'))) return null;
+  try { const p = JSON.parse(Buffer.from(m[1], 'base64url').toString()); return p.e > Date.now() ? { sessionId: p.s, mode: p.m } : null; } catch { return null; }
+}
 
 export function toolResult(data) {
   return { content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data, null, 1) }] };
@@ -248,22 +288,26 @@ export function toolError(e) {
   return { content: [{ type: 'text', text: `Hata: ${e.message || e}` }], isError: true };
 }
 
-export function buildBorsaServer(notify) {
+export function buildBorsaServer(notify, ctx = () => null) {
   return createSdkMcpServer({
     name: 'borsa',
     version: '1.0.0',
     alwaysLoad: true,
     instructions: INSTRUCTIONS,
     tools: toolSpecs(notify).map((s) => tool(s.name, s.description, s.schema, async (args) => {
+      const c = ctx();
+      if (c) { const g = authorizeTool(s.name, { ...c, via: 'sdk' }); if (!g.allow) return toolError({ message: g.reason }); }
       try { return toolResult(await s.handler(args)); } catch (e) { return toolError(e); }
     }, s.readOnly ? { annotations: { readOnlyHint: true } } : undefined)),
   });
 }
 
 // HTTP üzerinden araç çalıştırma (stdio köprüsü için)
-export async function runTool(name, args, notify) {
+// opts.mode verilirse önce izin kapısından geçer; verilmezse eski davranış (kapısız) korunur.
+export async function runTool(name, args, notify, opts = {}) {
   const spec = toolSpecs(notify).find((t) => t.name === name);
   if (!spec) throw new Error(`Bilinmeyen araç: ${name}`);
+  if (opts.mode) { const g = authorizeTool(name, { mode: opts.mode, sessionId: opts.sessionId ?? null, via: opts.via || 'http' }); if (!g.allow) return toolError({ message: g.reason }); }
   const parsed = z.object(spec.schema).parse(args || {});
   return spec.handler(parsed);
 }

@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { db, getSettings } from './db.js';
 import { WORKSPACE_DIR, ROOT } from './paths.js';
-import { buildBorsaServer, AUTO_TOOLS } from './agent-tools.js';
+import { buildBorsaServer, AUTO_TOOLS, mintScopedToken } from './agent-tools.js';
 import { marketStatus } from './market.js';
 import * as memory from './memory.js';
 import { ompBin, ompModels, ompModelsReady, ompModelMeta, runOmp, ensureOmpMcp } from './omp-runner.js';
@@ -87,6 +87,13 @@ export const PERMISSION_MODES = {
   plan: 'Sadece plan (dosya değiştirmez)',
   bypassPermissions: 'Otomatik (tüm araçlara izin)',
 };
+
+// Sağlayıcı yetenekleri (arayüz izin kipini buna göre çizer)
+export const CAPABILITIES = {
+  claude: { effort: true, subagent: true, cost: true, bypass: true },
+  codex: { effort: false, subagent: false, cost: false, bypass: true },
+  omp: { effort: true, subagent: true, cost: 'est', bypass: true },
+};
 const SUBAGENT_TOOLS = new Set(['Task', 'Agent']);
 const DATA_CONNECTORS = ['mcp__claude_ai_Borsa_MCP__*', 'mcp__claude_ai_Matriks_MCP__*'];
 
@@ -132,7 +139,12 @@ export class AgentManager extends EventEmitter {
     this.running = new Map(); // sessionId -> { abort, q, startedAt, title, pending: Map }
     this.lastInit = null;      // son Claude oturumunun araç/MCP bağlantı durumu (Ayarlar > Bağlantılar)
     this.ctxWindow = new Map(); // sessionId -> model bağlam penceresi (token)
-    this.borsaServer = buildBorsaServer((type, data) => this.emit('notify', { type, data }));
+    // ponytail: köprüdeki izin kipi en son başlatılan oturuma ait; eşzamanlı iki oturumda
+    // diğeri kendi kipinde çalışır. Düzeltme: SDK araç çağrısına oturum kimliği bağlamak.
+    this.borsaServer = buildBorsaServer((type, data) => this.emit('notify', { type, data }), () => {
+      const [id, r] = [...this.running].at(-1) || [];
+      return r ? { mode: r.perm || 'default', sessionId: id } : null;
+    });
     if (PROVIDERS.omp) {
       ompModels(); // model listesini arka planda önbelleğe al
       try { ensureOmpMcp(); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
@@ -210,7 +222,7 @@ export class AgentManager extends EventEmitter {
     // Claude Code yerleşik komutları (/compact, /context, /cost) doğrudan iletilir
     if (/^\/(compact|context|cost)\b/.test(text) && !context && !attachments.length) prompt = text;
     const abort = new AbortController();
-    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), activity: 'Düşünüyor', lang: lang === 'en' ? 'en' : 'tr' };
+    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), activity: 'Düşünüyor', lang: lang === 'en' ? 'en' : 'tr', perm: permissionMode };
     this.running.set(sessionId, run);
     this.#emit(sessionId, 'run.start', { startedAt: run.startedAt });
     this.emit('jobs');
@@ -250,6 +262,8 @@ export class AgentManager extends EventEmitter {
       ...(effort ? { effort } : {}),
       canUseTool: (toolName, input, { signal, suggestions }) => this.#askPermission(sessionId, run, toolName, input, signal, suggestions),
       stderr: (d) => { if (/error/i.test(d)) console.error('[claude]', d.trim().slice(0, 500)); },
+      // Alt sürece master gateway anahtarı verilmez; yalnız kapsamlı jeton ve izin kipi
+      env: (() => { const e = { ...process.env, KMY_PERMISSION_MODE: permissionMode, KMY_SCOPED_TOKEN: mintScopedToken({ sessionId, mode: permissionMode }) }; delete e.CLAUDECODE; return e; })(),
     };
 
     // Arka planda yürüt; olaylar WebSocket üzerinden akar.
@@ -463,9 +477,13 @@ export class AgentManager extends EventEmitter {
   // `codex exec --json` olay akışını Claude olaylarıyla aynı biçime çevirir. Codex etkileşimsiz çalıştığı için
   // izinler sandbox moduyla belirlenir: varsayılan salt okunur, "düzenlemeleri onayla" = çalışma alanına yazma.
   #runCodex(sessionId, run, session, prompt, { model, permissionMode, images = [] }) {
+    // Köprüye izin kipi ve kapsamlı jeton geçer; master gateway anahtarı Codex alt sürecine sızmaz
+    const bridgeEnv = { KMY_PERMISSION_MODE: permissionMode, KMY_SCOPED_TOKEN: mintScopedToken({ sessionId, mode: permissionMode }) };
     const args = ['exec', '--json', '--skip-git-repo-check', '-C', WORKSPACE_DIR,
       '-c', `mcp_servers.borsa.command=${JSON.stringify(process.execPath)}`,
-      '-c', `mcp_servers.borsa.args=[${JSON.stringify(MCP_STDIO)}]`];
+      '-c', `mcp_servers.borsa.args=[${JSON.stringify(MCP_STDIO)}]`,
+      '-c', `mcp_servers.borsa.env.KMY_PERMISSION_MODE=${JSON.stringify(permissionMode)}`,
+      '-c', `mcp_servers.borsa.env.KMY_SCOPED_TOKEN=${JSON.stringify(bridgeEnv.KMY_SCOPED_TOKEN)}`];
     if (permissionMode === 'bypassPermissions') args.push('--dangerously-bypass-approvals-and-sandbox');
     else args.push('-s', permissionMode === 'acceptEdits' ? 'workspace-write' : 'read-only');
     if (model) args.push('-m', model);
@@ -477,6 +495,7 @@ export class AgentManager extends EventEmitter {
 
     const started = Date.now();
     const env = { ...process.env };
+    Object.assign(env, bridgeEnv);
     delete env.CLAUDECODE;
     const child = spawn('codex', args, { cwd: WORKSPACE_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
     run.abort.signal.addEventListener('abort', () => child.kill('SIGTERM'));

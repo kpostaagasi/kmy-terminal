@@ -92,6 +92,16 @@ CREATE TABLE IF NOT EXISTS http_cache (
   value TEXT NOT NULL,
   fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS tool_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL DEFAULT (datetime('now')),
+  tool TEXT NOT NULL,
+  session_id TEXT,
+  via TEXT,
+  mode TEXT,
+  allowed INTEGER NOT NULL,
+  reason TEXT
+);
 `);
 
 // Şema göçleri (eski veritabanları için)
@@ -113,6 +123,9 @@ export const DEFAULT_SETTINGS = {
   ompModel: '',
   effort: 'medium',
   permissionMode: 'default',
+  // Yolo (bypassPermissions) bitiş damgası, ms cinsinden. 0 = süre yok (kullanıcı elle kapatır).
+  // Bu anahtar tanımlı değilse putSettings sessizce düşürüyor ve otomatik kapanma hiç çalışmıyor.
+  yoloUntil: 0,
   chatFontSize: 14,
   terminalFontSize: 13,
   theme: 'dark',
@@ -179,6 +192,32 @@ export function tx(fn) {
     db.exec('ROLLBACK');
     throw e;
   }
+}
+
+// Yedekleme: tablo kümesi sabit, sütun adları şemadan doğrulanır.
+// Sütun adları doğrudan SQL'e gömülürse istemci `{"x); DROP TABLE ...;--":1}` ile tabloyu silebilir.
+export const BACKUP_TABLES = ['settings', 'watchlist', 'symbols', 'platforms', 'strategies', 'transactions', 'snapshots', 'schedules'];
+
+export function restoreBackup(tables) {
+  if (!tables || typeof tables !== 'object' || Array.isArray(tables)) throw new Error('Geçersiz yedek dosyası');
+  const unknown = Object.keys(tables).filter((k) => !BACKUP_TABLES.includes(k));
+  if (unknown.length) throw new Error(`Yedek dosyasında bilinmeyen tablo: ${unknown.join(', ')}`);
+  tx(() => {
+    for (const t of [...BACKUP_TABLES].reverse()) db.exec(`DELETE FROM ${t}`);
+    for (const t of BACKUP_TABLES) {
+      const rows = tables[t] || [];
+      if (!Array.isArray(rows)) throw new Error(`${t} tablosu satır listesi değil`);
+      const valid = new Set(db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name));
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') throw new Error(`${t}: geçersiz satır`);
+        const cols = Object.keys(row);
+        const bad = cols.filter((c) => !valid.has(c));
+        if (bad.length) throw new Error(`${t} tablosunda şemada olmayan sütun: ${bad.join(', ')}`);
+        db.prepare(`INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`).run(...cols.map((c) => row[c]));
+      }
+    }
+  });
+  return { ok: true };
 }
 
 // İlk açılışta örnek izleme listesi
