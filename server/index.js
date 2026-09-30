@@ -15,6 +15,7 @@ import * as term from './terminal.js';
 import { technicalSummary, indicatorSeries } from './indicators.js';
 import { AgentManager, MODELS, CODEX_MODELS, EFFORTS, PERMISSION_MODES, PROVIDERS, CAPABILITIES, providerModelsReady, claudeExecutable, defaultModels } from './agent.js';
 import { runTool, screen, authorizeTool, verifyScopedToken } from './agent-tools.js';
+import { watchWeb } from './devwatch.js';
 import { radar } from './radar.js';
 import * as universe from './universe.js';
 import * as scheduler from './scheduler.js';
@@ -469,6 +470,10 @@ function broadcast(msg) {
   logWs('out', msg);
   for (const c of wss.clients) if (c.readyState === 1) c.send(s);
 }
+
+// Geliştirme izleyici: web/ altında dosya değişince açık istemcilere haber veriyor.
+// CSS'te yalnız stil dosyası değişir (yazma kutusu ve kaydırma korunur), JS/HTML'de tam yenileme yapılır.
+watchWeb(ROOT, WEB_DIR, ({ file, mtime }) => broadcast({ t: 'dev.reload', file, mtime, soft: /\.css$/.test(file) }));
 
 agent.on('event', (e) => {
   const msg = { t: 'agent', ...e };

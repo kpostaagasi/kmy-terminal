@@ -1,5 +1,14 @@
 # Sürüm Notları
 
+## 0.16.2 — 30 Eylül 2026 (canlı yeniden yükleme)
+
+### Yeni
+- **Kod değişince uygulama kendiliğinden güncelleniyor.** Kaynak ağacında çalışırken sunucu `web/` klasörünü izliyor; bir dosya değiştiğinde açık tüm istemcilere haber veriyor. macOS uygulaması, tarayıcı — hepsi aynı anda güncelleniyor, elle `⌘R` gerekmiyor.
+  - **CSS değişikliği**: yalnız stil dosyası yeniden isteniyor. Sayfa yenilenmiyor, yazma kutusundaki metin ve kaydırma konumu olduğu gibi kalıyor.
+  - **JS / HTML değişikliği**: tam yenileme yapılıyor; yazma kutusu taslağı, adres çubuğu hash'i ve kaydırma konumu geri yükleniyor.
+  - 120 ms sessizlik beklemesi: kaydedicinin yaptığı ardışık yazmalar tek bir yenilemeye dönüşüyor. Aynı dosya için mtime değişmediyse tekrar yayın yapılmıyor.
+  - Yalnız kaynak ağacında açılıyor (`.git` yoksa izleyici hiç başlamıyor) — paketlenmiş DMG uygulamasında hiçbir şey izlenmiyor. `BORSA_WATCH=0` ile kapatılabiliyor, `BORSA_WATCH=1` ile zorlanabiliyor.
+
 ## 0.16.1 — 30 Eylül 2026 (FAVÖK taban satırı, sohbet bestecisi)
 
 ### Düzeltilen
