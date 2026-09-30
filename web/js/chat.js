@@ -1406,36 +1406,60 @@ function fitSelect(sel) {
   const w = measureCtx.measureText(sel.selectedOptions[0].textContent).width;
   sel.style.width = `${Math.ceil(w + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2)}px`;
 }
-// Dar panelde satır kırpılmasın: önce ctx çubuğu, sonra seçiciler kısalır, yetmezse seçiciler kendi satırına geçer
+// Dar panelde sıra kırpılmasın. Sıralama: seçiciler her zaman okunur kalır (asla "Yε" gibi
+// iki harfe sıkışmaz), sağdaki istatistikler gerektikçe sağdan sola gizlenir, hiçbir zaman
+// alt satıra kaydırılmaz — kaydırma, hizalamayı bozup ayırıcıları tırtıklı gösteriyordu.
+const MIN_SEL = 72;                       // seçici alt sınırı (etiket okunur kalır)
+const cmItems = () => {
+  const top = $('.cm-top');
+  if (!top) return null;
+  return {
+    top,
+    bar: $('.ctxbar', top),
+    ctxStat: $('#stCtx')?.closest('.cm-stat'),
+    costStat: $('#stCostBtn'),
+    turnStat: $('#stTurnsBox'),
+    spacer: $('.spacer', top),
+    sels: ['#sessSel', '#optModel', '#optEffort'].map((q) => $(q)).filter((s) => s && !s.closest('.cm-chip').hidden),
+  };
+};
+
 function fitSelects() {
-  const top = $('.cm-top'), bar = $('.ctxbar');
-  const spacer = $('.spacer', top);
-  const sels = ['#sessSel', '#optModel', '#optEffort'].map((q) => $(q)).filter((s) => s && !s.closest('.cm-chip').hidden);
+  const it = cmItems();
+  if (!it) return;
+  const { top, bar, ctxStat, costStat, turnStat, spacer, sels } = it;
+
+  // Her şeyi sıfırla, sonra gerektiğince geri aç
+  top.style.flexWrap = 'nowrap';
   sels.forEach((s) => { s.style.maxWidth = ''; fitSelect(s); });
-  if (!top) return;
-  if (bar) { bar.style.display = ''; bar.style.width = ''; }
-  top.style.flexWrap = '';
-  if (spacer) { spacer.style.flexBasis = ''; spacer.style.height = ''; }
-  const gap = () => top.scrollWidth - top.clientWidth;
-  let over = gap();
-  if (over > 0 && bar) {
-    bar.style.width = `${Math.max(20, 80 - over)}px`;
-    if ((over = gap()) > 0) { bar.style.display = 'none'; over = gap(); }
+  for (const el of [bar, ctxStat, costStat, turnStat]) if (el) el.style.display = '';
+  if (spacer) { spacer.style.flexBasis = ''; spacer.style.height = ''; spacer.style.display = ''; }
+
+  const over = () => top.scrollWidth - top.clientWidth;
+  const selsWidth = () => sels.reduce((a, s) => a + s.offsetWidth, 0);
+
+  // Seçicileri asla okunamaz biçimde sıkıştırma; önce sağdaki gereksizleri at
+  if (over() > 0 && bar) { bar.style.width = '28px'; }
+  if (over() > 0 && bar) { bar.style.display = 'none'; }
+  if (over() > 0 && turnStat && !sessTurns) turnStat.style.display = 'none';
+  if (over() > 0 && costStat) costStat.style.display = 'none';
+  if (over() > 0 && ctxStat) ctxStat.style.display = 'none';
+  if (over() > 0) {                                  // son çare: esneme boşluğunu kapat
+    if (spacer) spacer.style.display = 'none';
   }
-  if (over > 0) {
-    const ws = sels.map((s) => s.offsetWidth), total = ws.reduce((a, b) => a + b, 0);
-    sels.forEach((s, i) => { s.style.maxWidth = `${Math.max(40, Math.round(ws[i] - (over * ws[i]) / total))}px`; });
-    over = gap();
+  if (over() > 0 && selsWidth() > sels.length * MIN_SEL) {
+    const w = sels.map((s) => s.offsetWidth), total = w.reduce((a, b) => a + b, 0);
+    let need = over();
+    sels.forEach((s, i) => {
+      const take = Math.min(Math.max(0, w[i] - MIN_SEL), need);
+      s.style.maxWidth = `${Math.round(w[i] - take)}px`;
+      need -= take;
+    });
   }
-  if (over <= 0) return;
-  // Alt satıra kaydır: istatistikler kırpılmadan tam görünür
-  top.style.flexWrap = 'wrap';
-  if (spacer) { spacer.style.flexBasis = '100%'; spacer.style.height = '0'; }
 }
 new ResizeObserver(fitSelects).observe($('.cm-top'));
 $('#optEffort').addEventListener('change', fitSelects);
 $('#sessSel').addEventListener('change', fitSelects);
-
 // Düşünme seviyesi: değer (low…max) sabit, görünen ad çevrilir
 const EFFORT_NAME = { low: 'Düşük', medium: 'Orta', high: 'Yüksek', xhigh: 'Çok yüksek', max: 'En yüksek' };
 const EFFORT_TIP = { low: 'Kısa işler, düşük maliyet', medium: 'Dengeli', high: 'Karmaşık analiz', xhigh: 'Zor işler', max: 'Tüm düşünme bütçesi' };
