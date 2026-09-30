@@ -59,10 +59,28 @@ function send(res, status, body, headers = {}) {
   res.end(isBuf ? body : JSON.stringify(body));
 }
 
-function serveFile(res, file, extraHeaders = {}) {
+// Statik dosyalarda yalnız "no-cache" yetmiyor: doğrulayıcı (ETag/Last-Modified) yoksa
+// WKWebView bazı dosyaları yeniden doğrulamadan önbellekten sunuyor ve uygulama
+// güncellemeden sonra eski CSS/JS ile çalışabiliyor. Doğrulayıcı ekleyip istek
+// eşleştiğinde 304 dönüyoruz; dosya değiştiyse 200 ile taze içerik gidiyor.
+function serveFile(res, file, extraHeaders = {}, req = null) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'Bulunamadı');
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': 'no-cache', ...extraHeaders });
+    const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+    const headers = {
+      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-cache',
+      ETag: etag,
+      'Last-Modified': new Date(st.mtimeMs).toUTCString(),
+      ...extraHeaders,
+    };
+    if (req) {
+      const inm = req.headers['if-none-match'];
+      const ims = req.headers['if-modified-since'];
+      const fresh = inm ? inm.split(',').some((x) => x.trim() === etag) : ims && new Date(ims).getTime() >= Math.floor(st.mtimeMs / 1000) * 1000;
+      if (fresh) { res.writeHead(304, headers); return res.end(); }
+    }
+    res.writeHead(200, { ...headers, 'Content-Length': st.size });
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -434,12 +452,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname.startsWith('/vendor/')) {
       const rel = VENDOR[pathname.slice(8)];
-      return rel ? serveFile(res, path.join(ROOT, 'node_modules', rel)) : send(res, 404, 'Bulunamadı');
+      return rel ? serveFile(res, path.join(ROOT, 'node_modules', rel), {}, req) : send(res, 404, 'Bulunamadı');
     }
     const file = path.resolve(WEB_DIR, '.' + (pathname === '/' ? '/index.html' : pathname));
     if (!file.startsWith(WEB_DIR)) return send(res, 403, 'Yasak');
     if (pathname === '/' || pathname === '/index.html') res.setHeader('Set-Cookie', gw.cookie()); // arayüz kabuğu: tarayıcıya erişim çerezi
-    return serveFile(res, file);
+    return serveFile(res, file, {}, req);
   } catch (e) {
     if (!res.headersSent) send(res, e.status || 400, { error: e.message });
   }
@@ -601,7 +619,7 @@ const reportServer = http.createServer((req, res) => {
   const cors = { 'Access-Control-Allow-Origin': '*' }; // raporlar salt okunur; arayüz Markdown'ı fetch ile okur
   try {
     const pathname = decodeURIComponent(url.pathname);
-    if (pathname === '/report.css') return serveFile(res, path.join(WEB_DIR, 'report.css'), cors);
+    if (pathname === '/report.css') return serveFile(res, path.join(WEB_DIR, 'report.css'), cors, req);
     if (pathname.startsWith('/reports/')) {
       if (!gw.authorize(req) && !ALLOWED_ORIGINS.has(req.headers.origin)) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
       const file = store.safeReportPath(pathname.slice(9));
@@ -609,7 +627,7 @@ const reportServer = http.createServer((req, res) => {
         const html = fs.readFileSync(file, 'utf8') + '<script>addEventListener("load",()=>setTimeout(print,300))</script>';
         return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
       }
-      return serveFile(res, file, cors);
+      return serveFile(res, file, cors, req);
     }
     send(res, 404, 'Bulunamadı');
   } catch (e) { send(res, 400, e.message); }
