@@ -60,6 +60,45 @@ export function connect() {
     emit('ws:' + m.t, m);
   };
 }
+
+// ── Geliştirme izleyicisi ───────────────────────────────────────────────────
+// Sunucu web/ altında bir dosya değiştiğinde haber verir. CSS'te yalnız stil dosyası
+// değiştirilir (sayfa ve yazma kutusu korunur); JS/HTML'de tam yenileme yapılır ve
+// yazma kutusundaki metin ile sohbet kaydırma konumu geri konur.
+const CSS_FILES = ['/styles.css', '/settings.css', '/terminal.css', '/report.css'];
+const keepDraft = () => {
+  try {
+    const d = document.getElementById('chatIn');
+    if (d && d.value) sessionStorage.setItem('bt:draft', d.value);
+    sessionStorage.setItem('bt:scroll', String(window.scrollY));
+  } catch { /* depolama kapalı olabilir */ }
+};
+const restoreDraft = () => {
+  try {
+    const v = sessionStorage.getItem('bt:draft');
+    const s = sessionStorage.getItem('bt:scroll');
+    sessionStorage.removeItem('bt:draft');
+    if (v) {
+      const d = document.getElementById('chatIn');
+      if (d) { d.value = v; d.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+    if (s) window.scrollTo(0, Number(s) || 0);
+  } catch { /* yok sayılır */ }
+};
+
+on('ws:dev.reload', (m = {}) => {
+  if (m.soft && m.file) {
+    // Stil dosyasını yeniden iste: tüm sayfa yenilenmez, durum korunur.
+    const base = '/' + m.file;
+    for (const l of document.querySelectorAll('link[rel=stylesheet]')) {
+      if (new URL(l.href, location.origin).pathname === base) l.href = `${base}?v=${m.mtime || Date.now()}`;
+    }
+    return;
+  }
+  keepDraft();
+  location.reload();
+});
+export function devReady() { restoreDraft(); }
 export function wsSend(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
 export function wsCall(msg, timeout = 30000) {
   return new Promise((resolve, reject) => {

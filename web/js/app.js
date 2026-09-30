@@ -1,5 +1,5 @@
 // Uygulama girişi: yerleşim, üst bar, görünüm yönlendirme, genel kısayollar
-import { state, on, emit, api, connect, wsCall, $, $$, h, esc, num, price, pct, cls, toast, modal, localGet, localSet, selectSymbol, debounce, ago, timeTR, askAgent } from './core.js';
+import { state, on, emit, api, connect, wsCall, $, $$, h, esc, num, price, pct, cls, toast, modal, localGet, localSet, selectSymbol, debounce, ago, timeTR, askAgent, devReady } from './core.js';
 import './watchlist.js';
 import { openRoute, ktRoute } from './market-view.js';
 import './portfolio-view.js';
@@ -487,6 +487,7 @@ document.addEventListener('keydown', (e) => {
     toast(t('Sunucuya ulaşılamadı: {e}', { e: e.message }), 'err');
   }
   connect();
+  devReady();   // canlı yenidenleme sonrası yazma kutusu taslağı ve kaydırma geri gelir
   showRightTab(localGet('rtab', 'kap'), { open: false });
   if (location.hash) applyHash(); else showView('agent');
   // Özet gelince yalnız özete bağlı parçalar tazelenir
