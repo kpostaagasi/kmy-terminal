@@ -8,6 +8,7 @@ import https from 'node:https';
 import { cacheGet, cachePut, db } from './db.js';
 import * as universe from './universe.js';
 import { isFundCode, fundQuote, fundBars, searchFunds } from './funds.js';
+import { trScore, compareSearchHits } from './fold.js';
 
 const UA = 'Mozilla/5.0';
 const Y1 = 'https://query1.finance.yahoo.com';
@@ -430,25 +431,30 @@ export async function priceOnDate(symbol, isoDate) {
 export async function search(q) {
   q = String(q || '').trim();
   if (!q) return [];
-  const up = normalize(q);
   const local = [];
   const TYPE_TR = { gold: 'Altın', commodity: 'Emtia', fx: 'Döviz', crypto: 'Kripto', index: 'Endeks', equity: 'Hisse' };
-  for (const [k, v] of Object.entries(SPECIAL)) if (k.startsWith(up) || v.name.toLocaleUpperCase('tr').includes(q.toLocaleUpperCase('tr'))) local.push({ symbol: k, name: v.name, type: v.type, exchange: TYPE_TR[v.type] || '' });
-  for (const k of INDICES) if (k.startsWith(up) || INDEX_NAMES[k].toLocaleUpperCase('tr').includes(q.toLocaleUpperCase('tr'))) local.push({ symbol: k, name: INDEX_NAMES[k], type: 'index', exchange: 'BIST' });
-  for (const s of universe.searchLocal(q, 10)) local.push({ symbol: s.code, name: s.name, type: 'equity', exchange: 'BIST', sector: s.sector });
-  for (const f of await searchFunds(q, 6).catch(() => [])) local.push({ symbol: f.code, name: f.name, type: 'fund', exchange: 'TEFAS' });
+  // Her kaynak aynı katlamayı (trFold) ve aynı puan ölçeğini (trScore) kullanır.
+  // src: 0 özel araç · 1 endeks · 2 yerel evren · 3 fon · 4 uzak (eşit puanda kaynak önceliği)
+  // Dar listelerde (src <= 1) ad-öneki ödülü kapatılır: 23 sembollük özel listede
+  // "altın" yazan kullanıcı şirket değil ürün arıyor.
+  const NARROW = { prefixWeight: 0 };
+  const add = (src, r, score) => { if (score) local.push({ ...r, _s: score, _src: src }); };
+  for (const [k, v] of Object.entries(SPECIAL)) add(0, { symbol: k, name: v.name, type: v.type, exchange: TYPE_TR[v.type] || '' }, trScore(k, v.name, q, NARROW));
+  for (const k of INDICES) add(1, { symbol: k, name: INDEX_NAMES[k], type: 'index', exchange: 'BIST' }, trScore(k, INDEX_NAMES[k], q, NARROW));
+  for (const s of universe.searchLocal(q, 10)) add(2, { symbol: s.code, name: s.name, type: 'equity', exchange: 'BIST', sector: s.sector }, s.score);
+  for (const f of await searchFunds(q, 8).catch(() => [])) add(3, { symbol: f.code, name: f.name, type: 'fund', exchange: 'TEFAS' }, f.score);
   let remote = [];
   try {
     const d = await getJson(`${Y2}/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&lang=tr-TR&region=TR`);
     remote = (d.quotes || []).filter((x) => x.symbol && x.exchange !== 'IST').map((x) => ({
       symbol: fromYahoo(x.symbol), name: x.longname || x.shortname || x.symbol, type: (x.quoteType || '').toLowerCase(), exchange: x.exchDisp || x.exchange || '',
+      _s: trScore(fromYahoo(x.symbol), x.longname || x.shortname || '', q), _src: 4,
     }));
   } catch { /* çevrimdışı: yerel sonuçlar yeter */ }
   const seen = new Set();
   const all = [...local, ...remote].filter((r) => (seen.has(r.symbol) ? false : seen.add(r.symbol)));
-  // Kodu birebir eşleşen sonuç (ör. fon kodu AFT) en üstte
-  all.sort((x, y) => (y.symbol === up) - (x.symbol === up));
-  return all.slice(0, 15);
+  all.sort(compareSearchHits);
+  return all.slice(0, 15).map(({ _s, _src, ...r }) => r);
 }
 
 // Haberler: BIST ve genel konular için Google News (Türkçe), ABD hisseleri için Yahoo

@@ -118,8 +118,10 @@ export function validateTx(t) {
   let quantity = num(t.quantity, AMOUNT_TYPES.has(type) ? 1 : 0);
   const price = num(t.price);
   const fee = num(t.fee);
-  if (![quantity, price, fee].every(Number.isFinite)) throw new Error('Sayısal alanlar geçersiz');
-  if (meta.needs.includes('symbol') && !symbol) throw new Error('Sembol zorunlu');
+  const tax = num(t.tax);
+  const other_fee = num(t.other_fee);
+  if (![quantity, price, fee, tax, other_fee].every(Number.isFinite)) throw new Error('Sayısal alanlar geçersiz');
+  if (fee < 0 || tax < 0 || other_fee < 0) throw new Error('Komisyon negatif olamaz');
   if (['BUY', 'SELL', 'DRIP', 'FREE', 'STAKING'].includes(type) && !(quantity > 0)) throw new Error('Miktar pozitif olmalı');
   if (['BUY', 'SELL', 'DRIP'].includes(type) && !(price > 0)) throw new Error('Fiyat pozitif olmalı');
   if (type === 'SPLIT' && !(quantity > 0)) throw new Error('Bölünme oranı pozitif olmalı (ör. 2 = her 1 hisse 2 olur)');
@@ -151,7 +153,7 @@ export function validateTx(t) {
     if (to_currency === currency) throw new Error('Kaynak ve hedef para birimi aynı olamaz');
     if (!(to_amount > 0)) throw new Error('Hedef tutar pozitif olmalı');
   }
-  return { date: t.date, platform_id, to_platform_id, symbol, asset_type, type, quantity, price, fee, currency, fx_rate, to_currency, to_amount, strategy_id, notes: t.notes || null };
+  return { date: t.date, platform_id, to_platform_id, symbol, asset_type, type, quantity, price, fee, tax, other_fee, currency, fx_rate, to_currency, to_amount, strategy_id, notes: t.notes || null };
 }
 
 // Döviz işlemlerinde kur verilmemişse işlem tarihindeki kapanıştan doldur
@@ -171,7 +173,7 @@ export async function fillFx(t) {
   return t;
 }
 
-const INSERT_COLS = ['date', 'platform_id', 'to_platform_id', 'symbol', 'asset_type', 'type', 'quantity', 'price', 'fee', 'currency', 'fx_rate', 'to_currency', 'to_amount', 'strategy_id', 'notes'];
+const INSERT_COLS = ['date', 'platform_id', 'to_platform_id', 'symbol', 'asset_type', 'type', 'quantity', 'price', 'fee', 'tax', 'other_fee', 'currency', 'fx_rate', 'to_currency', 'to_amount', 'strategy_id', 'notes'];
 
 export async function addTransaction(t) {
   const v = validateTx(await fillFx({ ...t }));
@@ -226,9 +228,10 @@ export const splitAppliesTo = (splitTx, platform) => !splitTx.platform || splitT
 export function computeLedger(txs = allTx()) {
   const pos = new Map();   // sembol|platform
   const cash = new Map();  // platform|para birimi → { amount, cost (TRY) }
-  const T = { realized: 0, dividends: 0, interest: 0, staking: 0, fees: 0, commissions: 0, deposits: 0, withdrawals: 0, bought: 0, sold: 0, fxRealized: 0 };
+  const T = { realized: 0, dividends: 0, interest: 0, staking: 0, fees: 0, commissions: 0, tax: 0, otherFee: 0, dividendTax: 0, deposits: 0, withdrawals: 0, bought: 0, sold: 0, fxRealized: 0 };
   const realizedBySym = {}, dividendsBySym = {};
   const warnings = [];
+  const audit = []; // yapısal boşluklar: sessizce yanlış değer üreten durumlar. Arayüzde "bölüm başlığı" olarak gösterilir.
   const flows = []; // yatırımcı nakit akışları (XIRR ve TWR için): { date, amount (TRY, yatırıma giren +) }
 
   const getPos = (sym, plat, t) => {
@@ -265,10 +268,11 @@ export function computeLedger(txs = allTx()) {
     switch (t.type) {
       case 'BUY': {
         const p = getPos(t.symbol, plat, t);
+        const charges = t.fee + (t.tax || 0) + (t.other_fee || 0);
         const gross = t.quantity * t.price;
-        p.qty += t.quantity; p.cost += (gross + t.fee) * fx; p.costNative += gross + t.fee; p.lastPrice = t.price;
-        T.bought += (gross + t.fee) * fx; T.commissions += t.fee * fx;
-        cashFlow(plat, cur, -(gross + t.fee), fx);
+        p.qty += t.quantity; p.cost += (gross + charges) * fx; p.costNative += gross + charges; p.lastPrice = t.price;
+        T.bought += (gross + charges) * fx; T.commissions += t.fee * fx; T.tax += (t.tax || 0) * fx; T.otherFee += (t.other_fee || 0) * fx;
+        cashFlow(plat, cur, -(gross + charges), fx);
         break;
       }
       case 'SELL': {
@@ -276,15 +280,16 @@ export function computeLedger(txs = allTx()) {
         const q = t.quantity;
         const avg = p.qty > 1e-12 ? p.cost / p.qty : 0;
         const avgN = p.qty > 1e-12 ? p.costNative / p.qty : 0;
-        const proceeds = (q * t.price - t.fee) * fx;
+        const charges = t.fee + (t.tax || 0) + (t.other_fee || 0);
+        const proceeds = (q * t.price - charges) * fx;
         const r = proceeds - avg * Math.min(q, Math.max(p.qty, 0));
         T.realized += r; realizedBySym[t.symbol] = (realizedBySym[t.symbol] || 0) + r;
         const qq = Math.min(q, Math.max(p.qty, 0));
         p.cost -= avg * qq; p.costNative -= avgN * qq; p.qty -= q;
         if (Math.abs(p.qty) < 1e-9) { p.qty = 0; p.cost = 0; p.costNative = 0; }
         p.lastPrice = t.price;
-        T.sold += proceeds; T.commissions += t.fee * fx;
-        cashFlow(plat, cur, q * t.price - t.fee, fx);
+        T.sold += proceeds; T.commissions += t.fee * fx; T.tax += (t.tax || 0) * fx; T.otherFee += (t.other_fee || 0) * fx;
+        cashFlow(plat, cur, q * t.price - charges, fx);
         break;
       }
       case 'DRIP': {
@@ -316,6 +321,7 @@ export function computeLedger(txs = allTx()) {
           const want = Math.max(t.quantity, 0);
           const q = Math.min(want, available);
           if (want > available + 1e-9) warnings.push(`${t.date} ${t.symbol}: transfer kaynağında yeterli miktar yok (${plat} → ${to}; istenen ${want}, kaynakta ${available}, taşınan ${q})`);
+          if (want > available + 1e-9) audit.push({ code: 'transfer_short', severity: 'uyari', title: 'Transfer kaynağında yeterli miktar yok', detail: `${t.date} ${t.symbol}: ${plat} → ${to}; istenen ${want}, kaynakta ${available}, taşınan ${q}`, action: 'Transfer miktarını düzelt' });
           if (!(q > 1e-9)) break;
           const avg = from.qty > 1e-12 ? from.cost / from.qty : 0, avgN = from.qty > 1e-12 ? from.costNative / from.qty : 0;
           from.qty -= q; from.cost -= avg * q; from.costNative -= avgN * q;
@@ -327,8 +333,11 @@ export function computeLedger(txs = allTx()) {
         break;
       }
       case 'DIVIDEND': {
-        const net = t.price - t.fee; // fee = stopaj/kesinti
-        T.dividends += net * fx; dividendsBySym[t.symbol] = (dividendsBySym[t.symbol] || 0) + net * fx;
+        // Eski satırlarda temettü stopajı `fee` içinde saklanıyordu; yeni kayıtlarda ayrı `tax` sütununda.
+        const wh = (t.tax || 0) + (t.fee || 0);
+        const net = t.price - wh;
+        T.dividends += net * fx; T.dividendTax += wh * fx; T.tax += (t.tax || 0) * fx;
+        dividendsBySym[t.symbol] = (dividendsBySym[t.symbol] || 0) + net * fx;
         cashFlow(plat, cur, net, fx);
         break;
       }
@@ -363,6 +372,7 @@ export function computeLedger(txs = allTx()) {
     cash: [...cash.values()].filter((c) => Math.abs(c.amount) > 1e-6),
     cashTracking,
     warnings,
+    audit,
     totals: T,
     realizedBySym, dividendsBySym, flows,
   };
@@ -401,6 +411,15 @@ function countryOf(sym, type, cur) {
 }
 // TL'ye karşı korunaklı sayılan varlıklar: altın, döviz, kripto, emtia ve döviz cinsi her şey
 const tlHedged = (h) => ['gold', 'fx', 'crypto', 'commodity'].includes(h.asset_type) || (h.currency && h.currency !== 'TRY');
+
+const SEV = { kritik: 0, uyari: 1, bilgi: 2 };
+// "Ne kadar eski?" — fiyat/kur tarihinin gün farkı. Saat dilimi kayması ileri tarih üretebilir, 0'a kırpılır.
+const daysSince = (d) => {
+  if (!d) return Infinity;
+  const t = typeof d === 'number' ? d : Date.parse(d);
+  return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400_000)) : Infinity;
+};
+const money0 = (n) => Math.round(n).toLocaleString('tr-TR');
 
 export async function summary() {
   if (cache && Date.now() - cache.at < 10_000) return cache.data;
@@ -485,13 +504,46 @@ export async function summary() {
   const totalPnl = L.cashTracking
     ? total - netInvested
     : unrealized + T.realized + T.dividends + T.interest - T.fees + T.fxRealized + kurFarki;
-  const warnings = [];
-  if (cashShort) warnings.push(`Kayıtlı nakit girişi (${Math.round(cashIn).toLocaleString('tr-TR')} ₺) pozisyon maliyetini (${Math.round(cost).toLocaleString('tr-TR')} ₺) karşılamıyor — başlangıç nakdi DEPOSIT olarak kaydedilmedi. Net yatırım maliyet esasıyla hesaplandı; "Toplam K/Z" güvenilmez.`);
+  // Bütünlük denetimi: sessizce yanlış değer üreten boşluklar. `warnings` geriye uyum için
+  // olduğu gibi kalır; `detail` alanı uyarı metniyle birebir aynıdır, arayüz aynı olayı
+  // iki kez göstermemek için onu `audit` içinden okur.
+  const audit = [...L.audit];
+  const W = [];
+  const addAudit = (a) => { audit.push(a); };
+  if (cashShort) {
+    W.push(`Kayıtlı nakit girişi (${Math.round(cashIn).toLocaleString('tr-TR')} ₺) pozisyon maliyetini (${Math.round(cost).toLocaleString('tr-TR')} ₺) karşılamıyor — başlangıç nakdi DEPOSIT olarak kaydedilmedi. Net yatırım maliyet esasıyla hesaplandı; "Toplam K/Z" güvenilmez.`);
+    addAudit({ code: 'net_invested', severity: 'kritik', title: 'Net yatırım maliyet esasıyla hesaplandı', detail: W[0], action: 'Nakit girişi ekle' });
+  }
   const negCash = cashRows.filter((c) => c.amount < -0.01);
-  if (L.cashTracking && negCash.length) warnings.push(`Eksi nakit: ${negCash.map((c) => `${c.platform} ${c.currency}`).join(', ')} — nakit girişi kaydı eksik olabilir`);
-  if (L.shorts.length) warnings.push(`Eldekinden fazla satış: ${L.shorts.map((p) => `${p.symbol} (${p.platform})`).join(', ')}`);
+  if (L.cashTracking && negCash.length) {
+    W.push(`Eksi nakit: ${negCash.map((c) => `${c.platform} ${c.currency}`).join(', ')} — nakit girişi kaydı eksik olabilir`);
+    addAudit({ code: 'neg_cash', severity: 'kritik', title: 'Eksi nakit bakiyesi', detail: W[W.length - 1], action: 'Nakit girişi ekle' });
+  }
+  if (L.shorts.length) {
+    W.push(`Eldekinden fazla satış: ${L.shorts.map((p) => `${p.symbol} (${p.platform})`).join(', ')}`);
+    addAudit({ code: 'short_position', severity: 'kritik', title: 'Eldekinden fazla satış', detail: W[W.length - 1], action: 'İşlem kaydını düzelt' });
+  }
   const unpriced = holdings.filter((h) => !h.priced).map((h) => h.symbol);
-  if (unpriced.length) warnings.push(`Canlı fiyatı olmayan varlıklar son işlem fiyatıyla değerlendirildi: ${unpriced.join(', ')}`);
+  if (unpriced.length) {
+    W.push(`Canlı fiyatı olmayan varlıklar son işlem fiyatıyla değerlendirildi: ${unpriced.join(', ')}`);
+    addAudit({ code: 'unpriced', severity: 'uyari', title: 'Canlı fiyatı olmayan varlıklar', detail: W[W.length - 1], action: 'Fiyat gir' });
+  }
+  // TEFAS fonu / mevduat: aylardır değişmeyen fiyat portföyü şişirir ya da şişirmez
+  const stale = holdings.filter((h) => ['fund', 'bond'].includes(h.asset_type) && daysSince(h.priceTime || h.firstDate) > 45);
+  if (stale.length) addAudit({ code: 'stale_price', severity: 'bilgi', title: 'Fon fiyatı aylardır güncellenmiyor', detail: `${stale.map((h) => `${h.symbol} (${daysSince(h.priceTime || h.firstDate)} gündür)`).join(', ')} — değerleme eski fiyattan yapılıyor`, action: 'Fiyat güncelle' });
+  // Kur boşluğu: canlı kuru olmayan ya da işlem günü kuru 1 olarak kaydedilmiş yabancı para
+  const noRate = [...new Set([...cashRows.map((c) => c.currency), ...holdings.map((h) => h.currency)].filter((c) => c && c !== 'TRY' && !fx[c]))];
+  const badRate = db.prepare("SELECT DISTINCT currency FROM transactions WHERE currency <> 'TRY' AND (fx_rate IS NULL OR fx_rate <= 1)").all().map((r) => r.currency);
+  if (noRate.length || badRate.length) addAudit({ code: 'fx_gap', severity: 'uyari', title: 'Döviz kuru boşluğu', detail: `${[...new Set([...noRate, ...badRate])].join(', ')}: kuru olmayan ya da 1 olarak kaydedilmiş işlemler var — yabancı para değerleri eksik hesaplanıyor`, action: 'Kur kaydı ekle' });
+  // Tarihsel serinin son noktası bugünkü değerden ayrışıyorsa grafik ile özet taban çatışır
+  const ser = await fullSeries().catch(() => []);
+  const lastPt = ser.at(-1);
+  if (total > 0 && lastPt && daysSince(lastPt.date) <= 7) {
+    const drift = (total - lastPt.value) / total;
+    if (Math.abs(drift) > 0.01) addAudit({ code: 'series_drift', severity: 'uyari', title: 'Özet ile değer grafiği uyuşmuyor', detail: `${lastPt.date} tarihli seri noktası ${money0(lastPt.value)} ₺, bugünkü değer ${money0(total)} ₺ (%${(drift * 100).toFixed(1)} sapma)`, action: 'Geçmiş değer ekle' });
+  }
+  audit.sort((a, b) => SEV[a.severity] - SEV[b.severity]);
+  const warnings = W;
 
   const data = {
     asOf: new Date().toISOString(),
@@ -501,6 +553,7 @@ export async function summary() {
       unrealizedPct: cost ? (unrealized / cost) * 100 : null,
       dayChange, dayChangePct: value - dayChange ? (dayChange / (value - dayChange)) * 100 : null,
       realized: T.realized, dividends: T.dividends, interest: T.interest, staking: T.staking, fees: T.fees, commissions: T.commissions,
+      tax: T.tax, otherFee: T.otherFee, dividendTax: T.dividendTax,
       fxRealized: T.fxRealized, fxUnrealized: kurFarki, kurFarki: T.fxRealized + kurFarki,
       netInvested, totalPnl, totalPnlPct: netInvested > 0 ? (totalPnl / netInvested) * 100 : null,
       // true olduğunda net yatırım maliyet esasıyla hesaplandı; arayüz "Toplam K/Z" kartını işaretlemeli
@@ -517,6 +570,7 @@ export async function summary() {
     },
     cash: cashRows,
     warnings,
+    audit,
     holdings, positions,
     closed: L.closed.map((c) => ({ symbol: c.symbol, realized: L.realizedBySym[c.symbol] || 0, dividends: L.dividendsBySym[c.symbol] || 0 })),
   };
@@ -573,9 +627,12 @@ function recordSnapshot(value, netInvested) {
 // ── Temettü ─────────────────────────────────────────────────
 export async function dividendReport() {
   const rows = db.prepare(`${TX_SELECT} WHERE t.type IN ('DIVIDEND', 'DRIP') ORDER BY t.date`).all();
+  // Eski satırlarda temettü stopajı `fee` içindeydi, yeni kayıtlarda `tax` sütununda: ikisi de toplanır
+  const wh = (r) => (r.tax || 0) + (r.fee || 0);
   const items = rows.map((r) => ({
     id: r.id, date: r.date, symbol: r.symbol, platform: r.platform, type: r.type,
-    amount: (r.type === 'DRIP' ? r.quantity * r.price : r.price - r.fee) * r.fx_rate, gross: (r.type === 'DRIP' ? r.quantity * r.price : r.price) * r.fx_rate, tax: r.type === 'DRIP' ? 0 : r.fee * r.fx_rate,
+    amount: (r.type === 'DRIP' ? r.quantity * r.price : r.price - wh(r)) * r.fx_rate,
+    gross: (r.type === 'DRIP' ? r.quantity * r.price : r.price) * r.fx_rate, tax: (r.type === 'DRIP' ? 0 : wh(r)) * r.fx_rate,
     currency: r.currency, notes: r.notes,
   }));
   const monthly = {}, yearly = {}, bySymbol = {};
@@ -644,6 +701,60 @@ export async function dividendReport() {
     upcoming, expected: expected.sort((a, b) => b.annualGross - a.annualGross), expectedAnnual,
     portfolioYieldPct: s.totals.holdingsValue ? (expected.reduce((a, b) => a + b.annualGross, 0) / s.totals.holdingsValue) * 100 : null,
   };
+}
+
+// ── Yıllık beyanname dökümü ──────────────────────────────────
+// Satış stopajı, komisyon ve BSMV ayrı sütunlarda toplanır (eskiden `fee` içinde karışıyordu).
+// Maliyet esası ortalama alındığından tüm geçmiş oynatılır; yalnızca [from, to] içindeki
+// işlemler yıl kovasına yazılır, böylece dönem filtresi maliyet hesabını bozmaz.
+export function taxReport(from = null, to = null) {
+  const inRange = (d) => (!from || d >= from) && (!to || d <= to);
+  const pos = new Map(); // sembol|platform → { qty, cost }
+  const years = new Map();
+  const bucket = (d) => {
+    const year = d.slice(0, 4);
+    if (!years.has(year)) years.set(year, { year, grossSales: 0, buyCost: 0, realized: 0, commission: 0, tax: 0, bsmv: 0, dividendGross: 0, dividendTax: 0, netOut: 0, dividendNet: 0, realizedPct: null });
+    return years.get(year);
+  };
+  for (const t of db.prepare(`${TX_SELECT} WHERE t.type IN ('BUY','SELL','DIVIDEND') ORDER BY t.date, t.id`).all()) {
+    const fx = t.fx_rate || 1;
+    const fee = Number(t.fee) || 0, tax = Number(t.tax) || 0, bsmv = Number(t.other_fee) || 0;
+    const b = inRange(t.date) ? bucket(t.date) : null;
+    const k = `${t.symbol}|${t.platform || '—'}`;
+    if (t.type === 'BUY') {
+      const gross = t.quantity * t.price, charges = fee + tax + bsmv;
+      if (b) { b.buyCost += (gross + charges) * fx; b.commission += fee * fx; b.tax += tax * fx; b.bsmv += bsmv * fx; }
+      const p = pos.get(k) || { qty: 0, cost: 0 };
+      p.qty += t.quantity; p.cost += (gross + charges) * fx;
+      pos.set(k, p);
+    } else if (t.type === 'SELL') {
+      const p = pos.get(k) || { qty: 0, cost: 0 };
+      const avg = p.qty > 1e-12 ? p.cost / p.qty : 0;
+      const sold = Math.min(t.quantity, Math.max(p.qty, 0));
+      const gross = t.quantity * t.price;
+      if (b) {
+        b.grossSales += gross * fx;
+        b.commission += fee * fx; b.tax += tax * fx; b.bsmv += bsmv * fx;
+        b.realized += (gross - fee - tax - bsmv - avg * sold) * fx;
+      }
+      p.qty -= t.quantity; p.cost -= avg * sold;
+      if (Math.abs(p.qty) < 1e-9) { p.qty = 0; p.cost = 0; }
+    } else if (b) {
+      b.dividendGross += t.price * fx;
+      b.dividendTax += (fee + tax) * fx; // eski satırlarda stopaj fee içindeydi
+    }
+  }
+  const list = [...years.values()].sort((a, b) => a.year.localeCompare(b.year));
+  const sum = (f) => list.reduce((a, b) => a + f(b), 0);
+  for (const b of list) {
+    b.netOut = b.grossSales - b.tax - b.commission - b.bsmv;
+    b.dividendNet = b.dividendGross - b.dividendTax;
+    b.realizedPct = b.buyCost ? (b.realized / b.buyCost) * 100 : null;
+  }
+  const total = { grossSales: sum((b) => b.grossSales), buyCost: sum((b) => b.buyCost), realized: sum((b) => b.realized), commission: sum((b) => b.commission), tax: sum((b) => b.tax), bsmv: sum((b) => b.bsmv), dividendGross: sum((b) => b.dividendGross), dividendTax: sum((b) => b.dividendTax) };
+  total.netOut = total.grossSales - total.tax - total.commission - total.bsmv;
+  total.dividendNet = total.dividendGross - total.dividendTax;
+  return { from, to, years: list, total };
 }
 
 // ── Tarihsel değer serisi ve risk metrikleri ────────────────
@@ -801,8 +912,10 @@ async function fullSeries() {
 }
 
 export async function risk({ from = null, to = null } = {}) {
+  // Beyanname dökümü risk yanıtının içinde gelir: ayrı uç açmadan Risk sekmesinin alt sekmesi beslenir.
+  const tax = taxReport(from, to);
   const all = await fullSeries();
-  if (all.length < 3) return { enough: false, series: [] };
+  if (all.length < 3) return { enough: false, series: [], tax };
   // Seçili dönem: başlangıç günündeki değer açılış değeri kabul edilir
   let series = all.filter((p) => (!from || p.date >= from) && (!to || p.date <= to));
   if (from && series.length && series[0].date > from) {
@@ -810,7 +923,7 @@ export async function risk({ from = null, to = null } = {}) {
     if (before) series = [{ ...before, flow: 0 }, ...series];
   }
   if (series.length) series = [{ ...series[0], flow: series[0].value }, ...series.slice(1)];
-  if (series.length < 3) return { enough: false, series: [], start: from, end: to };
+  if (series.length < 3) return { enough: false, series: [], start: from, end: to, tax };
   const { idx, rets } = twr(series);
   const settings = getSettings();
   // Risksiz faiz: varsayılan olarak dönemin ortalama TLREF'i (Borsa İstanbul); ayarlardan sabit oran seçilebilir
@@ -940,6 +1053,7 @@ export async function risk({ from = null, to = null } = {}) {
     monthly: Object.fromEntries(mv.map(([k, v]) => [k, pct(v)])),
     quarterly: Object.fromEntries(Object.entries(quarterly).map(([k, v]) => [k, pct(v)])),
     series: idx.map((p, i) => ({ date: p.date, level: p.level, value: p.value, invested: invested[i], ...Object.fromEntries(Object.entries(benchLevels).map(([k, lv]) => [k, lv[i]])) })),
+    tax,
     drawdown: dd,
   };
 }
@@ -951,7 +1065,9 @@ const HEADER_ALIASES = {
   symbol: ['symbol', 'sembol', 'hisse', 'kod', 'hisse kodu', 'menkul', 'menkul kıymet', 'kıymet', 'kiymet', 'varlık', 'varlik', 'enstrüman', 'asset'],
   quantity: ['quantity', 'adet', 'miktar', 'lot', 'gerçekleşen adet', 'işlem adedi', 'nominal', 'oran', 'bölünme oranı', 'bolunme orani'],
   price: ['price', 'fiyat', 'birim fiyat', 'ort. fiyat', 'ortalama fiyat', 'işlem fiyatı', 'gerçekleşen fiyat', 'tutar', 'amount', 'unit_price'],
-  fee: ['fee', 'komisyon', 'kom.', 'komisyon tutarı', 'masraf', 'ücret', 'stopaj'],
+  fee: ['fee', 'komisyon', 'kom.', 'komisyon tutarı', 'masraf', 'ücret'],
+  tax: ['tax', 'stopaj', 'stopaj tutarı', 'vergi', 'vergi tutarı'],
+  other_fee: ['other_fee', 'bsmv', 'b.s.m.v.', 'b.s.m.v', 'bankan işlem ücreti', 'bankan islem ucreti', 'diğer ücret', 'diger ucret'],
   currency: ['currency', 'para birimi', 'döviz', 'doviz', 'pb'],
   fx_rate: ['fx', 'fx_rate', 'kur', 'döviz kuru', 'fx_rate_to_try'],
   platform: ['platform', 'aracı kurum', 'araci kurum', 'kurum', 'hesap', 'broker'],
@@ -1013,12 +1129,13 @@ export function parseCsv(text) {
 }
 
 export const CSV_FIELDS = {
-  date: 'Tarih', type: 'İşlem tipi', symbol: 'Sembol', quantity: 'Adet / oran', price: 'Fiyat / tutar', fee: 'Komisyon / stopaj',
+  date: 'Tarih', type: 'İşlem tipi', symbol: 'Sembol', quantity: 'Adet / oran', price: 'Fiyat / tutar', fee: 'Komisyon',
+  tax: 'Stopaj', other_fee: 'BSMV / diğer ücret',
   currency: 'Para birimi', fx_rate: 'Kur', platform: 'Platform', to_platform: 'Hedef platform', to_currency: 'Hedef para birimi',
   to_amount: 'Hedef tutar', asset_type: 'Varlık tipi', strategy: 'Strateji', notes: 'Not',
 };
 // Aynı işlemi ikinci kez içe aktarmamak için imza
-const txSig = (t) => [t.date, t.type, t.symbol || '', Number(t.quantity || 0), Number(t.price || 0), Number(t.fee || 0), t.platform || ''].join('|');
+const txSig = (t) => [t.date, t.type, t.symbol || '', Number(t.quantity || 0), Number(t.price || 0), Number(t.fee || 0), Number(t.tax || 0), Number(t.other_fee || 0), t.platform || ''].join('|');
 
 // mapping: { alan: sütun sırası (0'dan) veya -1 (yok) } — otomatik algılamanın üzerine yazar
 export function previewCsv(text, mapping = null) {
@@ -1046,6 +1163,7 @@ export function previewCsv(text, mapping = null) {
     const t = {
       date: parseDateStr(get('date')), type, symbol: get('symbol') || null,
       quantity: parseNumber(get('quantity')), price: parseNumber(get('price')), fee: parseNumber(get('fee')) || 0,
+      tax: parseNumber(get('tax')) || 0, other_fee: parseNumber(get('other_fee')) || 0,
       currency: get('currency') || undefined, fx_rate: parseNumber(get('fx_rate')) || undefined,
       platform: get('platform') || undefined, to_platform: get('to_platform') || undefined,
       to_currency: get('to_currency') || undefined, to_amount: parseNumber(get('to_amount')) || undefined,
@@ -1095,7 +1213,7 @@ export function importSnapshots(text) {
 
 export function exportCsv() {
   const rows = listTransactions({ limit: 1e9 }).reverse();
-  const head = ['date', 'type', 'symbol', 'quantity', 'price', 'fee', 'currency', 'fx_rate', 'platform', 'to_platform', 'to_currency', 'to_amount', 'asset_type', 'strategy', 'notes'];
+  const head = ['date', 'type', 'symbol', 'quantity', 'price', 'fee', 'tax', 'other_fee', 'currency', 'fx_rate', 'platform', 'to_platform', 'to_currency', 'to_amount', 'asset_type', 'strategy', 'notes'];
   const esc = (v) => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   return [head.join(','), ...rows.map((r) => head.map((h) => esc(r[h])).join(','))].join('\n');
 }

@@ -1,6 +1,6 @@
 // kmy terminal sekmesi: ana ekran, sembol sayfaları (özet · finans · skor · değer · karşılaştırma),
 // piyasa sayfaları (tarayıcı · sektör haritası · piyasa özeti) ve alttaki komut satırı
-import { state, on, emit, api, $, $$, h, esc, md, num, price, pct, cls, compact, dateTR, css, toast, selectSymbol, askAgent, localGet, localSet, timeTR, srcTag, debounce, confirmBox, openPdfViewer, today } from './core.js';
+import { state, on, emit, api, $, $$, h, esc, md, num, price, pct, cls, compact, dateTR, css, toast, modal, selectSymbol, askAgent, localGet, localSet, timeTR, sqlDate, srcTag, debounce, confirmBox, openPdfViewer, today } from './core.js';
 import { baseOptions, makeChart, palette } from './charts.js';
 import { openTxModal } from './portfolio-view.js';
 import { openKapDetail, signalPill } from './kap.js';
@@ -14,6 +14,16 @@ const FKEYS = [['sum', t('ÖZET')], ['fin', t('FİNANS')], ['score', t('SKOR')],
 const SHORT = [t('[kısa]ÖZET'), t('[kısa]FİN'), t('[kısa]SKOR'), t('[kısa]DEĞER'), t('[kısa]KARŞ')];
 const RANGES = [['1d', t('1G')], ['5d', t('1H')], ['1mo', t('1A')], ['3mo', t('3A')], ['6mo', t('6A')], ['ytd', t('YBB')], ['1y', t('1Y')], ['5y', t('5Y')], ['max', t('Tümü')]];
 const DISCLAIMER = t('Bilgi amaçlıdır; yatırım tavsiyesi değildir.');
+// ÖZET alt sekmeleri: veri renderSum'da bir kez çekilir, sekme değişimi yalnız göster/gizle yapar
+const SUM_TABS = [['px', t('FİYAT · RAKAMLAR')], ['news', t('HABER AKIŞI')], ['docs', t('AJAN · BELGE · TEMETTÜ')]];
+// Ölçüt referansı yalnız günlük barlı aralıklarda çizilir: 5Y haftalık, TÜMÜ aylık veri gelir
+const BENCH_RANGES = ['1mo', '3mo', '6mo', 'ytd', '1y', '2y'];
+const BENCH_HIDE_TIP = t('Uzun aralıklarda (5Y, Tümü) ölçüt verisi haftalık/aylık geldiği için referans çizgisi gizlenir; yanlış karşılaştırma göstermemek için.');
+const BENCH_HIDE_INTRADAY = t('Gün içi aralıklarda ölçüt verisi günlük geldiği için referans çizgisi çizilmez.');
+const OV_NO_DATA = t('Bu aralıkta yeterli veri yok');
+let sumTab = localGet('sumTab', 'px');
+const ovOk = new Set(['vol']); // overlay için yeterli veri var mı (SMA200 5Y/TÜMÜ'de hesaplanamaz)
+let benchData = null;
 let range = localGet('range', '6mo');
 const overlays = new Set(localGet('overlays', ['sma20', 'sma50']));
 let lower = localGet('lower', 'rsi');
@@ -95,13 +105,16 @@ root.innerHTML = `
     <div class="kt-symbar">
       <div class="sym-head" id="symHead"></div>
       <div class="kt-actions">
+        <button class="ghost" id="bAlert" title="${t('Fiyat, temettü ve KAP eşikleri')}">🔔<span class="pill acc" id="bAlertN" hidden></span></button>
         <button class="ghost" id="bWatch">${t('＋ Listeye ekle')}</button>
         <button class="ghost" id="bTx">${t('Portföye ekle')}</button>
         <button class="btn" id="bAsk">${t('Asistanla analiz et')}</button>
       </div>
     </div>
+    <span class="seg" id="sumSeg">${SUM_TABS.map(([k, l]) => `<button data-sg="${k}">${l}</button>`).join('')}</span>
+    <div class="kt-stack kt-sg" data-sg="px">
     <div class="kt-panel kt-chartpanel">
-      <div class="kt-ph"><span>${t('Fiyat grafiği')}</span>
+      <div class="kt-ph" title="${BENCH_HIDE_TIP}"><span>${t('Fiyat grafiği')}</span>
         <div class="kt-ctrls">
           <div class="seg" id="rangeSeg">${RANGES.map(([r, l]) => `<button data-r="${r}">${l}</button>`).join('')}</div>
           <div class="seg" id="ovSeg"><button data-o="sma20">SMA20</button><button data-o="sma50">SMA50</button><button data-o="sma200">SMA200</button><button data-o="bb">Bollinger</button><button data-o="vol">${t('Hacim')}</button></div>
@@ -112,6 +125,7 @@ root.innerHTML = `
         <div class="chart-box kt-main-chart"><canvas id="mainChart"></canvas></div>
         <div class="chart-box sm" id="lowerBox"><canvas id="lowerChart"></canvas></div>
         <div class="kt-note" id="chartNote"></div>
+        <div class="kt-note" id="relNote"></div>
       </div>
     </div>
     <div class="kt-grid kt-g3">
@@ -119,15 +133,20 @@ root.innerHTML = `
       ${panel(t('Teknik görünüm'), '<div id="tech"></div>')}
       ${panel(`${t('Temel veriler')} <span class="dim" id="fundNote"></span>`, '<div id="fund"></div>')}
     </div>
-    <div class="kt-grid kt-g3">
-      ${panel(t('Haberler'), '<div class="news kt-scroll" id="news"></div>')}
-      ${panel(`${t('KAP bildirimleri')} ${sub(t('son 30 gün'))}`, '<div class="kt-scroll" id="symKap"></div>', { extra: `<button class="ghost" id="bKapAll">${t('Tümü ›')}</button>` })}
-      ${panel(t('Kurum raporları'), '<div class="kt-scroll" id="symRep"></div>', { extra: `<button class="ghost" id="bRepAll">${t('Tümü ›')}</button>` })}
     </div>
-    <div class="kt-grid kt-g3">
-      ${panel(`${t('Asistan notları')} <span class="dim" id="noteMeta"></span>`, '<div id="symNotes"></div>', { tip: t('Asistanın bu şirket için kaydettiği tez, kilit rakamlar ve tetikleyiciler') })}
-      ${panel(t('Belgeler'), '<div id="symDocs"></div>', { tip: t('KAP’tan indirilen faaliyet raporları, finansal raporlar ve sunumlar') })}
-      ${panel(t('Temettü ve sermaye artırımları'), '<div id="divs"></div>')}
+    <div class="kt-stack kt-sg" data-sg="news" hidden>
+      <div class="kt-grid kt-g3">
+        ${panel(t('Haberler'), '<div class="news kt-scroll" id="news"></div>')}
+        ${panel(`${t('KAP bildirimleri')} ${sub(t('son 30 gün'))}`, '<div class="kt-scroll" id="symKap"></div>', { extra: `<button class="ghost" id="bKapAll">${t('Tümü ›')}</button>` })}
+        ${panel(t('Kurum raporları'), '<div class="kt-scroll" id="symRep"></div>', { extra: `<button class="ghost" id="bRepAll">${t('Tümü ›')}</button>` })}
+      </div>
+    </div>
+    <div class="kt-stack kt-sg" data-sg="docs" hidden>
+      <div class="kt-grid kt-g3">
+        ${panel(`${t('Asistan notları')} <span class="dim" id="noteMeta"></span>`, '<div id="symNotes"></div>', { tip: t('Asistanın bu şirket için kaydettiği tez, kilit rakamlar ve tetikleyiciler') })}
+        ${panel(t('Belgeler'), '<div id="symDocs"></div>', { tip: t('KAP’tan indirilen faaliyet raporları, finansal raporlar ve sunumlar') })}
+        ${panel(t('Temettü ve sermaye artırımları'), '<div id="divs"></div>')}
+      </div>
     </div>
   </section>
 
@@ -393,16 +412,82 @@ $('#ktPopular').addEventListener('click', (e) => { const b = e.target.closest('[
 // ── 1) ÖZET ───────────────────────────────────────
 const segActive = () => {
   $$('#rangeSeg button').forEach((b) => b.classList.toggle('active', b.dataset.r === range));
-  $$('#ovSeg button').forEach((b) => b.classList.toggle('active', overlays.has(b.dataset.o)));
+  // Veri yetersizse gösterge açılamaz: sessizce boş çizgi çizmek, çalışıyor izlenimi yaratır
+  $$('#ovSeg button').forEach((b) => {
+    const ok = ovOk.has(b.dataset.o);
+    b.classList.toggle('active', ok && overlays.has(b.dataset.o));
+    b.disabled = !ok;
+    b.style.opacity = ok ? '' : '.4';
+    b.title = ok ? '' : OV_NO_DATA;
+  });
   $$('#lowSeg button').forEach((b) => b.classList.toggle('active', b.dataset.l === lower));
   $$('.kt-movseg button', root).forEach((b) => b.classList.toggle('active', b.dataset.m === moversTab));
   $$('#calSeg button').forEach((b) => b.classList.toggle('active', b.dataset.c === calScope));
+  $$('#sumSeg button').forEach((b) => b.classList.toggle('active', b.dataset.sg === sumTab));
   $('#lowerBox').hidden = lower === 'none';
 };
+// Alt sekme: yalnız göster/gizle. Veri renderSum'da önceden çekilip saklanır, istek atılmaz.
+function showSumTab() {
+  $$('.kt-sg', sec('sum')).forEach((el) => { el.hidden = el.dataset.sg !== sumTab; });
+  if (sumTab === 'px') requestAnimationFrame(() => resizeCharts('sum'));
+}
+$('#sumSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; sumTab = b.dataset.sg; localSet('sumTab', sumTab); segActive(); showSumTab(); };
 $('#rangeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; range = b.dataset.r; localSet('range', range); segActive(); loadChart(); };
 $('#ovSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; overlays.has(b.dataset.o) ? overlays.delete(b.dataset.o) : overlays.add(b.dataset.o); localSet('overlays', [...overlays]); segActive(); drawChart(); };
 $('#lowSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; lower = b.dataset.l; localSet('lower', lower); segActive(); drawChart(); };
 segActive();
+
+// ── Eşikler (zil) ────────────────────────────────────
+const ALERT_OPS = [['above', t('Fiyat üstü'), true], ['below', t('Fiyat altı'), true], ['div', t('Temettü ≥ (₺/hisse)'), true], ['kap', t('KAP bildirimi geldi'), false]];
+const alertLabel = (op) => ALERT_OPS.find(([k]) => k === op)?.[1] || op;
+const alertText = (a) => (a.op === 'kap' ? alertLabel(a.op) : `${alertLabel(a.op)} ${price(a.value)}`);
+let symAlerts = [];
+async function loadAlerts(s = curSym) {
+  try { symAlerts = await api(`/alerts?symbol=${enc(s)}`); } catch { symAlerts = []; }
+  if (s !== curSym) return;
+  const n = symAlerts.filter((a) => a.triggered_at).length;
+  const el = $('#bAlertN');
+  el.textContent = n;
+  el.hidden = !n;
+}
+$('#bAlert').onclick = () => {
+  const m = modal({ title: `${curSym} · ${t('Eşikler')}`, body: '<div id="alBox"></div>' });
+  const draw = () => {
+    $('#alBox', m.el).innerHTML = `
+      ${symAlerts.length ? `<table class="t"><tbody>${symAlerts.map((a) => `<tr>
+        <td>${esc(alertText(a))}${a.note ? ` <span class="muted">${esc(a.note)}</span>` : ''}</td>
+        <td class="r dim">${a.triggered_at ? esc(t('tetiklendi {d}', { d: timeTR(sqlDate(a.triggered_at)) })) : ''}</td>
+        <td class="r"><button class="kt-x" data-rm="${a.id}" aria-label="${t('Sil')}">×</button></td></tr>`).join('')}</tbody></table>`
+        : dimMsg(t('Bu sembol için eşik yok.'))}
+      <form class="kt-inline" id="alForm" style="margin-top:10px">
+        <b class="mono">${esc(curSym)}</b>
+        <select id="alOp">${ALERT_OPS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+        <input id="alVal" type="number" step="any" min="0" placeholder="${t('fiyat (₺)')}" style="width:110px">
+        <button class="btn">${t('Kaydet')}</button>
+      </form>
+      <div class="dim" style="margin-top:6px">${t('Hisse eşikleri BIST seansında değerlendirilir; tetiklenen eşik koşul bozulana kadar tekrar etmez.')}</div>`;
+    // KAP eşiğinde değer yok: bildirim geldiği anda tetiklenir
+    const val = $('#alVal', m.el), op = $('#alOp', m.el);
+    const sync = () => { val.hidden = val.disabled = op.value === 'kap'; };
+    op.onchange = sync; sync();
+    $('#alForm', m.el).onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/alerts', { method: 'POST', body: { symbol: curSym, op: op.value, value: Number(val.value) } });
+        await loadAlerts();
+        draw();
+      } catch (err) { toast(tx(err.message), 'err'); }
+    };
+    $$('[data-rm]', m.el).forEach((b) => { b.onclick = async () => { try { await api(`/alerts/${b.dataset.rm}`, { method: 'DELETE' }); await loadAlerts(); draw(); } catch (err) { toast(tx(err.message), 'err'); } }; });
+  };
+  draw();
+};
+on('ws:alerts.fired', (m) => {
+  const a = m?.alert;
+  if (!a || a.symbol !== curSym) return;
+  toast(t('🔔 {s}: {c}', { s: a.symbol, c: alertText(a) }), 'ok');
+  loadAlerts();
+});
 
 $('#bWatch').onclick = async () => { try { await api('/watchlist', { method: 'POST', body: { symbol: curSym } }); toast(t('{s} izleme listesine eklendi', { s: curSym }), 'ok'); } catch (e) { toast(tx(e.message), 'err'); } };
 $('#bTx').onclick = () => openTxModal({ symbol: curSym, price: state.quotes[curSym]?.price });
@@ -436,6 +521,8 @@ function renderSum() {
   const tok = symToken;
   const fresh = () => tok === symToken;
   renderHead();
+  showSumTab();
+  loadAlerts(s);
   api(`/quote/${enc(s)}`).then((q) => { if (q && fresh()) { state.quotes[s] = q; renderHead(); renderCur(); } }).catch(() => {});
   loadChart();
   $('#tech').innerHTML = SKEL;
@@ -610,6 +697,8 @@ async function loadChart() {
     const d = await D.hist(s, range, true);
     if (s !== curSym) return;
     lastHist = d;
+    await loadBench(s);
+    if (s !== curSym) return;
     drawChart();
     const q = state.quotes[s];
     $('#chartNote').textContent = ['GRAM', 'HAS', 'ONS', 'GUMUS', 'CEYREK', 'YARIM', 'TAM', 'CUMHURIYET', 'ATA', 'BILEZIK22'].includes(s)
@@ -618,9 +707,42 @@ async function loadChart() {
   } catch (e) {
     if (s !== curSym) return;
     lastHist = null;
+    benchData = null;
+    $('#relNote').textContent = '';
     makeChart($('#mainChart'), { type: 'line', data: { datasets: [] }, options: baseOptions() });
     toast(`${s}: ${tx(e.message)}`, 'err');
   }
+}
+
+// Ölçüt referans çizgisi: sembolün günlerine hizalanmış, başlangıcı 100'e normalize edilmiş gri seri.
+// 5Y/TÜMÜ aralıklarında ölçüt haftalık/aylık geldiği için çizgi çizilmez (yanlış karşılaştırma).
+const benchKey = () => state.settings?.benchmark || 'XU100';
+async function loadBench(s) {
+  const key = benchKey();
+  if (!BENCH_RANGES.includes(range) || key === s) { benchData = null; return; }
+  const d = await D.hist(key, range).catch(() => null);
+  benchData = alignBench(d?.bars || []);
+}
+function alignBench(bbars) {
+  const day = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const map = new Map(bbars.filter((b) => b.c > 0).map((b) => [day(b.t), b.c]));
+  const bars = lastHist.bars;
+  const vals = new Array(bars.length).fill(null);
+  let last = null;
+  for (let i = 0; i < bars.length; i++) { const v = map.get(day(bars[i].t)); if (v != null) last = v; if (last != null) vals[i] = last; }
+  const base = vals.find((v) => v != null);
+  if (!base) return null;
+  const s0 = bars.find((b) => b.c > 0)?.c, s1 = bars.at(-1).c;
+  if (!s0) return null;
+  return { key: benchKey(), data: vals.map((v, i) => (v == null ? null : { x: bars[i].t, y: (v / base) * 100 })),
+    sRet: (s1 / s0 - 1) * 100, bRet: (vals.at(-1) / base - 1) * 100, diff: (s1 / s0 - vals.at(-1) / base) * 100 };
+}
+function drawRelNote() {
+  const el = $('#relNote'), b = benchData;
+  if (!b) { el.textContent = (!BENCH_RANGES.includes(range) && benchKey() !== curSym) ? (['1d', '5d'].includes(range) ? BENCH_HIDE_INTRADAY : BENCH_HIDE_TIP) : ''; return; }
+  const rl = RANGES.find(([r]) => r === range)?.[1] || range;
+  el.title = t('Gri çizgi: başlangıcı 100’e normalize edilmiş {b} referansı.', { b: b.key });
+  el.innerHTML = `${esc(rl)}: ${esc(curSym)} <span class="${cls(b.sRet)}">${pct(b.sRet, 1)}</span> · ${esc(b.key)} <span class="${cls(b.bRet)}">${pct(b.bRet, 1)}</span> → <span class="${cls(b.diff)}">${t('{v} puan', { v: num(b.diff, 1) })}</span>`;
 }
 
 function drawChart() {
@@ -634,18 +756,34 @@ function drawChart() {
     label: curSym, data: pts(bars.map((b) => b.c)), borderColor: color, borderWidth: 1.5, pointRadius: 0, tension: 0.1, yAxisID: 'y',
     fill: { target: 'origin', above: alpha(color, 0.09) },
   }];
+  const has = (arr) => (arr || []).some((v) => v != null);
+  // Yetersiz veride gösterge çizilmez ve düğmesi pasifleşir: boş çizgi "çalışıyor" izlenimi yaratıyor
   const ovColors = { sma20: css('--accent'), sma50: css('--info'), sma200: css('--violet') };
-  for (const k of ['sma20', 'sma50', 'sma200']) if (overlays.has(k)) ds.push({ label: k.toUpperCase(), data: pts(ind[k]), borderColor: ovColors[k], borderWidth: 1, pointRadius: 0, yAxisID: 'y' });
+  ovOk.clear();
+  for (const k of ['sma20', 'sma50', 'sma200']) {
+    if (!has(ind[k])) continue;
+    ovOk.add(k);
+    if (overlays.has(k)) ds.push({ label: k.toUpperCase(), data: pts(ind[k]), borderColor: ovColors[k], borderWidth: 1, pointRadius: 0, yAxisID: 'y' });
+  }
+  if (has(ind.bbUpper)) ovOk.add('bb');
+  if (bars.some((b) => b.v)) ovOk.add('vol');
   const bbUp = t('BB üst');
-  if (overlays.has('bb')) {
+  if (overlays.has('bb') && ovOk.has('bb')) {
     ds.push({ label: bbUp, data: pts(ind.bbUpper), borderColor: css('--text-3'), borderDash: [4, 3], borderWidth: 1, pointRadius: 0, yAxisID: 'y' });
     ds.push({ label: t('BB alt'), data: pts(ind.bbLower), borderColor: css('--text-3'), borderDash: [4, 3], borderWidth: 1, pointRadius: 0, yAxisID: 'y' });
   }
-  const opts = baseOptions({ legend: overlays.size > 0 });
-  if (overlays.has('vol') && bars.some((b) => b.v)) {
+  const opts = baseOptions({ legend: ds.length > 1 });
+  if (ovOk.has('vol') && overlays.has('vol')) {
     ds.push({ type: 'bar', label: t('Hacim'), data: pts(bars.map((b) => b.v)), backgroundColor: css('--line-2'), yAxisID: 'v', barPercentage: 1, categoryPercentage: 1 });
     opts.scales.v = { display: false, beginAtZero: true, max: Math.max(...bars.map((b) => b.v)) * 4 };
   }
+  // Ölçüt 100 tabanlı: fiyat ekseninden ayrı, görünmez sol eksende çizilir
+  if (benchData) {
+    ds.push({ label: benchData.key, data: benchData.data, borderColor: alpha(css('--text-3'), 0.9), borderWidth: 1, borderDash: [5, 4], pointRadius: 0, yAxisID: 'b', tension: 0.1 });
+    opts.scales.b = { display: false, position: 'left' };
+  }
+  drawRelNote();
+  segActive();
   opts.plugins.legend.labels.filter = (i) => !i.text.startsWith('BB') || i.text === bbUp;
   makeChart($('#mainChart'), { type: 'line', data: { datasets: ds }, options: opts });
 
@@ -1399,7 +1537,7 @@ on('view:shown', (v) => {
 on('quotes', (q) => { if (q[curSym]) { renderCur(); if (rendered.sum === curSym) renderHead(); } });
 on('ready', () => { renderCur(); if (page === 'home') ensure('home', true); });
 on('settings', () => {
-  if (lastHist) drawChart();
+  if (lastHist) loadChart(); // ölçüt anahtarı değişmiş olabilir
   if (finData && rendered.fin === curSym) drawFinCharts(finData);
   if (compHist && rendered.comp === curSym) paintCompChart();
 });

@@ -46,6 +46,10 @@ const TX = [
   { date: '2025-05-01', platform: 'Kurum A', type: 'BUY', symbol: 'CEYREK', quantity: 2, price: 6500 },
   { date: '2025-05-02', platform: 'Kurum A', type: 'BUY', symbol: 'TTE', asset_type: 'fund', quantity: 1000, price: 0.072083 },
   { date: '2025-07-01', platform: 'Kurum A', type: 'SPLIT', symbol: 'THYAO', quantity: 2 },
+  // Kotasyonu olmayan TEFAS fonu: fiyat elle girilir, güncellenmezse değerleme eski kalır.
+  { date: '2025-05-03', platform: 'Kurum A', type: 'BUY', symbol: 'ZZF', asset_type: 'fund', quantity: 500, price: 2.5 },
+  // Kuru 1 olarak kaydedilmiş yabancı para: defter sessizce yanlış değer üretir, denetim yakalamalı.
+  { date: '2025-03-10', platform: 'Kurum A', type: 'DEPOSIT', price: 1000, currency: 'CHF', fx_rate: 1 },
   // Kurum A'da 180 adet var; 200 adet isteniyor → 180 taşınmalı, 20'lik hayalet pozisyon oluşmamalı.
   { date: '2025-07-02', platform: 'Kurum A', type: 'TRANSFER', symbol: 'THYAO', quantity: 200, to_platform: 'Kurum B' },
   { date: '2025-07-03', platform: 'Kurum B', type: 'FREE', symbol: 'BIMAS', quantity: 10 },
@@ -75,8 +79,37 @@ check('Net yatırım pozisyon maliyetine eşit', near(s.totals.netInvested, s.to
   `${Math.round(s.totals.netInvested)} vs maliyet ${Math.round(s.totals.cost)}`);
 check('Toplam K/Z portföy değerine eşit değil (eski hata)', Math.abs(s.totals.totalPnl - s.totals.value) > 0.01,
   `K/Z ${Math.round(s.totals.totalPnl)} vs değer ${Math.round(s.totals.value)}`);
-check('Toplam K/Z yüzdesi makul', s.totals.totalPnlPct == null || Math.abs(s.totals.totalPnlPct) < 100,
-  `${s.totals.totalPnlPct?.toFixed(1)}%`);
+// totalPnlPct canlı piyasa fiyatına bağlı olduğu için mutlak bir tavan koymak geçersiz
+// (iki koşu arasında canlı fiyat değişince sınırı aşıyordu). Değişmez olan ilişkiyi denetle.
+check('Toplam K/Z = değer − net yatırım', near(s.totals.totalPnl, s.totals.value - s.totals.netInvested, 0.5),
+  `${Math.round(s.totals.totalPnl)} vs ${Math.round(s.totals.value - s.totals.netInvested)}`);
+check('Toplam K/Z yüzdesi oranla tutarlı', s.totals.totalPnlPct == null || near(s.totals.totalPnlPct, (s.totals.totalPnl / s.totals.netInvested) * 100, 0.01),
+  `${s.totals.totalPnlPct?.toFixed(2)}%`);
+
+// ── Bütünlük denetimi (0.14.1) ───────────────────────────────────────────
+const codes = s.audit.map((a) => a.code);
+const find = (c) => s.audit.find((a) => a.code === c);
+check('Denetim: tek nakit kaydı → net_invested uyarısı', codes.includes('net_invested'),
+  find('net_invested')?.detail || '(yok)');
+check('Denetim: yetersiz transfer → transfer_short uyarısı', codes.includes('transfer_short'),
+  find('transfer_short')?.detail || '(yok)');
+check('Denetim: CHF işlemi (kuru 1) → fx_gap uyarısı', codes.includes('fx_gap') && /CHF/.test(find('fx_gap')?.detail || ''),
+  find('fx_gap')?.detail || '(yok)');
+check('Denetim: her madde code/severity/title/detail/action taşıyor',
+  s.audit.every((a) => a.code && ['kritik', 'uyari', 'bilgi'].includes(a.severity) && a.title && a.detail && a.action),
+  `${s.audit.length} madde: ${codes.join(', ')}`);
+check('Denetim: kritik uyarı önce sıralanır', s.audit[0]?.severity === 'kritik', s.audit[0]?.code || '-');
+// Geriye uyum: eski uyarı metinleri yerinde kalır; arayüzün aynı olayı iki kez göstermemesi
+// için audit.detail ile birebir eşleşmeleri gerekir.
+const covered = s.audit.filter((a) => ['net_invested', 'neg_cash', 'short_position', 'unpriced'].includes(a.code));
+check('Denetim: uyarı metni audit.detail ile birebir eşleşiyor', covered.every((a) => s.warnings.includes(a.detail)),
+  covered.map((a) => a.code).join(', '));
+
+// TEFAS fonu aylardır aynı fiyatla değerlendiriliyor
+pf.setManualPrice('ZZF', 2.5, '2024-06-01');
+const s2 = await pf.summary();
+const stale = s2.audit.find((a) => a.code === 'stale_price');
+check('Denetim: eski fiyatlı TEFAS fonu → stale_price uyarısı', !!stale && /ZZF/.test(stale.detail), stale?.detail || '(yok)');
 
 console.log(`\n${fail === 0 ? 'TAMAMI GEÇTİ' : 'BAŞARISIZ'}: ${pass} geçti, ${fail} kaldı`);
 process.exit(fail === 0 ? 0 : 1);

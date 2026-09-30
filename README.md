@@ -13,7 +13,7 @@ Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tara
 
 Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı), `omp` CLI ve omp içinde `/login` (oh-my-pi sağlayıcısı; CLI bulunursa model seçicide görünür).
 
-Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 87 kontrol: portföy 52, güvenlik 19, hata senaryoları 16; gerçek verinize dokunmaz).
+Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 165 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 24; gerçek verinize dokunmaz).
 
 ## Kurulum (DMG)
 

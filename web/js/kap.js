@@ -13,22 +13,49 @@ export function signalPill(sig) {
 
 const root = $('#rtab-kap');
 root.innerHTML = `
-  <div class="kap-bar"><div class="kap-sigs" id="kSigs"></div><span class="spacer"></span><button class="icon-btn sm" id="kRefresh" title="${t('KAP’tan yenile')}">↻</button><input id="kQ" placeholder="${t('Sembol')}" aria-label="${t('Bildirimlerde ara (sembol veya metin)')}"></div>
+  <div class="kap-bar"><button class="symlock" id="kLock" hidden title="${t('Sembol kipini kaldır')}"><span></span><span class="tab-x">✕</span></button><div class="kap-sigs" id="kSigs"></div><span class="spacer"></span><button class="icon-btn sm" id="kRefresh" title="${t('KAP’tan yenile')}">↻</button><input id="kQ" placeholder="${t('Sembol')}" aria-label="${t('Bildirimlerde ara (sembol veya metin)')}"></div>
   <div class="kap-filters">
     <select id="kScope" aria-label="${t('Kapsam')}"><option value="watchlist">${t('İzleme listesi')}</option><option value="portfolio">${t('Portföyüm')}</option><option value="all">${t('Tüm şirketler')}</option><option value="symbol">${t('Seçili sembol')}</option></select>
     <select id="kDays" aria-label="${t('Dönem')}"><option value="1">${t('{n} gün', { n: 1 })}</option><option value="3">${t('{n} gün', { n: 3 })}</option><option value="7" selected>${t('{n} gün', { n: 7 })}</option><option value="30">${t('{n} gün', { n: 30 })}</option><option value="90" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('{n} gün', { n: 90 })}</option><option value="365" title="${t('İzleme listesi, portföy veya sembol kapsamında')}">${t('1 yıl')}</option></select>
     <select id="kCls" aria-label="${t('Bildirim türü')}"><option value="">${t('Tüm türler')}</option><option value="ODA">${t('Özel durum')}</option><option value="FR">${t('Finansal rapor')}</option><option value="DG">${t('Diğer')}</option><option value="DKB">${t('Düzenleyici kurum')}</option></select>
   </div>
+  <div class="seg kap-view" id="kView"><button data-v="sort" data-p="date">${t('TARİH')}</button><button data-v="sort" data-p="signal">${t('SİNYALE')}</button><button data-v="group">${t('GÜNLÜK')}</button><button data-v="unread">${t('OKUNMAMIŞ')}</button></div>
   <div class="kap-info" style="flex-wrap:wrap"><span id="kInfo" style="flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
     <span class="row" style="gap:6px"><button class="ghost xs" id="kRead" title="${t('Listedeki tüm bildirimleri okundu say')}">${t('Okundu say')}</button><button class="ghost xs" id="kAsk">${t('Tez sinyallerini asistanla özetle')}</button></span></div>
   <div class="list" id="kList"></div>`;
 
 // Varsayılan 7 gün: izleme listesinde 3 günde çoğu zaman 2-3 bildirim çıkar, "akış durdu" sanılıyor.
-let f = { scope: localGet('kapScope', 'watchlist'), cls: '', days: localGet('kapDays', 7), q: '', symbol: null, signal: localGet('kapSignal', '') };
+let f = { scope: localGet('kapScope', 'watchlist'), cls: '', days: localGet('kapDays', 7), q: '', symbol: null, signal: localGet('kapSignal', ''),
+  sort: localGet('kapSort', 'date'), group: localGet('kapGroup', false), unread: localGet('kapUnread', false) };
 const seen = new Set(localGet('kapSeen', []));
+// Rozet: yüklenen listede okunmamış bildirim sayısı; markSeen anında düşürür.
 let unread = 0, items = [], total = 0, loading = false;
 $('#kScope').value = f.scope;
 $('#kDays').value = String(f.days);
+
+// ── Sembol kipi ───────────────────────────────────
+// Sembol seçilince sağ panel (KAP + Raporlar) o sembole kilitlenir. Kilit kapsam seçicisiyle
+// ya da rozetten çevrilir, sembol temizlenince kendiliğinden çözülür. Kilitliyken localSet yok:
+// kayıtlı kapsam tercihi kullanıcının kapatınca geri döneceği serbest kapsam olarak korunur.
+let lock = null;
+function setLock(sym) {
+  lock = sym || null;
+  f.symbol = lock;
+  $('#kLock').hidden = !lock;
+  if (lock) { $('#kLock').firstElementChild.textContent = lock; f.q = ''; $('#kQ').value = lock; }
+  else $('#kQ').value = f.q;
+  emit('symlock', lock);
+}
+function releaseLock() {
+  if (!lock) return;
+  f.scope = f.scope === 'symbol' ? 'watchlist' : f.scope;
+  $('#kScope').value = f.scope;
+  setLock(null);
+  guardDays();
+  load();
+}
+$('#kLock').onclick = releaseLock;
+on('symlock:off', releaseLock);   // Raporlar sekmesindeki rozet aynı kilidi kaldırır
 
 let forceNext = false;
 function qs(offset = 0) {
@@ -53,6 +80,41 @@ function itemHtml(x) {
     <div class="acts"><button data-open="${x.id}">${t('İçeriği göster')}</button><a href="${esc(x.url)}" target="_blank" rel="noopener">${t('KAP’ta aç ↗')}</a><button data-ask="${x.id}">${t('Asistanla analiz et')}</button></div></div></div>`;
 }
 
+// Sunucu daima en yeniyi öne alır; "SİNYALE" seçilince önem sırası devreye girer (istemci tarafı).
+const SIG_RANK = { TEZ: 0, YAPISAL: 1, FINANSAL: 2, KURUMSAL: 3 };
+const dayKey = (x) => (x.date || '').slice(0, 10);
+// KAP tarihleri +03:00; başlığı UTC öğünde kurup UTC'de biçimlendirerek saat dilimi kaymasını önle
+const dayLabel = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString(locale, { timeZone: 'UTC' }); };
+
+function viewItems() {
+  const list = f.unread ? items.filter((x) => !seen.has(x.id)) : [...items];
+  if (f.sort === 'signal') list.sort((a, b) => (SIG_RANK[a.signal] ?? 9) - (SIG_RANK[b.signal] ?? 9) || (b.date || '').localeCompare(a.date || ''));
+  return list;
+}
+// Gün başlıkları yalnız tarih sırasında anlamlı: sinyal sırasında gün bloğu tezlerin arasını bölerdi.
+function listHtml(list) {
+  if (!f.group) return list.map(itemHtml).join('');
+  const perDay = new Map();
+  for (const x of list) { const k = dayKey(x); perDay.set(k, (perDay.get(k) || 0) + 1); }
+  let day = null;
+  return list.map((x) => {
+    const k = dayKey(x);
+    if (k === day) return itemHtml(x);
+    day = k;
+    return (k ? `<div class="kap-day">${esc(dayLabel(k))} <span class="dim">· ${t('{n} bildirim', { n: perDay.get(k) })}</span></div>` : '') + itemHtml(x);
+  }).join('');
+}
+function emptyHtml() {
+  if (f.unread) return t('Okunmamış bildirim yok');
+  if (f.signal) return t('{label} sınıfında bildirim yok', { label: esc(SIG_LABEL[f.signal] || f.signal) });
+  return f.scope === 'watchlist' ? t('İzleme listenizdeki hisseler için bildirim yok') : t('Bildirim yok');
+}
+function drawList() {
+  const list = viewItems();
+  $('#kList').innerHTML = listHtml(list) || `<div class="empty">${emptyHtml()}</div>`;
+  if (items.length < total) $('#kList').append(h(`<button class="ghost" id="kMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: total - items.length })}</button>`));
+}
+
 let reqTok = 0;
 async function load(append = false) {
   if (append && loading) return; // aynı anda iki "daha fazla" isteği olmasın
@@ -70,9 +132,9 @@ async function load(append = false) {
     const counts = r.counts || {};
     const sum = Object.values(counts).reduce((a, b) => a + b, 0);
     $('#kSigs').innerHTML = `<button class="${!f.signal ? 'on' : ''}" data-sig="" title="${sum}">${t('Tümü')}</button>` + ['TEZ', 'YAPISAL', 'FINANSAL', 'KURUMSAL', 'DIGER'].map((k) => `<button class="${f.signal === k ? 'on' : ''}" data-sig="${k}" title="${esc(SIG_LABEL[k])} · ${counts[k] || 0} · ${sigTitle(k)}">${esc(SIG_SHORT[k])}</button>`).join('');
-    $('#kList').innerHTML = items.map(itemHtml).join('') || `<div class="empty">${f.signal ? t('{label} sınıfında bildirim yok', { label: esc(SIG_LABEL[f.signal] || f.signal) }) : f.scope === 'watchlist' ? t('İzleme listenizdeki hisseler için bildirim yok') : t('Bildirim yok')}</div>`;
-    if (items.length < total) $('#kList').append(h(`<button class="ghost" id="kMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: total - items.length })}</button>`));
-    if (root.classList.contains('active')) { unread = 0; badge(); }
+    drawList();
+    unread = items.filter((x) => !seen.has(x.id)).length;
+    badge();
   } catch (e) {
     if (tok === reqTok) $('#kList').innerHTML = `<div class="empty">${esc(tx(e.message))}</div>`;
   } finally { if (tok === reqTok) loading = false; }
@@ -87,11 +149,35 @@ $('#kList').addEventListener('click', (e) => {
   const a = e.target.closest('a'); if (a) { const it = e.target.closest('.kap-item'); if (it) markSeen([Number(it.dataset.id)]); }
 });
 $('#kSigs').addEventListener('click', (e) => { const b = e.target.closest('[data-sig]'); if (!b) return; f.signal = b.dataset.sig; localSet('kapSignal', f.signal); load(); });
+// Görünüm kipleri: sıralama (tarih ↔ sinyal), gün gruplaması, okunmamış süzgeci
+$('#kView').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-v]');
+  if (!b) return;
+  const v = b.dataset.v;
+  if (v === 'sort') f.sort = b.dataset.p; else f[v] = !f[v];
+  localSet(`kap${v[0].toUpperCase()}${v.slice(1)}`, v === 'sort' ? f.sort : f[v]);
+  syncView();
+  drawList();
+});
+// Gün gruplaması yalnız tarih sırasında anlamlı; sinyal sırasındayken düğmeyi kilitle
+function syncView() {
+  $$('#kView button[data-v]').forEach((b) => {
+    const on2 = b.dataset.v === 'sort' ? b.dataset.p === f.sort : f[b.dataset.v];
+    b.classList.toggle('active', !!on2);
+    if (b.dataset.v === 'group') b.disabled = f.sort !== 'date';
+  });
+}
+syncView();
 
 function markSeen(ids) {
-  for (const id of ids) seen.add(id);
+  let n = 0;
+  for (const id of ids) if (!seen.has(id)) { seen.add(id); n++; }
   localSet('kapSeen', [...seen].slice(-5000));
   for (const id of ids) $(`.kap-item[data-id="${id}"]`, root)?.classList.remove('new');
+  if (!n) return;
+  unread = Math.max(0, unread - n);
+  badge();
+  if (f.unread) drawList();   // süzgeç açıkken okunan satır listeden düşer
 }
 function badge() { $('#kapBadge').hidden = !unread; $('#kapBadge').textContent = unread; }
 
@@ -144,7 +230,7 @@ export async function openKapDetail(id) {
 
 // "Tüm şirketler" kapsamı sunucuda 31 güne kırpılır; kapsam ya da dönem değiştiğinde her yolda uyar
 const guardDays = () => { if (f.days > 31 && f.scope === 'all') toast(t('Tüm şirketler için en fazla 31 gün gösterilir; daha uzun geçmiş için sembol, izleme listesi veya portföy kapsamını seçin.')); };
-$('#kScope').onchange = (e) => { f.scope = e.target.value; f.symbol = null; localSet('kapScope', f.scope); guardDays(); load(); };
+$('#kScope').onchange = (e) => { f.scope = e.target.value; f.symbol = null; localSet('kapScope', f.scope); if (f.scope !== 'symbol') setLock(null); guardDays(); load(); };
 $('#kCls').onchange = (e) => { f.cls = e.target.value; load(); };
 $('#kDays').onchange = (e) => {
   f.days = Number(e.target.value);
@@ -158,7 +244,7 @@ $('#kRefresh').onclick = async () => {
   forceNext = true;
   try { await load(); } finally { forceNext = false; b.disabled = false; b.classList.remove('spin'); }
 };
-$('#kRead').onclick = () => { markSeen(items.map((x) => x.id)); unread = 0; badge(); };
+$('#kRead').onclick = () => markSeen(items.map((x) => x.id));
 const ASK_SCOPE = {
   watchlist: (days) => t('İzleme listemdeki şirketlerin son {days} günlük KAP bildirimlerinde TEZ (tez değiştirebilecek) ve YAPISAL sinyalleri tara; önemli olanların içeriğini get_kap_detail ile oku ve önem sırasıyla özetle.', { days }),
   portfolio: (days) => t('Portföyümdeki şirketlerin son {days} günlük KAP bildirimlerinde TEZ (tez değiştirebilecek) ve YAPISAL sinyalleri tara; önemli olanların içeriğini get_kap_detail ile oku ve önem sırasıyla özetle.', { days }),
@@ -168,7 +254,7 @@ $('#kAsk').onclick = () => askAgent(f.scope === 'symbol'
   ? t('{symbol} için son {days} günün KAP bildirimlerini tara (get_kap_disclosures); tez değiştirebilecek olanları get_kap_detail ile okuyup önem sırasıyla özetle.', { symbol: f.symbol || state.selected, days: f.days })
   : (ASK_SCOPE[f.scope] || ASK_SCOPE.all)(f.days));
 
-on('kap:filter', (x) => { Object.assign(f, x); $('#kScope').value = f.scope; load(); });
+on('kap:filter', (x) => { Object.assign(f, x); $('#kScope').value = f.scope; if (f.scope !== 'symbol') setLock(null); syncView(); load(); });
 on('ws:kap.updated', (m) => {
   if (m.fresh?.length) {
     unread += m.fresh.length; badge();
@@ -178,7 +264,14 @@ on('ws:kap.updated', (m) => {
   if (root.classList.contains('active')) load();
 });
 on('rtab:shown', (tab) => { if (tab === 'kap') load(); });
-on('symbol', () => { if (f.scope === 'symbol' && root.classList.contains('active')) load(); });
+// Sembol seçimi paneli o sembole kilitler; sekme pasif olsa bile yüklenir, kullanıcı geçince hazır bekler.
+on('symbol', (sym) => {
+  if (!sym) { releaseLock(); return; }
+  setLock(sym);
+  f.scope = 'symbol';
+  $('#kScope').value = 'symbol';
+  load();
+});
 on('ready', () => { if (root.classList.contains('active')) load(); });
 
 on('kap:open', (id) => openKapDetail(id));

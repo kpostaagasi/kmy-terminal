@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   quantity REAL NOT NULL DEFAULT 0,
   price REAL NOT NULL DEFAULT 0,
   fee REAL NOT NULL DEFAULT 0,
+  -- 0.14.1: beyanname için ayrı sütunlar. fee = alış komisyonu, tax = satış stopajı,
+  -- other_fee = banka işlem ücreti. Eski satırlarda fee stopajı da içeriyordu, DEFAULT 0 korur.
+  tax REAL NOT NULL DEFAULT 0,
+  other_fee REAL NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'TRY',
   fx_rate REAL NOT NULL DEFAULT 1,
   strategy_id INTEGER REFERENCES strategies(id) ON DELETE SET NULL,
@@ -112,6 +116,8 @@ for (const sql of [
   'ALTER TABLE transactions ADD COLUMN to_amount REAL',
   'ALTER TABLE symbols ADD COLUMN manual_price REAL',
   'ALTER TABLE symbols ADD COLUMN manual_price_at TEXT',
+  'ALTER TABLE transactions ADD COLUMN tax REAL NOT NULL DEFAULT 0',
+  'ALTER TABLE transactions ADD COLUMN other_fee REAL NOT NULL DEFAULT 0',
 ]) {
   try { db.exec(sql); } catch { /* sütun zaten var */ }
 }

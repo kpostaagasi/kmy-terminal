@@ -1,5 +1,5 @@
 // Sol panel: izleme listesi (canlı fiyat, mini grafik, sürükle-bırak sıralama, sembol ekleme)
-import { state, on, emit, api, $, $$, esc, price, pct, cls, selectSymbol, debounce, toast, askAgent, contextMenu, srcTag } from './core.js';
+import { state, on, emit, api, $, $$, esc, price, pct, cls, selectSymbol, debounce, toast, askAgent, contextMenu, srcTag, sparkSvg } from './core.js';
 import { openTxModal } from './portfolio-view.js';
 import { t, tx } from './i18n.js';
 
@@ -26,14 +26,17 @@ function ordered() {
   return s;
 }
 
-// Satır: sembol · fiyat (para birimi simgesiyle) · günlük değişim · çıkar
+// Satır: sembol · günlük mini grafik · fiyat (para birimi simgesiyle) · günlük değişim · çıkar
 const CUR = { TRY: '₺', USD: '$', EUR: '€', GBP: '£' };
 function rowHtml(sym) {
   const q = state.quotes[sym];
   const tip = `${tx(q?.longName || q?.name || sym)}${q ? ` · ${q.source || ''}${q.delayed ? ` · ${t('~15 dk gecikmeli')}` : ''}` : ''}`;
   const c = q?.changePct;
+  // Sunucu her quote'a 1 günlük 5 dakikalık kapanış dizisi koyar (spark); veri yoksa hücre boş kalır, kutu çizilmez.
+  const sp = q?.spark;
   return `<div class="wl-row ${sym === state.selected ? 'sel' : ''}" role="listitem" data-s="${esc(sym)}" draggable="${sortMode === 'manual'}" tabindex="0" title="${esc(tip)}">
     <span class="sym">${esc(sym)}</span>
+    <span class="wl-spark">${sp?.length > 1 ? sparkSvg(sp, { w: 40, h: 16 }) : ''}</span>
     <span class="px">${q ? `${CUR[q.currency] || ''}${price(q.price)}` : '…'}</span>
     <span class="pc ${cls(c)}">${q ? pct(c, 1) : ''}</span>
     <button class="rm" data-rm="${esc(sym)}" title="${t('Listeden çıkar')}" aria-label="${esc(t('{s} sembolünü listeden çıkar', { s: sym }))}">×</button>
