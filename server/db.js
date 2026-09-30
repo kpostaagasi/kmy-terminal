@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS http_cache (
   value TEXT NOT NULL,
   fetched_at INTEGER NOT NULL
 );
+-- Temizlik yazma yolunda ORDER BY fetched_at ile yapar (cachePut → trimCache)
+CREATE INDEX IF NOT EXISTS ix_cache_fetched ON http_cache(fetched_at);
 CREATE TABLE IF NOT EXISTS tool_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -106,6 +108,16 @@ CREATE TABLE IF NOT EXISTS tool_audit (
   allowed INTEGER NOT NULL,
   reason TEXT
 );
+-- Kurum raporlarından çıkarılan hedef fiyat / tavsiye. research.js doldurur, rapor görünümü okur.
+CREATE TABLE IF NOT EXISTS analyst_targets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  broker TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  target REAL, rating TEXT, upside_pct REAL, report_date TEXT,
+  source_id TEXT,                        -- research.js'in rapor kimliği
+  UNIQUE(broker, symbol, report_date)
+);
+CREATE INDEX IF NOT EXISTS ix_targets_symbol ON analyst_targets(symbol, report_date DESC);
 `);
 
 // Şema göçleri (eski veritabanları için)
@@ -132,6 +144,9 @@ export const DEFAULT_SETTINGS = {
   // Yolo (bypassPermissions) bitiş damgası, ms cinsinden. 0 = süre yok (kullanıcı elle kapatır).
   // Bu anahtar tanımlı değilse putSettings sessizce düşürüyor ve otomatik kapanma hiç çalışmıyor.
   yoloUntil: 0,
+  // Günlük ajan maliyet bütçesi (USD). 0 = sınır yok. costLimitEnforce true ise bütçe dolduğunda yeni tur reddedilir.
+  dailyCostLimit: 0,
+  costLimitEnforce: false,
   chatFontSize: 14,
   terminalFontSize: 13,
   theme: 'dark',
@@ -183,9 +198,46 @@ export function cacheGet(key, maxAgeMs) {
   return JSON.parse(row.value);
 }
 
+// http_cache tavanı: 300 satır / 50 MB. Temizlik yazma yolunda yapılır; okuma yolu (cacheGet) taramaz.
+const CACHE_MAX_ROWS = 300, CACHE_MAX_BYTES = 50 * 1024 * 1024;
+let cacheRows = -1, cacheBytes = -1;
+
+export function cacheStats() {
+  if (cacheRows < 0) {
+    // LENGTH(TEXT) karakter sayar; ölçüm bayt olmalı (Türkçe karakterler 2 bayt)
+    const r = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(value AS BLOB))), 0) AS b FROM http_cache').get();
+    cacheRows = Number(r.n); cacheBytes = Number(r.b);
+  }
+  return { rows: cacheRows, bytes: cacheBytes };
+}
+
+export function cacheClear() {
+  db.exec('DELETE FROM http_cache');
+  cacheRows = 0; cacheBytes = 0;
+}
+
+function trimCache() {
+  // En eskileri düşür: satır tavanı, sonra bayt tavanı (yeniden yazılan eski anahtarlar fazlalık yaratır)
+  db.exec(`DELETE FROM http_cache WHERE key IN (SELECT key FROM http_cache ORDER BY fetched_at DESC LIMIT -1 OFFSET ${CACHE_MAX_ROWS})`);
+  const rows = db.prepare('SELECT key, LENGTH(CAST(value AS BLOB)) AS b FROM http_cache ORDER BY fetched_at ASC').all();
+  let bytes = rows.reduce((a, r) => a + Number(r.b), 0);
+  for (const r of rows) {
+    if (bytes <= CACHE_MAX_BYTES) break;
+    db.prepare('DELETE FROM http_cache WHERE key = ?').run(r.key);
+    bytes -= Number(r.b);
+  }
+  cacheRows = -1; cacheBytes = -1; // bir sonraki cacheStats ölçümü tazeler
+}
+
 export function cachePut(key, value) {
+  const json = JSON.stringify(value);
+  const prev = db.prepare('SELECT LENGTH(CAST(value AS BLOB)) AS b FROM http_cache WHERE key = ?').get(key);
   db.prepare('INSERT INTO http_cache(key, value, fetched_at) VALUES(?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, fetched_at = excluded.fetched_at')
-    .run(key, JSON.stringify(value), Date.now());
+    .run(key, json, Date.now());
+  cacheStats();
+  cacheBytes += Buffer.byteLength(json) - (prev ? Number(prev.b) : 0);
+  if (!prev) cacheRows++;
+  if (cacheRows > CACHE_MAX_ROWS || cacheBytes > CACHE_MAX_BYTES) trimCache();
 }
 
 export function tx(fn) {

@@ -317,6 +317,11 @@ export default {
   'Sağ tık (izleme listesi)': 'Right-click (watchlist)',
   'Grafik · asistan özeti · KAP · işlem ekle': 'Chart · assistant summary · KAP · add transaction',
   'Klavye kısayolları': 'Keyboard shortcuts',
+  // 0.15.0 düzeltmesi: 3 sekme (⌘1–3), 0.15.0'da eklenen ⌘\ ve ⇧⌘\, Esc'in modal/çekmece kapsamı
+  'Dashboard · kmy terminal · Portföy': 'Dashboard · kmy terminal · Portfolio',
+  'Sağ paneli aç/kapat': 'Show / hide side panel',
+  'KAP ↔ Raporlar': 'KAP ↔ Reports',
+  'Pencere, panel veya paleti kapat': 'Close window, panel or palette',
   '/analiz SEMBOL': '/analiz SYMBOL',
   'Kapsamlı analiz ve rapor': 'In-depth analysis and report',
   '/teknik SEMBOL': '/teknik SYMBOL',
@@ -338,4 +343,11 @@ export default {
   'Sohbet komutları': 'Chat commands',
   'BIST fiyatları ~15 dk gecikmelidir; kaynak ve gecikme her fiyatın yanında gösterilir. Terminal ve asistan çıktıları yatırım tavsiyesi değildir.':
     'BIST prices are delayed by ~15 min; the source and delay are shown next to each price. Output from the terminal and the assistant is not investment advice.',
+  'Günlük asistan maliyeti': 'Daily assistant cost',
+  'USD cinsinden günlük üst sınır. 0 = sınır yok, gösterge gizlenir.': 'Daily cap in USD. 0 = no cap; the indicator stays hidden.',
+  'Bütçe dolunca sohbeti kilitle': 'Lock chat when the budget is full',
+  'Kapalıyken yalnız uyarılır; açıkken limit dolunca yeni tur gönderilemez.': 'Off: warn only. On: no new turns once the cap is reached.',
+  'kayıt': 'records',
+  'Bilinmiyor': 'Unknown',
+  'Hesaplanıyor…': 'Calculating…',
 };

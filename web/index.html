@@ -23,9 +23,9 @@
     <button class="icon-btn only-narrow" id="btnLeft" aria-label="İzleme listesini aç"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
     <div class="brand" title="kmy terminal"><b>KMY</b> <span>TERMINAL</span></div>
     <nav class="viewbar" role="tablist" aria-label="Görünümler">
-      <button role="tab" data-key="1" data-view="agent" class="active" data-i18n>Dashboard</button>
-      <button role="tab" data-key="2" data-view="market">kmy terminal</button>
-      <button role="tab" data-key="3" data-view="portfolio" data-i18n>Portföy</button>
+      <button role="tab" id="tab-agent" data-key="1" data-view="agent" class="active" aria-selected="true" aria-controls="view-agent" data-i18n>Dashboard</button>
+      <button role="tab" id="tab-market" data-key="2" data-view="market" aria-selected="false" aria-controls="view-market">kmy terminal</button>
+      <button role="tab" id="tab-portfolio" data-key="3" data-view="portfolio" aria-selected="false" aria-controls="view-portfolio" data-i18n>Portföy</button>
     </nav>
     <span class="spacer"></span>
     <div class="topbar-right">
@@ -56,26 +56,26 @@
     <div class="splitter" data-split="left" aria-hidden="true"></div>
 
     <section class="center" id="center">
-      <div class="view active" id="view-agent">
+      <div class="view active" id="view-agent" role="tabpanel" aria-labelledby="tab-agent">
         <div class="agent-body"><div class="agent-pane active" id="agentChat"></div><div class="agent-pane" id="agentTerm"></div></div>
       </div>
-      <div class="view" id="view-market"></div>
-      <div class="view" id="view-portfolio"></div>
+      <div class="view" id="view-market" role="tabpanel" aria-labelledby="tab-market"></div>
+      <div class="view" id="view-portfolio" role="tabpanel" aria-labelledby="tab-portfolio"></div>
     </section>
 
     <div class="splitter" data-split="right" aria-hidden="true"><button class="split-handle" id="splitHandle" title="Sağ paneli gizle" aria-label="Sağ paneli gizle">»</button></div>
     <aside class="right" id="right">
-      <div class="right-tabs" role="tablist">
-        <button role="tab" data-rtab="chat" hidden data-i18n>Asistan sohbeti</button>
-        <button role="tab" data-rtab="kap" class="active">KAP <span class="badge" id="kapBadge" hidden></span></button>
-        <button role="tab" data-rtab="reports" data-i18n>Raporlar</button>
-        <button role="tab" data-rtab="pdf" hidden>PDF <span class="tab-x" id="pdfClose" title="Kapat" aria-label="PDF sekmesini kapat">✕</span></button>
+      <div class="right-tabs" role="tablist" aria-label="Sağ panel">
+        <button role="tab" id="rt-chat" data-rtab="chat" aria-controls="rtab-chat" aria-selected="false" hidden data-i18n>Asistan sohbeti</button>
+        <button role="tab" id="rt-kap" data-rtab="kap" class="active" aria-controls="rtab-kap" aria-selected="true">KAP <span class="badge" id="kapBadge" hidden></span></button>
+        <button role="tab" id="rt-reports" data-rtab="reports" aria-controls="rtab-reports" aria-selected="false" data-i18n>Raporlar</button>
+        <button role="tab" id="rt-pdf" data-rtab="pdf" aria-controls="rtab-pdf" aria-selected="false" hidden>PDF <span class="tab-x" id="pdfClose" title="Kapat" aria-label="PDF sekmesini kapat">✕</span></button>
         <button class="icon-btn sm only-narrow" id="btnRightClose" aria-label="Paneli kapat">✕</button>
       </div>
-      <div class="rtab" id="rtab-chat"></div>
-      <div class="rtab active" id="rtab-kap"></div>
-      <div class="rtab" id="rtab-reports"></div>
-      <div class="rtab" id="rtab-pdf"></div>
+      <div class="rtab" id="rtab-chat" role="tabpanel" aria-labelledby="rt-chat"></div>
+      <div class="rtab active" id="rtab-kap" role="tabpanel" aria-labelledby="rt-kap"></div>
+      <div class="rtab" id="rtab-reports" role="tabpanel" aria-labelledby="rt-reports"></div>
+      <div class="rtab" id="rtab-pdf" role="tabpanel" aria-labelledby="rt-pdf"></div>
     </aside>
   </main>
   <footer class="statusbar">

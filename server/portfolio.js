@@ -233,6 +233,7 @@ export function computeLedger(txs = allTx()) {
   const warnings = [];
   const audit = []; // yapısal boşluklar: sessizce yanlış değer üreten durumlar. Arayüzde "bölüm başlığı" olarak gösterilir.
   const flows = []; // yatırımcı nakit akışları (XIRR ve TWR için): { date, amount (TRY, yatırıma giren +) }
+  const splits = []; // bölünme anında birden çok platformda pozisyonu olan SPLIT kayıtları
 
   const getPos = (sym, plat, t) => {
     const k = `${sym}|${plat}`;
@@ -309,7 +310,10 @@ export function computeLedger(txs = allTx()) {
       }
       case 'SPLIT': {
         // Platform belirtilmemişse sembolün tüm pozisyonlarına uygulanır
-        for (const q of pos.values()) if (q.symbol === t.symbol && splitAppliesTo(t, q.platform)) { q.qty *= t.quantity; if (q.lastPrice) q.lastPrice /= t.quantity; }
+        const hit = [...pos.values()].filter((q) => q.symbol === t.symbol);
+        for (const q of hit) if (splitAppliesTo(t, q.platform)) { q.qty *= t.quantity; if (q.lastPrice) q.lastPrice /= t.quantity; }
+        // Pozisyon sayısı bölünme anındakidir: sonradan açılan platformlar bölünmeyi etkilemez
+        if (hit.length > 1) splits.push({ ...t, platforms: hit.length });
         break;
       }
       case 'TRANSFER': {
@@ -353,6 +357,15 @@ export function computeLedger(txs = allTx()) {
       }
       default: break;
     }
+  }
+
+  // SPLIT platform tutarlılığı: geçmiş seri sembol başına tek kova tutar, platform ayrımı yapamaz.
+  // Platform belirtilmiş bölünme defterde yalnız o platformun pozisyonunu büyütür, seride ise
+  // sembolün tamamına uygulanır → özet ile grafik ayrışır. Platform belirtilmemiş bölünme ise
+  // çok platformlu sembolde hangi kova için yazıldığı belli değildir.
+  for (const s of splits) {
+    if (s.platform) audit.push({ code: 'multi_platform_split', severity: 'kritik', title: 'Platformlu bölünme çok platformlu sembolde', detail: `${s.date} ${s.symbol}: ${s.quantity}× bölünme yalnız ${s.platform} platformunda uygulandı, sembol o tarihte ${s.platforms} platformda — geçmiş seri tümüne uyguluyor, özet ile grafik ayrışır`, action: 'Bölünmeyi düzelt' });
+    else audit.push({ code: 'multi_platform_split', severity: 'uyari', title: 'Platformu belirtilmemiş bölünme', detail: `${s.date} ${s.symbol}: ${s.quantity}× bölünme platform belirtilmeden kaydedilmiş, sembol o tarihte ${s.platforms} platformda — geçmiş seri platform ayrımı yapamıyor`, action: 'Bölünmeye platform ekle' });
   }
 
   const bySym = new Map();
@@ -535,6 +548,17 @@ export async function summary() {
   const noRate = [...new Set([...cashRows.map((c) => c.currency), ...holdings.map((h) => h.currency)].filter((c) => c && c !== 'TRY' && !fx[c]))];
   const badRate = db.prepare("SELECT DISTINCT currency FROM transactions WHERE currency <> 'TRY' AND (fx_rate IS NULL OR fx_rate <= 1)").all().map((r) => r.currency);
   if (noRate.length || badRate.length) addAudit({ code: 'fx_gap', severity: 'uyari', title: 'Döviz kuru boşluğu', detail: `${[...new Set([...noRate, ...badRate])].join(', ')}: kuru olmayan ya da 1 olarak kaydedilmiş işlemler var — yabancı para değerleri eksik hesaplanıyor`, action: 'Kur kaydı ekle' });
+  // Evren yaşam döngüsü: portföydeki bir kod artık BIST listesinde olmayabilir. Veri silinmez,
+  // yalnız uyarılır — kaldırılan ya da kodu değişen kod doğrulanmadan taşınmaz.
+  if (universe.isReady()) {
+    const codes = holdings.filter((h) => h.asset_type === 'stock' && isBist(h.symbol)).map((h) => ({ h, c: universe.checkCode(h.symbol) }));
+    const gone = codes.filter((x) => x.c.status === 'delisted');
+    if (gone.length) addAudit({ code: 'delisted_holding', severity: 'uyari', title: 'Artık listelenmeyen hisse', detail: `${gone.map((x) => `${x.h.symbol} (${x.c.name || 'adı bilinmiyor'}, ${x.c.removedAt} tarihinde kaldırıldı)`).join(', ')} — geçmiş veri korunuyor, güncel fiyat ve temettü gelmiyor`, action: 'Sembolü doğrula' });
+    const ren = codes.filter((x) => x.c.confirm);
+    if (ren.length) addAudit({ code: 'renamed_holding', severity: 'bilgi', title: 'Kodu değişmiş olabilecek hisse', detail: ren.map((x) => `${x.h.symbol} → ${x.c.candidates.map((k) => k.symbol).join('/')} (${x.c.name}, ${x.c.removedAt} tarihinde kaldırıldı)`).join(', ') + ' — eski kod BIST listesinde yok; yeni kodlar yalnız ad benzerliğine dayanıyor, doğrulamadan taşınmadı', action: 'Yeni kodu doğrula' });
+    const unk = codes.filter((x) => x.c.status === 'unknown');
+    if (unk.length) addAudit({ code: 'unknown_symbol', severity: 'uyari', title: 'BIST listesinde bulunmayan sembol', detail: `${unk.map((x) => x.h.symbol).join(', ')} — evrende yok, kaldırılmış olarak da bilinmiyor; kod elle girilmiş ya da hatalı olabilir`, action: 'Sembolü doğrula' });
+  }
   // Tarihsel serinin son noktası bugünkü değerden ayrışıyorsa grafik ile özet taban çatışır
   const ser = await fullSeries().catch(() => []);
   const lastPt = ser.at(-1);

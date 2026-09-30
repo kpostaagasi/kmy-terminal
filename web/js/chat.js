@@ -1,6 +1,6 @@
 // AGENT CHAT: Claude / Codex oturumları, akışlı yanıt, katlanan araç grupları, KOMİTE (alt ajan) kartları,
 // izin ve soru kartları, dosya ekleri, eğik çizgi komutları, maliyet / tur / bağlam göstergesi
-import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR } from './core.js';
+import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR, today } from './core.js';
 import { t, tx, lang } from './i18n.js';
 
 // Çizgi simgeler (currentColor): ataç, gönder, durdur
@@ -14,6 +14,14 @@ root.innerHTML = `
   <div class="panel-bar"><span class="pb-title">${t('Asistan sohbeti')}</span><span class="head-actions" id="agentActions"></span><span class="spacer"></span>
     <div class="seg" id="agentMode"><button data-m="chat" class="active">${t('Sohbet')}</button><button data-m="terminal" title="${t('Kabuk ve Claude Code komut satırı')}">${t('Kabuk')}</button></div></div>
   <details class="komite" id="komite"><summary></summary><div class="komite-list"></div></details>
+  <div class="chat-find" id="chatFind" style="position:fixed;z-index:60;width:min(420px,86vw);background:var(--panel);border:1px solid var(--line-2);border-radius:3px;box-shadow:var(--shadow)" hidden>
+    <div class="row" style="padding:6px 8px;gap:6px">
+      <input id="findQ" style="flex:1" placeholder="${t('Sohbette ara…')}" aria-label="${t('Sohbette ara')}">
+      <span class="dim mono" id="findN" style="font-size:10.5px;white-space:nowrap"></span>
+      <button class="icon-btn sm" id="findX" title="${t('Kapat (Esc)')}" aria-label="${t('Kapat')}">✕</button>
+    </div>
+    <div id="findList" class="table-wrap" style="max-height:260px;border-top:1px solid var(--line)"></div>
+  </div>
   <div class="chat-log" id="chatLog" aria-live="polite"></div>
   <div class="chat-foot" id="chatFoot">
     <div class="slash" id="slash" hidden></div>
@@ -25,6 +33,7 @@ root.innerHTML = `
         <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
         <span class="spacer"></span>
         <span class="cm-stat" id="stCostBtn" role="button" tabindex="0" style="cursor:pointer" title="${t('Nereye harcadım')}">${t('Maliyet')} <b id="stCost">$0,00</b></span>
+        <span class="cm-stat" id="stBudget" hidden title="${t('Günlük asistan maliyeti')}"></span>
         <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
         <span class="cm-stat" title="${t('Model bağlam kullanımı')}">ctx <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
       </div>
@@ -62,6 +71,10 @@ let toolRun = null;                  // art arda gelen araç kartları grubu
 let pendingTitle = null;             // /yeni İsim ile verilen oturum adı (ilk mesajda kullanılır)
 let turnFiles = new Map();           // bu turda ajanın yazdığı/düzenlediği dosyalar
 let turnHead = null, turnTodo = null; // turun ilk asistan mesajı (saat · maliyet) ve görev kartı
+let msgIdx = [];                     // sohbet içi arama dizini: [{ kind, text, ts, el }] (user + text gövdeleri)
+let idxMap = new WeakMap();            // replay olayı → dizin kaydı (çizilince el bağlanır, yeniden eklenmez)
+let turnUser = null;                 // bu asistan yanıtını üreten kullanıcı mesajının kaydı (yeniden üret için)
+let turnLog = null;                  // { start, tools: [{name, ms, sub}], cost, subs } — tur muhasebe defteri
 const subKinds = new Map();          // alt ajan tool_use id → tür
 const OLD_EVENTS_PAGE = 150;
 
@@ -105,6 +118,7 @@ async function loadSessions() {
   sessions = await api('/sessions').catch(() => []);
   const sel = $('#sessSel');
   sel.innerHTML = `<option value="">${t('Yeni oturum')}</option>` + sessions.map((s) => `<option value="${s.id}" ${s.id === current ? 'selected' : ''}>${s.running ? '● ' : ''}${provTag(s.provider)}${esc(sessTitle(s).slice(0, 40))}</option>`).join('');
+  updateBudget(); // oturum listesi tazelendi → günlük toplam da değişmiş olabilir
   if (current && !sessions.find((s) => s.id === current)) { current = null; localSet('session', null); }
   requestAnimationFrame(() => fitSelect(sel));
 }
@@ -115,7 +129,7 @@ $('#sessExport').onclick = () => exportChat();
 
 async function openSession(id) {
   current = id; localSet('session', id);
-  log.innerHTML = ''; stream = null; toolEls = new Map(); toolRun = null; turnHead = null; turnTodo = null; subKinds.clear(); lastCtx = null; ctxWindow = null; sessCost = 0; sessTurns = 0; pendingEvents = []; ctxWarned = 0;
+  log.innerHTML = ''; stream = null; toolEls = new Map(); toolRun = null; turnHead = null; turnTodo = null; subKinds.clear(); lastCtx = null; ctxWindow = null; sessCost = 0; sessTurns = 0; pendingEvents = []; ctxWarned = 0; msgIdx = []; turnLog = null; turnUser = null;
   running = false; hideWorking();
   sessionProvider = null;
   if (!id) { welcome(); updateStats(); $('#sessSel').value = ''; if (state.meta) syncProvider(); return; }
@@ -126,8 +140,16 @@ async function openSession(id) {
   if (state.meta) syncProvider();
   $('#sessSel').value = id;
   sessCost = s.cost_usd || 0;
+  // Arama dizini: tüm olaylar zaten geldiği için ek istek gerekmiyor. Yalnız son sayfa çizilir;
+  // eski olayların kaydı yine dizinde durur, çizilince el bağlanır (replay olayları yeniden eklenmez).
+  idxMap = new WeakMap();
+  for (const e of s.events) {
+    if (e.kind !== 'user' && e.kind !== 'text') continue;
+    const it = { kind: e.kind, text: String(e.data?.text || ''), ts: e.ts, el: null };
+    msgIdx.push(it); idxMap.set(e, it);
+  }
   ctxWindow = s.contextWindow || null;
-  const evs = s.events.map((e) => ({ type: e.kind, ...e.data, replay: true, ts: e.ts }));
+  const evs = s.events.map((e) => ({ type: e.kind, ...e.data, replay: true, ts: e.ts, src: e }));
   // Canlı 'usage' olayı gelmeden oturum yeniden açılırsa gösterge '–'e düşüyordu; son kayıtlı turu geri yükle
   for (let i = evs.length - 1; i >= 0; i--) if (evs[i].type === 'usage' && evs[i].ctx) { lastCtx = evs[i].ctx; ctxWindow = evs[i].window || ctxWindow; break; }
   if (evs.length > OLD_EVENTS_PAGE) {
@@ -184,9 +206,27 @@ function sessionsModal() {
     return t(diff <= 0 ? 'Bugün' : diff === 1 ? 'Dün' : diff < 7 ? 'Bu hafta' : diff < 31 ? 'Bu ay' : 'Daha eski');
   };
   const cost = (x) => (paid(x.provider) || x.cost_usd ? `$${num(x.cost_usd || 0, 2)}` : t('abonelik'));
+  // Arama önce başlığa bakar; eşleşme az ise oturum gövdeleri de taranır (önbellekli, tek tek istek).
+  // Tüm oturumları her tuş vuruşunda taramak 200 istek demek; yalnız gerekirse ve bir kez yapılır.
+  const bodyCache = new Map();          // sessionId → gövde metni (null = henüz çekilmedi)
+  const bodyHit = new Map();            // sessionId → eşleşen 120 karakterlik bağlam
+  const bodyOf = (x) => api(`/sessions/${x.id}`).then((s) => String((s.events || []).map((e) => e.data?.text || '').join(' '))).catch(() => '');
+  const scanBodies = async (q) => {
+    const todo = sessions.filter((x) => !bodyCache.has(x.id) && !foldTR(x.title || '').includes(q));
+    for (const x of todo) bodyCache.set(x.id, null); // yinelenen istekleri engelle
+    let n = 0;
+    for (const x of todo) {
+      const b = await bodyOf(x);
+      bodyCache.set(x.id, b);
+      const at = foldTR(b).indexOf(q);
+      if (at >= 0) { bodyHit.set(x.id, ctx120(b, q)); if (++n >= 40) break; } // 40 eşleşte yeter
+      if (!m.el.isConnected) return;
+    }
+  };
   const draw = () => {
-    const q = qIn.value.toLocaleLowerCase('tr').trim();
-    const list = sessions.filter((x) => !q || (x.title || '').toLocaleLowerCase('tr').includes(q));
+    const q = foldTR(qIn.value.trim());
+    const list = sessions.filter((x) => !q || foldTR(x.title || '').includes(q) || bodyHit.has(x.id));
+    if (q && list.length < 5 && m.el.isConnected) scanBodies(q).then(draw).catch(() => {});
     const groups = [];
     for (const x of list) {
       const k = dayKey(sqlDate(x.updated_at));
@@ -196,6 +236,7 @@ function sessionsModal() {
       <div class="ss-row ${x.id === current ? 'cur' : ''}" data-o="${x.id}" tabindex="0">
         <span class="ss-st ${x.running ? 'run' : ''}">${x.running ? '<span class="spinner"></span>' : ''}</span>
         <div class="ss-main"><div class="ss-title">${esc(sessTitle(x))}</div>
+          ${bodyHit.has(x.id) ? `<div class="ss-meta ss-hit">${esc(t('mesaj: {hit}', { hit: bodyHit.get(x.id) }))}</div>` : ''}
           <div class="ss-meta"><span class="ss-prov">${esc(provName(x.provider))}</span>${x.model ? ` · ${esc(x.model)}` : ''} · ${dateTR(sqlDate(x.updated_at), true)} · <span class="${paid(x.provider) ? 'up' : ''}">${cost(x)}</span></div></div>
         <div class="ss-acts"><button class="icon-btn sm" data-r="${x.id}" title="${t('Yeniden adlandır')}" aria-label="${t('Yeniden adlandır')}">✎</button><button class="icon-btn sm" data-x="${x.id}" title="${t('JSON olarak indir')}" aria-label="${t('İndir')}">⤓</button><button class="icon-btn sm ss-del" data-d="${x.id}" title="${t('Sil')}" aria-label="${t('Sil')}">🗑</button></div>
       </div>`).join('')}`).join('')
@@ -362,11 +403,96 @@ function endThinking() {
 }
 
 const tsOf = (e) => (e?.ts ? sqlDate(e.ts)?.getTime() || Date.now() : Date.now());
+// ── Sohbet içi arama (⌘F) ─────────────────────────
+// Tarayıcının kendi ⌘F'i yalnız görünür metni bulur; sohbet gövdeleri markdown'a dönüştüğü için burada
+// ham gövde dizini tutulur. Karşılaştırma trFold ile yapılır (bkz. server/fold.js) — 'İ'/'i' asimetrisi olmasın.
+const findBox = $('#chatFind'), findQ = $('#findQ'), findList = $('#findList'), findN = $('#findN');
+let findHits = [], findAt = 0;
+// server/fold.js trFold ile aynı eşleme: önce toLocaleLowerCase('tr') (I→ı), sonra Türkçe harfleri ASCII'ye katla
+const TR_MAP = { ı: 'i', ş: 's', ğ: 'g', ü: 'u', ö: 'o', ç: 'c' };
+const foldTR = (s) => String(s ?? '').toLocaleLowerCase('tr').replace(/[ışğüöç]/g, (c) => TR_MAP[c]);
+const ctx120 = (s, q) => {
+  const i = foldTR(s).indexOf(q);
+  if (i < 0) return String(s).slice(0, 120);
+  const from = Math.max(0, i - 40);
+  return `${from ? '…' : ''}${String(s).slice(from, i + 80)}${i + 80 < s.length ? '…' : ''}`;
+};
+function openFind() {
+  // #agentChat konumlandırılmış değil; kutu sabit konumla kütüğün sağ üstüne oturur.
+  // Ölçü için önce görünür olmalı: önce "gizli" bırakılıp sağ kenara yapışır, sonra konum düzeltilir.
+  findBox.hidden = false;
+  findBox.style.top = left0();
+  findBox.style.left = left0();
+  findQ.value = ''; drawFind();
+  findQ.focus();
+  function left0() { return `${Math.max(8, log.getBoundingClientRect().right - findBox.offsetWidth - 12)}px`; }
+}
+function closeFind() { findBox.hidden = true; findHits = []; findAt = 0; }
+function drawFind() {
+  const q = foldTR(findQ.value.trim());
+  if (!q) { findHits = []; findAt = 0; findN.textContent = ''; findList.innerHTML = ''; return; }
+  findHits = msgIdx.filter((x) => foldTR(x.text).includes(q)).reverse(); // en yeni önce
+  findAt = 0;
+  findN.textContent = findHits.length ? t('{n} eşleşme', { n: findHits.length }) : t('eşleşme yok');
+  const RB = 'display:flex;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:5px 9px;cursor:pointer;color:var(--text-2);font-size:12px;align-items:baseline';
+  findList.innerHTML = findHits.slice(0, 60).map((x, i) => `<button data-i="${i}" style="${RB}${x.el ? '' : ';opacity:.5'}">
+    <span class="dim mono" style="font-size:10.5px;white-space:nowrap">${esc(dateTR(sqlDate(x.ts), true))}</span>
+    <span class="mono" style="font-size:10.5px;color:var(--accent);white-space:nowrap">${esc(x.kind === 'user' ? t('siz') : t('asistan'))}</span>
+    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ctx120(x.text, q))}</span></button>`).join('')
+    || `<div class="dim" style="padding:8px">${t('Bu sohbette eşleşme yok.')}</div>`;
+}
+function gotoHit(i) {
+  const x = findHits[i];
+  if (!x?.el) { toast(t('Bu mesaj henüz yüklenmedi; "Önceki mesajları yükle" düğmesini kullanın'), '', 5000); return; }
+  findAt = i;
+  $$('[data-i]', findList).forEach((b) => { const on = Number(b.dataset.i) === i; b.style.background = on ? 'var(--accent-soft)' : ''; b.style.color = on ? 'var(--text)' : ''; });
+  // Katlanmış mesajı aç, kütüğü ortala ve eşleşen kelimeyi vurgula
+  const box = x.el;
+  if (box.classList.contains('folded')) { box.classList.remove('folded'); const f = $('[data-fold]', box); if (f) f.textContent = t('Daralt'); }
+  clearFindMarks();
+  const node = x.kind === 'user' ? $('.body', box) : $('.md', box);
+  if (node) markFind(node, foldTR(findQ.value.trim()));
+  stick = false;
+  box.scrollIntoView({ block: 'center' });
+  const b = $(`[data-i="${i}"]`, findList); b?.scrollIntoView({ block: 'nearest' });
+}
+// Eşleşen kelimeyi <mark> ile vurgula: gövde HTML'e dönüştüğü için düz metin kutusu değil, metin düğümü taranır
+function markFind(node, q) {
+  if (!q) return;
+  const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) {
+    const at = foldTR(n.nodeValue).indexOf(q);
+    if (at < 0) continue;
+    const r = document.createRange();
+    r.setStart(n, at); r.setEnd(n, at + q.length);
+    const m = h(`<mark class="find-hit" style="background:var(--accent-soft);color:var(--text);border-radius:2px"></mark>`);
+    try { r.surroundContents(m); } catch { continue; } // denklik bozuk düğümde atla
+    return;
+  }
+}
+function clearFindMarks() { $$('mark.find-hit', log).forEach((m) => m.replaceWith(...m.childNodes)); log.normalize(); }
+findQ.addEventListener('input', drawFind);
+findQ.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeFind(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); gotoHit(Math.min(findAt + (e.shiftKey ? -1 : 1), Math.max(0, findHits.length - 1))); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); gotoHit(Math.min(Math.max(0, findAt + (e.key === 'ArrowDown' ? 1 : -1)), Math.max(0, findHits.length - 1))); }
+});
+findList.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) gotoHit(Number(b.dataset.i)); });
+$('#findX').onclick = closeFind;
+// Tarayıcının ⌘F'i engellenmez: yalnız sohbet görünürken ve odak sohbetteyken yakalanır
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f') return;
+  if (findBox.hidden && (!root.offsetParent || !root.contains(document.activeElement))) return;
+  e.preventDefault();
+  findBox.hidden ? openFind() : findQ.focus();
+});
+
 const SUB_TOOLS = new Set(['Task', 'Agent']);
 
 // Asistan mesajı: turun ilkinde AJAN etiketi + saat (sonuçta maliyet eklenir); kopyala, daralt/genişlet
 function assistantBox(e) {
-  const el = h(`<div class="msg assistant"><div class="md"></div><div class="msg-actions"><button class="ghost xs" data-copy title="${t('Mesajı kopyala')}">${t('Kopyala')}</button><button class="ghost xs" data-fold hidden>${t('Genişlet')}</button></div></div>`);
+  const el = h(`<div class="msg assistant"><div class="md"></div><div class="msg-actions"><button class="ghost xs" data-copy title="${t('Mesajı düz metin olarak kopyala')}">${t('Kopyala')}</button><button class="ghost xs" data-copy-md title="${t('Markdown kaynağını kopyala')}">${t('Kopyala (MD)')}</button><button class="ghost xs" data-regen title="${t('Aynı isteği yeniden gönder — maliyet bir tur daha')}">${t('Yeniden üret')}</button><button class="ghost xs" data-report title="${t('Bu yanıtı kalıcı HTML raporuna çevir')}">${t('Rapora çevir')}</button><button class="ghost xs" data-fold hidden>${t('Genişlet')}</button></div></div>`);
   if (!turnHead) {
     turnHead = el;
     el.prepend(h(`<div class="who"><b class="ai">${t('Asistan')}</b><span class="meta">${timeTR(tsOf(e))}</span></div>`));
@@ -380,16 +506,62 @@ function finalizeAssistant(el, text) {
     if ($('.md', el).scrollHeight > 900) { el.classList.add('folded'); $('[data-fold]', el).hidden = false; }
   });
 }
+// Tur özeti: tek satırda süre · araç · alt ajan · maliyet; açılınca araç satırları süreyle, alt ajan ağaç şeklinde
+function turnSummary(tl) {
+  const rows = [...tl.tools.values()];
+  const sec = Math.max(1, Math.round((tl.durationMs || Date.now() - tl.start) / 1000));
+  const bits = [t('{n} sn', { n: sec }), rows.length ? t('{n} araç', { n: rows.length }) : '', tl.subs ? t('{n} alt ajan', { n: tl.subs }) : '', tl.cost ? `$${num(tl.cost, 2)}` : ''].filter(Boolean).join(' · ');
+  const line = (x) => `<div>${esc(x.sub ? `${x.name}(${x.kind})` : toolLabel(x.name))} <span class="dim">${x.ms ? t('{n} sn', { n: x.ms }) : t('sürüyor')}</span></div>`;
+  const el = h(`<details class="tool-run turn-sum"><summary><span class="tr-t"></span></summary><div class="tr-body"></div></details>`);
+  $('.tr-t', el).textContent = `✓ ${t('Tamamlandı · {info}', { info: bits })} ▸`;
+  $('.tr-body', el).innerHTML = rows.map(line).join('') || `<div class="dim">${t('araç kullanılmadı')}</div>`;
+  // 5 dakikadan uzun turlar kendiliğinden açılır: nerede takıldı sorusu en çok burada sorulur
+  if (sec >= 300) el.open = true;
+  return el;
+}
+
 log.addEventListener('click', async (e) => {
+  const mdBtn = e.target.closest('[data-copy-md]');
+  if (mdBtn) {
+    const raw = mdBtn.closest('.msg')?.dataset.raw || '';
+    if (!raw) { toast(t('Bu mesajın markdown kaynağı yok'), 'err'); return; }
+    try { await navigator.clipboard.writeText(raw); toast(t('Markdown kopyalandı'), 'ok', 1500); } catch { toast(t('Panoya erişilemedi'), 'err'); }
+    return;
+  }
+  if (e.target.closest('[data-regen]')) { regenerate(); return; }
+  if (e.target.closest('[data-report]')) { toReport(e.target.closest('.msg')?.dataset.raw || ''); return; }
   const cp = e.target.closest('[data-copy]');
   if (cp) {
-    const raw = cp.closest('.msg')?.dataset.raw || cp.closest('.msg')?.querySelector('.md')?.innerText || '';
+    const raw = cp.closest('.msg')?.querySelector('.md')?.innerText || cp.closest('.msg')?.dataset.raw || '';
     try { await navigator.clipboard.writeText(raw); toast(t('Kopyalandı'), 'ok', 1500); } catch { toast(t('Panoya erişilemedi'), 'err'); }
     return;
   }
   const fd = e.target.closest('[data-fold]');
   if (fd) { const m = fd.closest('.msg'); m.classList.toggle('folded'); fd.textContent = t(m.classList.contains('folded') ? 'Genişlet' : 'Daralt'); }
 });
+
+// Yeniden üret: bu yanıtı üreten kullanıcı mesajından sonraki her şeyi DOM'dan ve istemci durumundan sil,
+// aynı istemi yeniden gönder. Sunucu tarafında dallanma yok — tek yönlü tekrar, maliyet bir tur.
+function regenerate() {
+  if (running) { toast(t('Asistan çalışıyor; önce durdurun (Esc)'), 'err'); return; }
+  if (!turnUser) { toast(t('Üretilecek istek bulunamadı'), 'err'); return; }
+  const { text, context, attachments: atts, el } = turnUser;
+  // Kullanıcı mesajından sonraki kardeşleri sil (yanıt, araç kartları, özetler, çalışma göstergesi)
+  const cut = [...log.children].slice([...log.children].indexOf(el));
+  for (const n of cut) n.remove();
+  msgIdx = msgIdx.filter((x) => !cut.includes(x.el));
+  // İstemci durumu: eski turun izleri kalmasın
+  sessCost = Math.max(0, sessCost - (turnLog?.cost || 0)); // yalnız bu turun maliyeti geri alınır, oturum toplamı korunur
+  stream = null; toolEls = new Map(); toolRun = null; turnHead = null; turnTodo = null; turnFiles = new Map(); subKinds.clear(); turnLog = null;
+  send(text, { context: context || undefined });
+  if (atts?.length) toast(t('{n} eki yeniden eklenmedi; dosyaları tekrar seçin', { n: atts.length }), '', 6000);
+}
+
+// Rapora çevir: sohbetten çıkarmak istediğin uzun analiz kalıcı HTML rapor olur
+function toReport(text) {
+  if (!text?.trim()) { toast(t('Rapora çevrilecek metin yok'), 'err'); return; }
+  send(t('Aşağıdaki analizi mcp__borsa__save_report aracıyla HTML rapor olarak kaydet. Başlık ve bölümleri koru, yeni veri uydurma.\n\n{text}', { text: text.slice(0, 60000) }));
+}
 
 // Art arda gelen araç çağrıları tek satırda katlanır: "N sn çalıştı ▸ · N araç"
 function addTool(el, e) {
@@ -493,15 +665,19 @@ function renderEvent(e) {
   switch (e.type) {
     case 'user': {
       turnFiles = new Map(); turnHead = null; turnTodo = null; toolRun = null;
+      turnLog = { start: Date.now(), tools: new Map(), subs: 0, cost: 0 };
       $('.welcome', log)?.remove();
       const el = h(`<div class="msg user"><div class="who"><b>${t('Sen')}</b><span class="meta">${timeTR(tsOf(e))}</span></div><div class="body"></div></div>`);
       $('.body', el).textContent = e.text;
+      // Yeniden üret: bu yanıtı üreten isteği sakla (sunucuda dallanma yok, tek yönlü tekrar)
+      turnUser = { text: e.text, context: e.context || null, attachments: e.attachments || [], el };
       if (e.context) {
         const c = e.context.split('\n')[0];
         el.append(h(`<div class="ctx">＋ ${esc(t('Bağlam: {text}', { text: c.length > 90 ? `${c.slice(0, 90)}…` : c }))}</div>`));
       }
       if (e.attachments?.length) el.append(h(`<div class="ctx">📎 ${e.attachments.map((a) => esc(a.name || a.path)).join(', ')}</div>`));
       add(el);
+      const ix = idxMap.get(e.src); if (ix) ix.el = el; else msgIdx.push({ kind: 'user', text: e.text, ts: tsOf(e), el });
       stick = true; scrollEnd(true);
       break;
     }
@@ -514,10 +690,12 @@ function renderEvent(e) {
       if (!stream?.thinkEl) stream = { ...(stream || {}), thinkEl: add(h(`<details class="thinking"><summary>${t('Düşünüyor…')}</summary><div></div></details>`)), thinkText: '' };
       stream.thinkText += e.text; renderStream();
       break;
-    case 'text':
-      if (stream?.el) { finalizeAssistant(stream.el, e.text); stream.el = null; stream.text = ''; }
-      else finalizeAssistant(add(assistantBox(e)), e.text);
+    case 'text': {
+      const target = stream?.el || add(assistantBox(e));
+      finalizeAssistant(target, e.text);
+      const ix = idxMap.get(e.src); if (ix) { ix.el = target; ix.text = e.text; } else msgIdx.push({ kind: 'text', text: e.text, ts: Date.now(), el: target });
       break;
+    }
     case 'thinking':
       if (stream?.thinkEl) { $('div', stream.thinkEl).textContent = e.text; $('summary', stream.thinkEl).textContent = t('Düşünce'); stream.thinkEl = null; }
       else add(h(`<details class="thinking"><summary>${t('Düşünce')}</summary><div></div></details>`)).querySelector('div').textContent = e.text;
@@ -538,6 +716,7 @@ function renderEvent(e) {
       if (SUB_TOOLS.has(e.name)) {
         const kind = e.input?.subagent_type || 'general-purpose';
         subKinds.set(e.id, { kind, start: tsOf(e) });
+        if (turnLog) { turnLog.subs++; turnLog.tools.set(e.id, { name: e.name, kind, sub: true, ms: null }); }
         toolRun = null;
         add(subCard('main', kind, `**${e.input?.description || t('Görev')}**\n\n${e.input?.prompt || ''}`, `${timeTR(tsOf(e))} · ${esc(e.name)} <span class="sc-live"><span class="spinner"></span></span>`, e.id));
         break;
@@ -550,6 +729,7 @@ function renderEvent(e) {
       $('.ti', el).textContent = toolSummary(e.input);
       $('.in', el).textContent = JSON.stringify(e.input, null, 2);
       toolEls.set(e.id, el);
+      if (turnLog) turnLog.tools.set(e.id, { name, sub: false, ms: null });
       addTool(el, e);
       if (e.name === 'mcp__borsa__save_report') emit('reports:refresh');
       const fp = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(e.name) ? e.input?.file_path || e.input?.notebook_path : null;
@@ -559,17 +739,20 @@ function renderEvent(e) {
       break;
     }
     case 'tool_result': {
+      const rec = turnLog?.tools.get(e.id);
       const sa = subKinds.get(e.id);
       if (sa) {
         const live = $(`.sub-card[data-sa="${CSS.escape(e.id)}"] .sc-live`, log);
         if (live) live.textContent = `· ${t('tamamlandı')}`;
-        const sec = Math.max(1, Math.round((tsOf(e) - sa.start) / 1000));
+        const sec = e.ms != null ? Math.max(1, Math.round(e.ms / 1000)) : Math.max(1, Math.round((tsOf(e) - sa.start) / 1000));
+        if (rec) rec.ms = sec;
         toolRun = null;
         add(subCard(sa.kind, 'main', e.text, `${timeTR(tsOf(e))} · ${t('{n} sn', { n: sec })}${e.isError ? ` · <span class="down">${t('hata')}</span>` : ''}`));
         break;
       }
       const el = toolEls.get(e.id);
       if (!el) break;
+      if (e.ms != null) { el.dataset.ms = e.ms; if (rec) rec.ms = Math.max(1, Math.round(e.ms / 1000)); }
       $('.st', el).innerHTML = e.isError ? '<span class="down">✗</span>' : '<span class="up">✓</span>';
       if (e.isError) el.classList.add('err');
       const box = h('<div class="to"></div>'); // girdi katlanmış kalsın, çıktı altta
@@ -627,6 +810,7 @@ function renderEvent(e) {
       }
       const meta = turnHead && $('.who .meta', turnHead);
       if (meta && !meta.dataset.done) { meta.dataset.done = 1; meta.insertAdjacentHTML('beforeend', !paid(e.provider) && !e.cost ? ` · ${esc(provName(e.provider))}` : ` · <span class="up">$${num(e.cost || 0, 2)}</span>`); }
+      if (turnLog && !e.replay) { turnLog.cost += e.cost || 0; turnLog.durationMs = e.durationMs || Date.now() - turnLog.start; add(turnSummary(turnLog)); }
       for (const r of $$('.tool-run', log).slice(-3)) drawRun(r);
       $$('.sc-live .spinner', log).forEach((x) => x.remove());
       turnHead = null;
@@ -793,7 +977,47 @@ function updateStats() {
   bar.className = p >= 90 ? 'hi' : p >= 50 ? 'mid' : '';
   if (p >= 95 && ctxWarned < 95) { ctxWarned = 95; toast(t('Bağlam penceresi %95 dolu. /compact ile sıkıştırın veya /yeni ile yeni oturum açın.'), 'err', 9000); }
   else if (p >= 80 && ctxWarned < 80) { ctxWarned = 80; toast(t('Bağlam penceresi %80 dolu. /compact ile sıkıştırabilirsiniz.'), '', 7000); }
+  updateBudget();
   fitSelects(); // istatistik metni genişleyince satır yeniden ölçülür
+}
+
+// ── Günlük maliyet bütçesi ────────────────────────
+// Limit 0 ise gösterge gizli: her gün sıfır bütçe göstermek anlamsız. Ayar anahtarları sunucudan gelir
+// (dailyCostLimit USD · costLimitEnforce). Gün toplamı chat_sessions.cost_usd'den, gün sınırı İstanbul.
+function dailyCost() {
+  const d = today();
+  // updated_at UTC'de geliyor (datetime('now')); doğrudan dilimlemek İstanbul günüyle karşılaştırırdı.
+  const dayOf = (s) => { const x = sqlDate(s); return x ? x.toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' }) : ''; };
+  return sessions.reduce((a, x) => (paid(x.provider) && dayOf(x.updated_at) === d ? a + (x.cost_usd || 0) : a), 0);
+}
+let turnOffBudget = false; // "Bugün için kapat" yalnız bu oturumu etkiler
+const budgetLimit = () => Math.max(0, Number(state.settings.dailyCostLimit) || 0);
+const budgetOver = () => { const l = budgetLimit(); return l > 0 && dailyCost() >= l; };
+let budgetWarned = 0;
+function updateBudget() {
+  const el = $('#stBudget'), lim = budgetLimit();
+  if (!lim) { el.hidden = true; budgetWarned = 0; return; } // sınır yok → gösterge gizli
+  const spent = dailyCost(), pct = (spent / lim) * 100;
+  el.hidden = false;
+  // Renkler mevcut yardımcı sınıflardan (styles.css başka ajanın dosyası): %80 accent, aşım down
+  el.innerHTML = `${t('Bugün')} <b class="${pct >= 100 ? 'down' : pct >= 80 ? 'accent' : ''}">$${num(spent, 2)}</b><span class="dim">/$${num(lim, 0)}</span>`;
+  el.style.color = pct >= 100 ? 'var(--down)' : '';
+  el.title = t('Günlük bütçe: {spent} / {limit} (%{pct})', { spent: `$${num(spent, 2)}`, limit: `$${num(lim, 2)}`, pct: num(pct, 0) });
+  if (pct >= 100 && budgetWarned < 100) { budgetWarned = 100; toast(t('Günlük asistan bütçesi doldu. Yeni tur göndermek için limiti artırın veya "Sadece uyar" moduna alın.'), 'err', 10000); }
+  else if (pct >= 80 && budgetWarned < 80) { budgetWarned = 80; toast(t('Günlük asistan bütçesinin %{pct}’i kullanıldı.', { pct: num(pct, 0) }), '', 7000); }
+  const lock = $('#budgetLock');
+  // Kart yalnız bir kez çizilir; her turda yeniden eklenmesin
+  if (budgetOver() && state.settings.costLimitEnforce && !turnOffBudget && !lock) {
+      const c = add(h('<div class="msg notice budget-lock" id="budgetLock"></div>'));
+      c.innerHTML = `<b>${t('Günlük bütçe doldu')}</b><br>${t('Bugün {spent} harcandı, limit {limit}. Yeni tur göndermek için:', { spent: `$${num(dailyCost(), 2)}`, limit: `$${num(budgetLimit(), 2)}` })}<br>
+        <button class="ghost xs" data-b="raise">${t('Limiti ikiye katla')}</button>
+        <button class="ghost xs" data-b="warn">${t('Sadece uyar')}</button>
+        <button class="ghost xs" data-b="stop">${t('Bugün için kapat')}</button>`;
+      const put = (patch) => api('/settings', { method: 'PUT', body: patch }).catch((x) => toast(tx(x.message), 'err'));
+      $('[data-b=raise]', c).onclick = () => put({ dailyCostLimit: Math.max(1, Math.ceil(budgetLimit() * 2)) });
+      $('[data-b=warn]', c).onclick = () => put({ costLimitEnforce: false });
+      $('[data-b=stop]', c).onclick = () => { c.remove(); turnOffBudget = true; toast(t('Bütçe kilidi bu oturum için kapatıldı'), '', 6000); };
+  } else lock?.remove();
 }
 
 // ── Canlı olaylar ─────────────────────────────────
@@ -865,6 +1089,8 @@ async function send(text, { context } = {}) {
   text = (text ?? input.value).trim();
   if (!text && !attachments.length) return;
   // Yerel komutlar (/durdur, /status, /help…) ajan çalışırken de kullanılabilir; istem gönderen komutlar beklemeli
+  // Günlük bütçe dolduysa ve uygulama açıksa yeni tur gönderilmez
+  if (!turnOffBudget && state.settings.costLimitEnforce && budgetOver()) { toast(t('Günlük bütçe doldu; yeni tur gönderilemiyor. Limiti değiştirin veya uyarı moduna alın.'), 'err', 9000); return; }
   const cmd = text.startsWith('/') ? findCmd(text.split(/\s+/)[0].toLowerCase()) : null;
   if (cmd && !(running && cmd.fn) && (await handleSlash(text))) { input.value = ''; autosize(); slash.hidden = true; drawQuick(); return; }
   if (running) { toast(t('Asistan hâlâ çalışıyor. Durdurun veya yeni oturum açın.'), 'err'); return; }
@@ -1223,7 +1449,8 @@ function fillOptions() {
   if (!m) return;
   syncProvider();
   syncEffort();
-  permMode = s.permissionMode || 'default';
+  turnOffBudget = false; // ayar değişti: "bugün için kapat" sıfırlanır
+  updateBudget();
   markYolo();
 }
 on('settings', fillOptions);

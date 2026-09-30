@@ -1,7 +1,7 @@
 // Uygulama girişi: yerleşim, üst bar, görünüm yönlendirme, genel kısayollar
-import { state, on, emit, api, connect, wsCall, $, $$, h, esc, num, price, pct, cls, toast, modal, localGet, localSet, selectSymbol, debounce, ago, timeTR } from './core.js';
+import { state, on, emit, api, connect, wsCall, $, $$, h, esc, num, price, pct, cls, toast, modal, localGet, localSet, selectSymbol, debounce, ago, timeTR, askAgent } from './core.js';
 import './watchlist.js';
-import './market-view.js';
+import { openRoute, ktRoute } from './market-view.js';
 import './portfolio-view.js';
 import './terminal-view.js';
 import './reports-view.js';
@@ -63,6 +63,8 @@ function showView(v) {
   v = VIEW_ALIAS[v] || v;
   if (!['agent', 'market', 'portfolio'].includes(v)) v = 'agent';
   $$('.viewbar [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
+  // Sekme durumu ekran okuyucuya: index.html'de statik durum doğru, sekme değişince güncellenmeli.
+  $$('.viewbar [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
   $$('.view').forEach((el) => el.classList.toggle('active', el.id === `view-${v}`));
   curView = v;
   placeChat(v);
@@ -70,9 +72,80 @@ function showView(v) {
   emit('view:shown', v);
   document.body.classList.remove('left-open', 'right-open');
   $('#backdrop').hidden = true;
+  writeHash();
 }
 on('view', showView);
 $$('.viewbar [data-view]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+
+// ── Hash yönlendirme (kalıcı bağlantı) ─────────────
+// #/sohbet · #/pazar/THYAO · #/pazar/THYAO/skor · #/pazar/THYAO/ozet/fiyat · #/portfoy/risk
+const VIEW_SLUG = { agent: 'sohbet', market: 'pazar', portfolio: 'portfoy' };
+const PAGE_SLUG = { home: '', sum: '', fin: 'finans', score: 'skor', value: 'deger', comp: 'kars', screen: 'tara', sectors: 'sektorler', market: 'piyasa' }; // sum sayfası yalnız sembol + /ozet/<alt sekme> ile yazılır
+const SUM_SLUG = { px: 'fiyat', news: 'haber', docs: 'belge' };
+const PG_FROM = { finans: 'fin', skor: 'score', deger: 'value', kars: 'comp', tara: 'screen', sektorler: 'sectors', piyasa: 'market' };
+const SUM_FROM = { fiyat: 'px', haber: 'news', belge: 'docs' };
+const SYM_PAGE = { sum: 1, fin: 1, score: 1, value: 1, comp: 1 }; // sembol gerektiren kmy terminal sayfaları
+const pfTab = () => $('#view-portfolio .subtabs button.active')?.dataset.t || 'ozet';
+const pfTabs = [...document.querySelectorAll('#view-portfolio .subtabs [data-t]')].map((b) => b.dataset.t);
+// Yazma ve geri yükleme ayrı yönlüdür: pushState hashchange tetiklemez, geri/ileri popstate ile gelir.
+// Yazma bir olay turunda birleştirilir (mikrotask) ve canonical hash zaten geri yükleme sonrası
+// replaceState ile ayarlandığı için aynı değer ikinci kez yazılmaz.
+let hashQueued = false, lastHash = '';
+function curHash() {
+  const v = curView;
+  let h = `#/${VIEW_SLUG[v] || 'sohbet'}`;
+  if (v === 'portfolio') h += `/${pfTab()}`;
+  if (v === 'market') {
+    const r = ktRoute();
+    if (r.page === 'sum') h += `/${r.sym}`;
+    else if (SYM_PAGE[r.page]) h += `/${r.sym}/${PAGE_SLUG[r.page] || r.page}`;
+    else if (r.page !== 'home') h += `/${PAGE_SLUG[r.page] || r.page}`;
+    if (r.page === 'sum') h += `/ozet/${SUM_SLUG[r.tab] || 'fiyat'}`;
+  }
+  return h;
+}
+// Aynı olay turunda birden çok geçiş olabilir (sembol + sekme); yalnız son durum yazılır
+function writeHash() {
+  if (hashQueued) return;
+  hashQueued = true;
+  queueMicrotask(() => {
+    hashQueued = false;
+    const h = curHash();
+    if (location.hash === h) return;
+    lastHash = h;
+    history[location.hash ? 'pushState' : 'replaceState'](null, '', h);
+  });
+}
+// hash geri yükleme: bilinmeyen parçalar yok sayılır, sonuç canonical hash ile değiştirilir
+function applyHash() {
+  const h = location.hash;
+  if (!h || h === lastHash) return;
+  lastHash = h;
+  const p = decodeURIComponent(h.replace(/^#\/?/, '')).split('/').filter(Boolean);
+  if (!p.length) return;
+  if (p[0] === 'pazar' || p[0] === 'market') {
+    // p[1] bir sayfa kısaltmasıysa sembol değildir (tara · sektorler · piyasa · ozet · skor …)
+    const sym = p[1] && !PG_FROM[p[1]] && p[1] !== 'ozet' && /^[A-Z0-9.^=-]{1,15}$/i.test(p[1]) ? p[1].toUpperCase() : '';
+    const rest = sym ? p.slice(2) : p.slice(1);
+    const page = rest[0] ? (PG_FROM[rest[0]] || (rest[0] === 'ozet' ? 'sum' : 'home')) : (sym ? 'sum' : 'home');
+    const tab = page === 'sum' ? SUM_FROM[rest[1]] || null : null;
+    showView('market');
+    if (sym) openRoute({ sym, pg: page, tab });
+    else openRoute({ pg: page });
+  } else if (p[0] === 'portfoy' || p[0] === 'portfolio') {
+    showView('portfolio');
+    const tb = p[1];
+    if (tb && pfTabs.includes(tb) && tb !== pfTab()) $(`#view-portfolio .subtabs [data-t="${tb}"]`)?.click();
+  } else showView('agent');
+  // showView/openRoute yazmaları bu satırdan sonra mikrotask'ta çalışır; canonical hash önce ayarlanır
+  const canon = curHash();
+  if (location.hash !== canon) { lastHash = canon; history.replaceState(null, '', canon); }
+}
+addEventListener('hashchange', applyHash);
+addEventListener('popstate', applyHash);
+on('kt:page', writeHash);
+on('pf:tab', writeHash);
+on('symbol', writeHash);
 
 let agentMode = 'chat';
 function setAgentMode(m) {
@@ -91,6 +164,8 @@ export function showRightTab(tab, { open = true } = {}) {
   if (tab === 'chat' && $('[data-rtab=chat]').hidden) tab = 'kap';
   if (tab === 'pdf' && $('[data-rtab=pdf]').hidden) tab = 'reports'; // PDF sekmesi yalnız bir rapor açıkken var
   $$('.right-tabs [data-rtab]').forEach((b) => b.classList.toggle('active', b.dataset.rtab === tab));
+  // Sağ panel sekmeleri için aynı durum güncellemesi.
+  $$('.right-tabs [data-rtab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.rtab === tab)));
   $$('.rtab').forEach((el) => el.classList.toggle('active', el.id === `rtab-${tab}`));
   if (tab !== 'chat') localSet('rtab', tab);
   emit('rtab:shown', tab);
@@ -127,15 +202,22 @@ $('#btnInstall').onclick = async () => {
   installPrompt = null;
 };
 
-// Dar ekran çekmeceleri
+// Dar ekran çekmeceleri (ESC ve arka plan dokunuşu kapatır)
+const closePanels = () => { document.body.classList.remove('left-open', 'right-open'); $('#backdrop').hidden = true; };
 function openPanel(side) {
   document.body.classList.add(`${side}-open`);
   $('#backdrop').hidden = false;
 }
 $('#btnLeft').onclick = () => openPanel('left');
 $('#btnRight').onclick = () => openPanel('right');
-$('#btnRightClose').onclick = () => { document.body.classList.remove('right-open'); $('#backdrop').hidden = true; };
-$('#backdrop').onclick = () => { document.body.classList.remove('left-open', 'right-open'); $('#backdrop').hidden = true; };
+$('#btnRightClose').onclick = closePanels;
+$('#backdrop').onclick = closePanels;
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  if (!document.body.classList.contains('left-open') && !document.body.classList.contains('right-open')) return;
+  e.stopPropagation();
+  closePanels();
+});
 
 // Sürüklenebilir ayırıcılar
 $$('.splitter').forEach((sp) => {
@@ -252,11 +334,31 @@ $('#chipJobs').onclick = () => {
 // ── Sembol paleti (⌘K) ───────────────────────────
 const TYPE_TR = { equity: t('Hisse'), index: t('Endeks'), fx: t('Döviz'), currency: t('Döviz'), commodity: t('Emtia'), etf: 'ETF', mutualfund: t('Fon'), fund: t('Fon'), cryptocurrency: t('Kripto'), crypto: t('Kripto'), future: t('Vadeli'), gold: t('Altın') };
 const isLocal = (r) => ['BIST', 'Döviz', 'Borsa İstanbul', 'Serbest piyasa'].includes(r.exchange) || !/[.-]/.test(r.symbol);
+// ── Komut paleti (⌘K sonra ">") ───────────────────
+// Komut listesi burada tanımlıdır; ⌘K > yazınca sembol yerine bu satırlar listelenir.
+const PAL_COMMANDS = [
+  { label: t('Portföy değerlendirmesi'), keys: 'portfoy degerlendir', run: () => { showView('agent'); askAgent(t('Portföyümü değerlendir: performans, risk metrikleri, yoğunlaşma, en güçlü ve en zayıf pozisyonlar. Kısa ve maddeli.')); } },
+  { label: t('BIST taraması: F/K ≤ 8'), keys: 'tarama fk', run: () => { showView('market'); openRoute({ pg: 'screen' }); $('#scrPresets [data-p="value"]')?.click(); } },
+  { label: t('Günün piyasa özeti'), keys: 'piyasa ozet', run: () => { showView('market'); openRoute({ pg: 'market' }); } },
+  { label: t('Portföy risk sekmesi'), keys: 'portfoy risk', run: () => { showView('portfolio'); $('#view-portfolio .subtabs [data-t="risk"]')?.click(); } },
+  { label: t('KAP taraması'), keys: 'kap', run: () => { showView('agent'); showRightTab('kap'); } },
+  { label: t('Sembol ekle'), keys: 'sembol ekle', run: () => { openPanel('left'); $('#wlAddInput')?.focus(); } },
+  { label: t('Yenile'), keys: 'yenile', run: () => location.reload() },
+  { label: t('Tema değiştir'), keys: 'tema', run: () => openSettings('gorunum') },
+  { label: t('Sekme: Sohbet'), keys: 'sohbet', run: () => showView('agent') },
+  { label: t('Sekme: Piyasa'), keys: 'pazar piyasa terminal', run: () => showView('market') },
+  { label: t('Sekme: Portföy'), keys: 'portfoy', run: () => showView('portfolio') },
+  { label: t('Yeni ajan oturumu'), keys: 'yeni oturum', run: () => { showView('agent'); emit('chat:new'); } },
+  { label: t('Sağ panel aç/kapat'), keys: 'sag panel', run: () => toggleRight() },
+];
+const cmdHit = (c, q) => !q || `${c.label} ${c.keys}`.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr'));
+const cmdRows = (q) => PAL_COMMANDS.filter((c) => cmdHit(c, q));
+const isCmd = (s) => s.trim().startsWith('>');
 let palEl = null;
 function openPalette() {
   if (palEl) { palEl.close(); return; }
   const back = h(`<div class="pal-back"><div class="pal" role="dialog" aria-modal="true" aria-label="${t('Sembol ara')}">
-    <div class="pal-in"><svg class="pal-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input placeholder="${t('Hisse, endeks, döviz veya şirket ara…')}" aria-label="${t('Sembol ara')}" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
+    <div class="pal-in"><svg class="pal-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input placeholder="${t('Hisse, endeks, döviz veya şirket ara… (komut için > yazın)')}" aria-label="${t('Sembol ara')}" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
     <div class="pal-res" role="listbox"></div>
     <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t('gezin')}</span><span><kbd>↵</kbd> ${t('aç')}</span><span><kbd>esc</kbd> ${t('kapat')}</span></div></div></div>`);
   const input = $('input', back), res = $('.pal-res', back);
@@ -268,6 +370,8 @@ function openPalette() {
   back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
   const mark = (t, q) => { const x = esc(t || ''); if (!q) return x; const i = (t || '').toLocaleLowerCase('tr').indexOf(q.toLocaleLowerCase('tr')); return i < 0 ? x : `${esc(t.slice(0, i))}<mark>${esc(t.slice(i, i + q.length))}</mark>${esc(t.slice(i + q.length))}`; };
   const row = (r, i, q) => {
+    if (r.run) return `<button class="pal-row ${i === sel ? 'sel' : ''}" data-i="${i}" role="option">
+      <span class="pal-sym">${mark(r.label, q)}</span><span class="pal-name">${esc(r.keys)}</span><span class="pal-tag">${t('Komut')}</span></button>`;
     const qt = state.quotes[r.symbol];
     return `<button class="pal-row ${i === sel ? 'sel' : ''}" data-i="${i}" role="option">
       <span class="pal-sym">${mark(r.symbol, q)}</span>
@@ -283,20 +387,25 @@ function openPalette() {
       || `<div class="pal-empty">${q ? esc(t('“{q}” için sonuç yok. Enter ile doğrudan açabilirsiniz.', { q })) : t('Aramak için yazmaya başlayın')}</div>`;
     $('.pal-row.sel', res)?.scrollIntoView({ block: 'nearest' });
   };
+  // Komut modu: "> " ile yazılır; komutlar ilk grupta, arama geçmişi korunur
+  const cmdraw = () => { const cq = input.value.trim().slice(1).trim(); sel = 0; res.classList.remove('busy'); draw([[t('Komutlar'), cmdRows(cq)]], cq); };
   const recent = () => localGet('palRecent', []);
   const home = () => {
+    if (isCmd(input.value)) return cmdraw();
     const nm = (s) => ({ symbol: s, name: tx(state.quotes[s]?.name || ''), type: state.quotes[s]?.type });
     const rec = recent().slice(0, 5);
-    draw([[t('Son arananlar'), rec], [t('İzleme listesi'), (state.watchlist || []).filter((s) => !rec.some((r) => r.symbol === s)).slice(0, 8).map(nm)]]);
+    draw([[t('Komutlar'), cmdRows('')], [t('Son arananlar'), rec], [t('İzleme listesi'), (state.watchlist || []).filter((s) => !rec.some((r) => r.symbol === s)).slice(0, 8).map(nm)]]);
   };
   const pick = (r) => {
+    if (r?.run) { close(); r.run(); return; }
     if (!r?.symbol) return;
     localSet('palRecent', [{ symbol: r.symbol, name: r.name || '', type: r.type }, ...recent().filter((x) => x.symbol !== r.symbol)].slice(0, 8));
-    selectSymbol(r.symbol); showView('market'); close();
+    openRoute({ sym: r.symbol, pg: 'sum' }); showView('market'); close();
   };
   const search = debounce(async () => {
     const q = input.value.trim();
     if (!q) { sel = 0; home(); return; }
+    if (isCmd(q)) return cmdraw();
     const my = ++tok;
     res.classList.add('busy');
     const items = await api(`/search?q=${encodeURIComponent(q)}`).catch(() => []);
@@ -309,7 +418,12 @@ function openPalette() {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, rows.length - 1); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); e.preventDefault(); }
-    else if (e.key === 'Enter') { e.preventDefault(); pick(rows[sel] || { symbol: input.value.trim().toUpperCase() }); return; }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isCmd(input.value) && !rows[sel]) return; // komut modunda eşleşme yoksa bir şey açma
+      pick(rows[sel] || { symbol: input.value.trim().toUpperCase() });
+      return;
+    }
     else return;
     $$('.pal-row', res).forEach((b) => b.classList.toggle('sel', Number(b.dataset.i) === sel));
     $('.pal-row.sel', res)?.scrollIntoView({ block: 'nearest' });
@@ -353,28 +467,36 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Başlangıç ─────────────────────────────────────
+// Piyasa özeti (overview) soğuk açılışta saniyeler sürebilir; sohbet, WebSocket,
+// izleme listesi ve fiyat şeridi onu beklemez. ready yalnız meta+settings'e bağlıdır.
 (async () => {
   const w = localGet('widths', null);
   if (w?.left) document.documentElement.style.setProperty('--left-w', w.left);
   if (w?.right) document.documentElement.style.setProperty('--right-w', w.right);
   if (localGet('rightHidden', false)) toggleRight(false);
+  const ovP = api('/market/overview');
   try {
-    // Ayarlar piyasa özetini beklemez (soğuk açılışta özet birkaç saniye sürebilir)
-    const ovP = api('/market/overview');
     const [meta, settings] = await Promise.all([api('/meta'), api('/settings')]);
     state.meta = meta;
     applySettings(settings);
-    const overview = await ovP;
     setAgentMode(settings.uiMode === 'terminal' ? 'terminal' : 'chat');
-    for (const q of overview.items) state.quotes[q.symbol] = q;
-    renderMarket(overview.status);
-    renderTicker();
+    renderTicker(); // boş fiyatlarla '…' basar, özeti beklemez
     quoteTime();
     emit('ready');
   } catch (e) {
     toast(t('Sunucuya ulaşılamadı: {e}', { e: e.message }), 'err');
   }
   connect();
-  showView('agent'); // açılışta her zaman DASHBOARD sekmesi
   showRightTab(localGet('rtab', 'kap'), { open: false });
+  if (location.hash) applyHash(); else showView('agent');
+  // Özet gelince yalnız özete bağlı parçalar tazelenir
+  await ovP.then((overview) => {
+    const q = Object.fromEntries(overview.items.map((x) => [x.symbol, x]));
+    Object.assign(state.quotes, q);
+    lastQuoteAt = Date.now();
+    renderMarket(overview.status);
+    renderTicker();
+    quoteTime();
+    emit('quotes', q);
+  }).catch((e) => toast(t('Piyasa özeti alınamadı: {e}', { e: e.message }), 'err'));
 })();

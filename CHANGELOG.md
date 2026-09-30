@@ -1,5 +1,47 @@
 # Sürüm Notları
 
+## 0.16.0 — 30 Eylül 2026 (güvenilirlik, hash yönlendirme, ajan iş akışı, kurum konsensüsü, sembol yaşam döngüsü)
+
+### Yeni — sunucu
+- **Hız sınırı.** `/api/*` için kayan pencereli sayaç: dakikada 600 istek, `POST` için 120. Aşılınca `429` + `Retry-After` + `{"error":"Çok fazla istek"}`. Statik dosyalar, `/vendor/`, rapor sunucusu ve WebSocket muaf. *Canlı ölçüm: 700 GET → 598×200 + 102×429 · 130 POST → 120×200 + 10×429 · 400 statik istek → 0 hata · WebSocket 429 sırasında açık kaldı.*
+- **İstek yığılması giderildi.** `pushQuotes` / `pushKap` ve üçüncü zamanlayıcı `setInterval` yerine gecikmeli tekrar desenine geçti. Yavaş ağda istekler üst üste binmiyor.
+- **Seans kapısı.** Piyasa kapalıyken BIST hisse ve endeks fiyat turları hiç çalışmıyor; döviz, altın, Brent, kripto ve S&P 500 7/24 güncelleniyor. Eşik denetimi de aynı kapıdan geçiyor. *Hafta sonu ölçümü: atlanan XU100 XBANK THYAO ASELS; devam eden USDTRY EURTRY GRAM ONS BRENT BTC SPX.*
+- **Önbellek tavanı.** `http_cache` 300 satır / 50 MB sınırını aşınca yazma yolunda kendini temizliyor (`fetched_at` indeksli). Bayt ölçümü `LENGTH(CAST(value AS BLOB))` ile — `LENGTH(TEXT)` karakter sayıyordu. `/api/health` artık `cache: {rows, bytes}` yayınlıyor, Ayarlar › Veri'de gösteriliyor.
+- **`analyst_targets` tablosu** (kurum hedef fiyatları) ve `ix_targets_symbol` indeksi.
+
+### Yeni — arayüz
+- **Hash yönlendirme.** `#/sohbet`, `#/pazar/THYAO/ozet/fiyat`, `#/pazar/THYAO/skor`, `#/pazar/tara|sektorler|piyasa`, `#/portfoy/risk`. Tarayıcıyı `#/pazar/THYAO/skor` adresinde yenileyince aynı yer açılıyor; geri/ileri tuşları çalışıyor. Bilinmeyen parça `#/sohbet`'e düşüyor, kanonik hash `replaceState` ile normalleştiriliyor.
+- **Açılış artık en yavaş ucu beklemiyor.** `ready` yayını `/market/overview`'dan ayrıldı; sohbet, WebSocket, izleme listesi ve fiyat şeridi overview'un süresi kadar beklemiyor.
+- **⌘K'ya komut modu.** `>` ile 13 komut: portföy değerlendirmesi, BIST taraması, günün piyasa özeti, portföy risk sekmesi, KAP taraması, sembol ekle, yenile, tema, 3 sekme geçişi, yeni ajan oturumu, panel aç/kapat.
+- **Modal odak tuzağı.** Odak içeriye giriyor, Tab dışarı çıkmıyor, arka plan `inert`, ESC kapatıyor, kapanınca odak tetikleyen düğmeye dönüyor. Sağ tık menüsü için de aynı davranış. Dar ekranda sol çekmece de ESC ile kapanıyor.
+- **Sekmelere `aria-selected` / `aria-controls`**, panellere `role="tabpanel"`. Önceden `index.html`'de statik durum vardı ama **sekme değişince güncellenmiyordu**. Sürekli değişen alanlarda `aria-live` yok. 8/8 ikon düğmesinde `aria-label` doğrulandı.
+- **Kısayol yardımı düzeltildi.** `⌘1–4 → Piyasa·Portföy·Terminal·Raporlar` yanlıştı (3 sekme var); `⌘\` ve `⇧⌘\` hiç listelenmiyordu.
+- **Çeviri:** 6 ajanın bıraktığı 67 yeni metnin İngilizce karşılığı eklendi.
+
+### Yeni — ajan
+- **Asistan mesajı eylemleri:** Kopyala (MD), Yeniden üret, Rapora çevir. Yeniden üretme sunucu dallanması yapmıyor — kullanıcı mesajından sonraki kardeşleri temizleyip aynı isteği tekrar gönderiyor, yalnız o turun maliyetini geri alıyor.
+- **Sohbet içi arama (⌘F).** Mesaj **gövdelerinde** arıyor (oturum listesinde yalnız başlık aranıyordu). Sonuca tıklayınca mesaj açılıyor, eşleşme vurgulanıyor, kütük ortalanıyor. Ek istek yok.
+- **Tur muhasebe defteri.** `tool_use` gövdesine `startedAt`, `tool_result` gövdesine `ms` eklendi (şema değişikliği yok). Mesaj altında süre · araç · alt ajan · maliyet; açılınca araçlar süreyle listeleniyor, alt ajanlar ağaç şeklinde. 5 dakikayı aşan turlar kendiliğinden açılıyor.
+- **Günlük maliyet bütçesi.** Sohbette `BÜGÜN $0,00 / $5` göstergesi (limit 0 iken gizli), %80'de uyarı, limit dolunca "limiti ikiye katla / sadece uyar / bugün için kapat". Ayarlar › Bağlantı'ya iki alan.
+
+### Yeni — piyasa verisi
+- **Kurum konsensüsü.** 12 aracı kurumun raporlarından hedef fiyat ve tavsiye çıkarılıyor. Raporlar paneline beşinci sekme **Konsensüs**: kurum · tarih · hedef · tavsiye · potansiyel · güncellik, dört sütun sıralanabilir, altında medyan ve AL/TUT/SAT dağılımı. Kurum satırına tıklayınca akış o kuruma filtreleniyor. Sembol yazılmadığında en çok konuşulan 20 sembolün fırsat listesi çıkıyor. Sembol kipi KAP ile paylaşılıyor. *Canlı: AK Yatırım'ın 40 raporundan 19'unda hedef çıkarıldı, 19/19'unda metin "hedef fiyatımızı <N>" idi — 0 uydurma.*
+- **Rapor akışında serbest metin araması ve kategori süzgeci** (istemcide, yeni sunucu ucu yok).
+- **Sembol yaşam döngüsü.** Evrenden çıkan semboller kaldırıldı olarak işaretleniyor; **hiçbir veri silinmiyor**. `/api/universe/status` artık `total`, `delisted`, `added`, `delistedList`, `codes` döndürüyor (canlı: 630 sembol). Kod değişikliği veri kaynağında olmadığı için **uydurulmadı**: örtüşen yeni kod varsa "muhtemel değişiklik, doğrulayın" işaretleniyor.
+- **Evrende olmayan kod artık sessizce boş dönmüyor** — arama sonucunda Türkçe uyarı satırı; aynı uyarı ajanın `search_symbol` aracına düşüyor.
+- **Portföy denetimine 4 madde:** `delisted_holding`, `renamed_holding`, `unknown_symbol`, `multi_platform_split`.
+- **İzleme listesinde kaldırılmış sembol uyarısı:** rozet + son ad + muhtemel yeni kod. Tıklamayı engellemiyor; listeye eklemede `confirmBox` ile soruyor.
+
+### Düzeltilen
+- Hedef fiyat ayrıştırıcısının bulduğu gerçek hata: Yapı Kredi'nin ASELS raporunda "8,1 USD/hisse'den 8,5 USD'ye (400 TL)" yazıyordu; ayrıştırıcı 8'i TL sanıp 345 TL'lik hisse için hedef 8 yazıyordu. Yabancı para birimi reddediliyor, satır `null` dönüyor.
+- "YENİ" rozeti 36 saat kuralıyla üretiliyordu, yani "ilk kez gördüğüm" değil; ilk taramada 200 raporun 200'ü "yeni" görünüyordu. Artık `firstSeen` tabanlı.
+- "Eksik anahtar bulunamadı" senaryoları ayrıştırıcıyı yanlış pozitife sokabiliyordu: "satış imkânı", "Satış baskısı", "Tutar", "mağaza açılışı hedefi" hedef fiyat sanılmıyor (28 birim vakayla doğrulandı).
+
+### Doğrulama
+- `npm test` dört dosya, **165 kontrol** — portföy 63, güvenlik 19, arama 59, hata senaryoları 24.
+- Altı paket canlı tarayıcıda doğrulandı: hash yönlendirme, ⌘K komut modu (13 komut), odak tuzağı (8 Tab sonrası odak modal içinde), aria güncellemesi, konsensüs fırsat listesi (20 sembol), sağlık uç noktası, yeni ayarlar.
+- macOS uygulaması 0.15.0 olarak derlendi, kuruldu ve açıldı: arayüz yerel kabukta tam çalışıyor, yeni mesaj eylemleri ve bütçe göstergesi görünüyor. Uygulama, sistem bildirim izninin kapalı olduğunu doğru tespit edip uyarıyor.
+
 ## 0.15.0 — 30 Eylül 2026 (sembol kilidi, ajan görünürlüğü, arama düzeltmesi, alarmlar, portföy denetimi)
 
 ### Yeni

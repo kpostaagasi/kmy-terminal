@@ -4,11 +4,13 @@
 // Giriş veya bot koruması olan kaynaklar (Halk şirket raporları, Deniz, Alnus) klasör izleme ile arşive alınır (inbox.js).
 import fs from 'node:fs';
 import path from 'node:path';
-import { cacheGet, cachePut } from './db.js';
+import { cacheGet, cachePut, db } from './db.js';
 import { REPORTS_DIR } from './paths.js';
 import * as universe from './universe.js';
+import * as market from './market.js';
 import * as store from './store.js';
 import * as pf from './portfolio.js';
+import { trFold } from './fold.js';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const LIST_TTL = 30 * 60_000;
@@ -90,11 +92,68 @@ function category(s) {
   return 'Diğer';
 }
 
-const item = (broker, key, o) => ({
-  id: `${key}:${o.srcId}`, broker, brokerKey: key, title: o.title, date: o.date, category: o.category || category(`${o.cat || ''} ${o.title}`),
-  symbols: o.symbols?.length ? o.symbols : symbolsIn(o.title, o.tags), summary: o.summary ? o.summary.slice(0, 600) : null,
-  url: o.url || null, page: o.page || null, size: o.size || null, analyst: o.analyst || null, access: o.access || 'açık',
-});
+// ── Hedef fiyat ve tavsiye ─────────────────────────────────────
+// Kurum raporlarının başlığı/özeti metninden hedef fiyatı ve tavsiyeyi çıkarır.
+// Metinde yoksa null döner — yanlış hedef fiyattan karar verilmesin diye
+// tahmin üretilmez. Sayılar Türkçe biçimde ("1.234,56"), katlama trFold ile yapılır.
+const NUM_TR = String.raw`\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?|\d+`;
+const CUR = String.raw`(?:₺|TL|TRY|USD|EUR|\$)`;
+// Anahtar ifadesi ve "değer/arz" gibi niteleyiciler tek grupta: alternatifler
+// gruplanmazsa sayı kısmı yalnız son dala uygulanır.
+const TARGET_KEY = /(?:hedef\s*(?:fiyat|price|target|deger)\w*|target\s*price|price\s*target|fair\s*value)(?:\s*(?:degeri|duzeyi|seviyesi|seviyesinde|araligi|araliginda|target))?/i;
+const RATE_KEY = /tavsiye|oneri|onerisi|rating|recommendation|gorus|hedef\s*fiyat/;
+// weak: tek başına güvenilmez kelimeler ("satış" Türkçede satış rakamı da demek).
+// Yalnız "tavsiye/öneri" gibi bir rating bağlamı önlerinde sayılır.
+// Sıra önemli: ALDIR "AL"den önce gelmeli.
+const RATINGS = [[/\baldir\w*/, 'ALDIR', 0], [/\bsat\b|\bsell\b/, 'SAT', 0], [/\bal\b|\bbuy\b/, 'AL', 0], [/\btut\b|\bhold\b/, 'TUT', 0],
+  [/\bsatis\b|\bunderweight\b/, 'SAT', 1], [/\bnotr\b|\btarafsiz\b|\bneutral\b/, 'TUT', 1], [/\boverweight\b|\bbirim\b/, 'AL', 1]];
+
+// # ponytail: anahtar ile sayı arası boşluk dar tutulur — genişletilirse
+// "Hedef fiyat revizyonu ... 29 milyon" gibi cümlelerden sayı yakalanır.
+// Bedeli: "hedef fiyatımızı hisse başına 88 TL" / "%26 artırarak 460 TL" gibi
+// yazımlar kaçırılır (40 raporda 19 doğru, 0 yanlış). Hatırlatmayı genişletmek için:
+// "hisse başına|%X artırarak" gibi beyaz listeyi `[\s:.,-]*` yerine koy.
+// Aralık ("hedef fiyat 100-120") alt sınırı alır; tam aralık istersen iki sayıyı da sakla.
+export function parseTarget(...parts) {
+  const txt = trFold(parts.filter(Boolean).join(' '));
+  for (const m of txt.matchAll(new RegExp(`${TARGET_KEY.source}[\\s:.,-]*(?:${CUR}\\s*)?(${NUM_TR})`, 'gi'))) {
+    const after = txt.slice(m.index + m[0].length, m.index + m[0].length + 14);
+    // Yüzde, süre ("12 aylık"), yıl ("2026 yılı") ve milyon/kat tasarrufları hedef fiyat değildir
+    if (/^\s*[%]/.test(after) || /^\s*(?:aylik|gun|gunluk|ay|yil|yili|kat|milyar|mn)\b/.test(after)) continue;
+    // Tablo BIST içindir, hedef fiyat TL cinsindendir. "8.1USD/hisse'den 8.5USD'ye"
+    // gibi yazımlarda sayıyı TL sanmak birim hatasıdır → yabancı para birimi reddedilir.
+    const near = txt.slice(Math.max(0, m.index - 6), m.index + m[0].length + 8);
+    if (/usd|eur|gbp|chf|€|\$/i.test(near)) continue;
+    const v = universe.trNum(m[1]);
+    if (v != null && v >= 0.5 && v <= 50_000) return v;
+  }
+  return null;
+}
+
+export function parseRating(...parts) {
+  const txt = trFold(parts.filter(Boolean).join(' '));
+  const hits = [];
+  for (const [re, label, weak] of RATINGS) for (const m of txt.matchAll(new RegExp(re.source, 'g'))) {
+    // "Tavsiye: AL" gibi metinde geçen rating, metinde geçen rastgele "AL"dan güçlüdür
+    // Bağlam iki yana da bakılır: "Nötr tavsiye" kelimesi eşleşmeden sonra gelir
+    const near = RATE_KEY.test(txt.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30));
+    if (weak && !near) continue;
+    hits.push({ label, i: m.index, w: near ? 0 : 1 });
+  }
+  if (!hits.length) return null;
+  hits.sort((a, b) => a.w - b.w || a.i - b.i);
+  return hits[0].label;
+}
+
+const item = (broker, key, o) => {
+  const symbols = o.symbols?.length ? o.symbols : symbolsIn(o.title, o.tags);
+  return {
+    id: `${key}:${o.srcId}`, broker, brokerKey: key, title: o.title, date: o.date, category: o.category || category(`${o.cat || ''} ${o.title}`),
+    symbols, summary: o.summary ? o.summary.slice(0, 600) : null,
+    target: parseTarget(o.title, o.summary), rating: parseRating(o.title, o.summary),
+    url: o.url || null, page: o.page || null, size: o.size || null, analyst: o.analyst || null, access: o.access || 'açık',
+  };
+};
 
 // ── Kurum uyarlayıcıları ─────────────────────────────────────
 const ADAPTERS = {
@@ -327,6 +386,9 @@ const ADAPTERS = {
 };
 
 export const BROKERS = Object.fromEntries(Object.entries(ADAPTERS).map(([k, a]) => [k, { name: a.name, site: a.site }]));
+// Tablo kurum adıyla yazılır; akış süzgeci ise uyarlayıcı anahtarı bekler.
+const BROKER_KEY = Object.fromEntries(Object.entries(BROKERS).map(([k, b]) => [trFold(b.name), k]));
+const brokerKeyOf = (name) => BROKER_KEY[trFold(name)] || null;
 export const UNAVAILABLE = [
   { name: 'Halk Yatırım şirket raporları', reason: 'müşteri girişi gerektiriyor; hedef fiyat listesi akışta, tam raporlar klasör izleme ile arşive alınır' },
   { name: 'Deniz Yatırım', reason: 'site bot koruması kullanıyor' },
@@ -346,6 +408,79 @@ function dedupe(items) {
   });
 }
 
+// Kurum raporlarından çıkan hedef fiyat/tavsiyeyi tabloya yazar. Tarama tekrar
+// çalıştığında satır çoğalmaz (UNIQUE(broker, symbol, report_date) üzerinde upsert).
+// Çok sembollü raporda tek hedef fiyat hangi sembole ait belli değil → atlanır.
+const UPSERT_TARGET = db.prepare(`INSERT INTO analyst_targets (broker, symbol, target, rating, report_date, source_id)
+  VALUES (?, ?, ?, ?, ?, ?)
+  ON CONFLICT(broker, symbol, report_date) DO UPDATE SET
+    -- Doğrudan overwrite: yeniden taramada hedef bulunamazsa eski (varsa hatalı) değer
+    -- kalsın diye COALESCE kullanılmaz; satır o günün ayrıştırma sonucunun kaydıdır.
+    target = excluded.target, rating = excluded.rating, source_id = excluded.source_id`);
+
+function saveTargets(items) {
+  let n = 0;
+  for (const x of items) {
+    if (x.symbols.length !== 1 || (x.target == null && !x.rating)) continue;
+    UPSERT_TARGET.run(x.broker, x.symbols[0], x.target ?? null, x.rating ?? null, String(x.date).slice(0, 10), x.id);
+    n++;
+  }
+  return n;
+}
+
+const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+// Kurum konsensüsü: sembolün görüşleri + özet. Sembol yoksa en çok konuşulan
+// 20 sembolün medyan hedef farkı ("fırsat listesi").
+export async function consensus(symbol = null) {
+  const sym = symbol ? market.normalize(symbol) : null;
+  if (sym) {
+    // Her kurumun en güncel görüşü: aynı broker'ın birden çok satırından en yeni tarih
+    const rows = db.prepare(`SELECT t.* FROM analyst_targets t
+      JOIN (SELECT broker, MAX(report_date) d FROM analyst_targets WHERE symbol = ? GROUP BY broker) m
+        ON m.broker = t.broker AND m.d = t.report_date
+      WHERE t.symbol = ? ORDER BY t.broker`).all(sym, sym);
+    if (!rows.length) return { symbol: sym, targets: [], summary: null };
+    const q = await market.getQuote(sym).catch(() => null);
+    const price = q?.price ?? null;
+    const tg = rows.filter((r) => r.target != null);
+    return {
+      symbol: sym, price,
+      targets: rows.map((r) => ({ broker: r.broker, brokerKey: brokerKeyOf(r.broker), target: r.target, rating: r.rating, report_date: r.report_date,
+        source_id: r.source_id, upside: price && r.target ? ((r.target / price - 1) * 100) : null })),
+      summary: {
+        brokers: rows.length, withTarget: tg.length,
+        median: tg.length ? median(tg.map((r) => r.target)) : null,
+        mean: tg.length ? tg.reduce((a, r) => a + r.target, 0) / tg.length : null,
+        min: tg.length ? Math.min(...tg.map((r) => r.target)) : null,
+        max: tg.length ? Math.max(...tg.map((r) => r.target)) : null,
+        al: rows.filter((r) => r.rating === 'AL' || r.rating === 'ALDIR').length,
+        sat: rows.filter((r) => r.rating === 'SAT').length,
+        oldest: rows.map((r) => r.report_date).sort()[0], newest: rows.map((r) => r.report_date).sort().at(-1),
+      },
+    };
+  }
+  const syms = db.prepare(`SELECT symbol, COUNT(DISTINCT broker) n FROM analyst_targets WHERE target IS NOT NULL
+    GROUP BY symbol ORDER BY n DESC, symbol LIMIT 20`).all();
+  if (!syms.length) return { symbol: null, targets: [], summary: null, list: [] };
+  const prices = await market.getQuotes(syms.map((s) => s.symbol)).catch(() => ({}));
+  const list = syms.map(({ symbol, n }) => {
+    // Sembol başına medyan: her kurumun en güncel hedefi (sembol dalıyla aynı kural)
+    const rows = db.prepare(`SELECT t.target FROM analyst_targets t
+      JOIN (SELECT broker, MAX(report_date) d FROM analyst_targets WHERE symbol = ? AND target IS NOT NULL GROUP BY broker) m
+        ON m.broker = t.broker AND m.d = t.report_date
+      WHERE t.symbol = ? AND t.target IS NOT NULL`).all(symbol, symbol);
+    const med = rows.length ? median(rows.map((x) => x.target)) : null;
+    const px = prices[symbol]?.price ?? null;
+    return { symbol, brokers: n, median: med, price: px, upside: px && med ? ((med / px - 1) * 100) : null };
+  });
+  return { symbol: null, targets: [], summary: null, list: list.filter((x) => x.median != null) };
+}
+
+// "Yeni" = ilk kez gördüğümüz rapor (firstSeen), yayın tarihi değil. 36 saatten eski
+// yayınlanmış ama yeni eklenmiş bir rapor da rozet alır; eski raporlar alarm üretmez.
+const isNewItem = (x) => !!x.firstSeen && Date.now() - x.firstSeen < 36 * 3600_000;
+
 // ── Liste ────────────────────────────────────────────────────
 let inflight = null;
 export async function refresh(force = false) {
@@ -361,11 +496,14 @@ export async function refresh(force = false) {
     }));
     const prev = cacheGet('research:list', 30 * 86400_000);
     const byId = new Map((prev?.items || []).map((x) => [x.id, x]));
-    for (const x of results.flat()) if (x.title && x.date) byId.set(x.id, { ...byId.get(x.id), ...x, firstSeen: byId.get(x.id)?.firstSeen || Date.now() });
+    // İlk taramada raporun kendi tarihi tohumlanır: yoksa 400 günlük arşivin tamamı
+    // "YENİ" görünür. Sonraki taramalarda firstSeen = ilk kez gördüğümüz an olur.
+    for (const x of results.flat()) if (x.title && x.date) byId.set(x.id, { ...byId.get(x.id), ...x, firstSeen: byId.get(x.id)?.firstSeen || (prev ? Date.now() : Date.parse(x.date) || Date.now()) });
     // Başarısız kurumun eski kayıtları korunur; 400 günden eskiler atılır
     const cutoff = Date.now() - 400 * 86400_000;
     const items = [...byId.values()].filter((x) => new Date(x.date).getTime() > cutoff).sort((a, b) => b.date.localeCompare(a.date));
     const data = { at: Date.now(), items: dedupe(items), status };
+    saveTargets(data.items);
     cachePut('research:list', data);
     return data;
   })().finally(() => { inflight = null; });
@@ -399,7 +537,7 @@ export async function list({ days = 30, broker = null, symbol = null, q = null, 
   const saved = savedIndex();
   return {
     at: d.at, total: items.length, status: d.status, brokers: BROKERS, unavailable: UNAVAILABLE,
-    items: items.slice(offset, offset + limit).map((x) => ({ ...x, isNew: Date.now() - new Date(x.date).getTime() < 36 * 3600_000, saved: saved[x.id] || null })),
+    items: items.slice(offset, offset + limit).map((x) => ({ ...x, isNew: isNewItem(x), saved: saved[x.id] || null })),
   };
 }
 

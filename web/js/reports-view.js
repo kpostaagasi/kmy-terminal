@@ -1,5 +1,5 @@
 // Sağ panel Raporlar + PDF sekmeleri: kurum raporu akışı, arşiv (ajan + kurum raporları), önizleme
-import { state, on, emit, api, $, $$, esc, md, dateTR, toast, confirmBox, askAgent, localGet, localSet, modal, debounce } from './core.js';
+import { state, on, emit, api, $, $$, esc, md, dateTR, toast, confirmBox, askAgent, localGet, localSet, modal, debounce, price, pct } from './core.js';
 import { t, tx } from './i18n.js';
 
 const root = $('#rtab-reports');
@@ -9,14 +9,22 @@ const ALL_BROKERS = `<option value="">${t('Tüm kurumlar')}</option>`;
 root.innerHTML = `<div class="reports">
   <div class="report-list">
     <div class="panel-head"><span>${t('Raporlar')}</span><div class="head-actions"><button class="symlock" id="rLock" hidden title="${t('Sembol kipini kaldır')}"><span></span><span class="tab-x">✕</span></button><button class="icon-btn sm" id="rUpload" title="${t('Kurum raporu veya PDF yükle')}">⇪</button><button class="icon-btn sm" id="rRefresh" title="${t('Yenile')}">↻</button></div></div>
-    <div class="seg" id="rKind" style="margin:8px 8px 0;display:flex"><button data-k="akis" style="flex:1" title="${t('Aracı kurumların yeni yayımladığı şirket raporları')}">${t('Akış')}</button><button data-k="all" style="flex:1">${t('Arşiv')}</button><button data-k="ajan" style="flex:1">${t('Asistan')}</button><button data-k="kurum" style="flex:1">${t('Kurum')}</button></div>
+    <div class="seg" id="rKind" style="margin:8px 8px 0;display:flex;flex-wrap:wrap"><button data-k="akis" style="flex:1 1 30%" title="${t('Aracı kurumların yeni yayımladığı şirket raporları')}">${t('Akış')}</button><button data-k="konsensus" style="flex:1 1 30%" title="${t('Kurumların hedef fiyat ve tavsiye konsensüsü')}">${t('Konsensüs')}</button><button data-k="all" style="flex:1 1 30%">${t('Arşiv')}</button><button data-k="ajan" style="flex:1 1 30%">${t('Asistan')}</button><button data-k="kurum" style="flex:1 1 30%">${t('Kurum')}</button></div>
     <div id="feedBox" hidden>
       <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
         <div class="seg" id="fDays" style="display:flex"><button data-d="7" style="flex:1">${t('{n} gün', { n: 7 })}</button><button data-d="30" style="flex:1">${t('{n} gün', { n: 30 })}</button><button data-d="90" style="flex:1">${t('{n} gün', { n: 90 })}</button><button data-d="0" style="flex:1">${t('Tümü')}</button></div>
         <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="fSym" placeholder="${t('Sembol')}" style="width:84px" aria-label="${t('Sembol')}"><select id="fBroker" style="flex:1;min-width:0" aria-label="${t('Kurum')}">${ALL_BROKERS}</select></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="fQ" placeholder="${t('Başlık veya özette ara…')}" style="flex:1;min-width:0" aria-label="${t('Akışta ara')}"><select id="fCat" style="width:110px" aria-label="${t('Kategori')}"></select></div>
         <div class="row" style="gap:6px"><button class="ghost xs fMine" data-m="watchlist" style="flex:1">${t('İzleme listem')}</button><button class="ghost xs fMine" data-m="portfolio" style="flex:1">${t('Portföyüm')}</button></div>
+      </div>
       <div id="feedList"></div>
       <div class="dim" id="feedNote" style="font-size:11px;padding:8px"></div>
+    </div>
+    <div id="consBox" hidden>
+      <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="cSym" placeholder="${t('Sembol (boşsa fırsat listesi)')}" style="flex:1;min-width:0" aria-label="${t('Sembol')}"><button class="ghost xs" id="cGo">${t('Getir')}</button></div>
+      </div>
+      <div id="consList"></div>
     </div>
     <div id="archBox">
     <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
@@ -57,8 +65,10 @@ async function load() {
 function draw() {
   $$('#rKind button').forEach((b) => b.classList.toggle('active', b.dataset.k === kind));
   $('#feedBox').hidden = kind !== 'akis';
-  $('#archBox').hidden = kind === 'akis';
+  $('#consBox').hidden = kind !== 'konsensus';
+  $('#archBox').hidden = kind === 'akis' || kind === 'konsensus';
   if (kind === 'akis') { loadFeed(); return; }
+  if (kind === 'konsensus') { loadConsensus(); return; }
   const q = $('#rFilter').value.toLocaleLowerCase('tr').trim();
   const broker = $('#rBroker').value;
   const list = reports.filter((r) => (kind === 'all' || r.kind === kind) && (!broker || r.broker === broker)
@@ -154,6 +164,7 @@ let feed = { items: [] }, feedDays = localGet('feedDays', 30), feedTok = 0, feed
 const BROKER_DOT = { garanti: '#2dd4bf', ak: '#ef4444', isyatirim: '#3b82f6', yapikredi: '#60a5fa', ziraat: '#22c55e', vakif: '#f59e0b', tacirler: '#a78bfa', phillip: '#f472b6', integral: '#94a3b8', a1: '#facc15', gedik: '#eab308', halk: '#38bdf8' };
 const FEED_PAGE = 200;
 let feedLoading = false;
+let pendingBroker = '';   // konsensüs satırı → akış süzgeci; seçenekler yüklenene kadar bekler
 const feedItemHtml = (x) => `<div class="report-item feed-item ${x.id === feedSel ? 'sel' : ''}" data-id="${esc(x.id)}">
       <div class="t"><span class="dot" style="background:${BROKER_DOT[x.brokerKey] || 'var(--text-3)'}"></span>${x.symbols.length ? `<b class="mono accent">${esc(x.symbols.slice(0, 3).join(', '))}</b> ` : ''}<span class="dim">${esc(x.broker)}</span>${x.isNew ? ` <span class="pill acc">${t('Yeni')}</span>` : ''}${x.saved ? ` <span class="pill" title="${t('Arşivde')}">✓</span>` : ''}</div>
       <div class="t2">${esc(x.title)}</div>
@@ -176,20 +187,111 @@ async function loadFeed(append = false) {
     const r = await api(`/research?${q}`);
     if (tok !== feedTok) return;
     feed = append ? { ...r, items: [...feed.items, ...r.items] } : r;
-    const cur = $('#fBroker').value;
+    const cur = pendingBroker || $('#fBroker').value;
+    pendingBroker = '';
     $('#fBroker').innerHTML = ALL_BROKERS + Object.entries(r.brokers).map(([k, b]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(r.status?.[k] && !r.status[k].ok ? t('{name} (hata)', { name: b.name }) : b.name)}</option>`).join('');
-    const html = r.items.map(feedItemHtml).join('');
-    if (append) $('#feedList').insertAdjacentHTML('beforeend', html);
-    else $('#feedList').innerHTML = html || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
-    $('#fMore')?.remove();
-    if (feed.items.length < r.total) $('#feedList').insertAdjacentHTML('beforeend', `<button class="ghost" id="fMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: r.total - feed.items.length })}</button>`);
-    bindFeed();
+    drawFeed();
     const fails = Object.entries(r.status || {}).filter(([, s]) => !s.ok).map(([k]) => r.brokers[k]?.name);
     const locked = r.unavailable.map((u) => `<span title="${esc(tx(u.reason))}">${esc(tx(u.name))}</span>`).join(', ');
     $('#feedNote').innerHTML = `${t('{n} şirket raporu', { n: r.total })} · ${t('Son güncelleme {date} · 30 dakikada bir yenilenir', { date: dateTR(r.at, true) })}${fails.length ? ` · <span class="down">${t('Alınamadı: {list}', { list: esc(fails.join(', ')) })}</span>` : ''}<br>${t('Giriş gerektiren kaynaklar ({list}): raporları kendi hesabınızla indirin; Ayarlar › Veri › Kurum raporları için klasör izleme onları arşive alır.', { list: locked })}`;
   } catch (e) { if (tok === feedTok) $('#feedList').innerHTML = `<div class="empty">${esc(tx(e.message))}</div>`; }
   finally { if (tok === feedTok) feedLoading = false; }
 }
+
+// Serbest metin araması ve kategori süzgeci yüklenen sayfalar üzerinde, istemcide.
+// Yeni sunucu ucu gerekmez: akış zaten 200'er sayfa geliyor.
+function drawFeed() {
+  const q = $('#fQ').value.toLocaleLowerCase('tr').trim();
+  const cat = $('#fCat').value;
+  const cats = [...new Set(feed.items.map((x) => x.category))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const curCat = $('#fCat').value;
+  $('#fCat').innerHTML = `<option value="">${t('Tümü')}</option>` + cats.map((c) => `<option ${c === curCat ? 'selected' : ''}>${esc(tx(c))}</option>`).join('');
+  const items = feed.items.filter((x) => (!cat || x.category === cat)
+    && (!q || `${x.title} ${x.summary || ''} ${x.broker} ${x.symbols.join(' ')}`.toLocaleLowerCase('tr').includes(q)));
+  $('#feedList').innerHTML = items.map(feedItemHtml).join('')
+    || `<div class="empty">${t('Bu filtreye uyan rapor yok')}</div>`;
+  $('#fMore')?.remove();
+  if (feed.items.length < (feed.total || 0)) $('#feedList').insertAdjacentHTML('beforeend', `<button class="ghost" id="fMore" style="margin:10px auto;display:block">${t('Daha fazla yükle ({n})', { n: (feed.total || 0) - feed.items.length })}</button>`);
+  bindFeed();
+}
+
+// ── Konsensüs ─────────────────────────────
+// Kurumların hedef fiyat/tavsiye tablosu. Sembol girilmezse sunucu en çok
+// konuşulan 20 sembolün fırsat listesini döner.
+let consSort = 'date', consDir = -1, consData = null;
+const RATE_PILL = { AL: 'up', ALDIR: 'up', TUT: '', SAT: 'down' };
+const ageDays = (d) => Math.max(0, Math.round((Date.now() - new Date(`${d}T12:00:00`).getTime()) / 86400_000));
+const freshTag = (d) => { const n = ageDays(d); return `<span class="pill ${n <= 30 ? 'acc' : n <= 90 ? '' : 'down'}" title="${t('Güncellik: {n} gün önce', { n })}">${n}g</span>`; };
+const th = (k, label, cls = '') => `<th class="sortable ${cls}" data-cs="${k}">${esc(label)}${consSort === k ? (consDir < 0 ? ' ▾' : ' ▴') : ''}</th>`;
+
+function drawConsensus() {
+  const d = consData;
+  if (!d) return;
+  const el = $('#consList');
+  if (!d.targets?.length) {
+    el.innerHTML = d.list?.length ? consListHtml(d.list) : `<div class="empty">${t('Henüz hedef fiyat çıkarılmış rapor yok. Kurum raporlarını tara, sonra buraya dön.')}</div>`;
+    bindCons();
+    return;
+  }
+  const s = d.summary || {};
+  const rows = [...d.targets].sort((a, b) => {
+    const k = consSort;
+    const va = k === 'upside' ? a.upside : k === 'target' ? a.target : k === 'date' ? a.report_date : a.broker;
+    const vb = k === 'upside' ? b.upside : k === 'target' ? b.target : k === 'date' ? b.report_date : b.broker;
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (typeof va === 'string' ? va.localeCompare(vb, 'tr') : va - vb) * consDir;
+  });
+  el.innerHTML = `<div class="cons-sum">
+      <div><span class="l">${t('Medyan hedef')}</span><span class="v">${s.median != null ? `${price(s.median)} ₺` : '—'}</span></div>
+      <div><span class="l">${t('Mevcut fiyat')}</span><span class="v">${d.price != null ? `${price(d.price)} ₺` : '—'}</span></div>
+      <div><span class="l">${t('AL / TUT / SAT')}</span><span class="v">${s.al || 0} / ${(s.brokers || 0) - (s.al || 0) - (s.sat || 0)} / ${s.sat || 0}</span></div>
+      <div><span class="l">${t('Kurum')}</span><span class="v">${s.brokers || 0}</span></div>
+      <div><span class="l">${t('Tarih aralığı')}</span><span class="v" style="font-size:11px;white-space:normal">${esc(dateTR(s.oldest))} – ${esc(dateTR(s.newest))}</span></div>
+    </div>
+    <div class="table-wrap"><table class="t cons-t"><thead><tr>${th('broker', t('Kurum'))}${th('date', t('Tarih'))}${th('target', t('Hedef'), 'r')}${th('rating', t('Tavsiye'))}${th('upside', t('Potansiyel'), 'r')}<th>${t('Güncellik')}</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="click" data-b="${esc(r.brokerKey || '')}" data-s="${esc(d.symbol)}"><td>${esc(r.broker)}</td><td class="mono">${esc(dateTR(r.report_date))}</td><td class="r">${r.target != null ? price(r.target) : '—'}</td><td>${r.rating ? `<span class="pill ${RATE_PILL[r.rating] || ''}">${esc(r.rating)}</span>` : '—'}</td><td class="r ${r.upside > 0 ? 'up' : r.upside < 0 ? 'down' : ''}">${r.upside != null ? pct(r.upside) : '—'}</td><td>${freshTag(r.report_date)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="dim" style="font-size:11px;padding:8px">${t('Kurum satırına tıkla: o kurumun raporlarına filtrelenmiş akış açılır.')}</div>`;
+  bindCons();
+}
+
+function consListHtml(list) {
+  return `<div class="dim" style="font-size:11px;padding:8px 8px 0">${t('En çok konuşulan semboller (fırsat listesi). Sembol yazınca kurum tablosu açılır.')}</div>
+    <div class="table-wrap"><table class="t cons-t"><thead><tr><th>${t('Sembol')}</th>${th('brokers', t('Kurum'), 'r')}${th('median', t('Medyan hedef'), 'r')}${th('upside', t('Potansiyel'), 'r')}</tr></thead><tbody>
+    ${list.map((x) => `<tr class="click" data-s="${esc(x.symbol)}"><td class="mono"><b>${esc(x.symbol)}</b></td><td class="r">${x.brokers}</td><td class="r">${price(x.median)}</td><td class="r ${x.upside > 0 ? 'up' : x.upside < 0 ? 'down' : ''}">${pct(x.upside)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function bindCons() {
+  $$('#consList th.sortable').forEach((h) => h.onclick = () => { const k = h.dataset.cs; consDir = consSort === k ? -consDir : -1; consSort = k; drawConsensus(); });
+  $$('#consList tr.click').forEach((tr) => tr.onclick = () => {
+    // #fBroker seçenekleri akış yüklenince dolar; filtreyi o ana kadar sakla
+    pendingBroker = tr.dataset.b || '';
+    $('#fSym').value = tr.dataset.s;
+    if (pendingBroker) $('#fBroker').value = pendingBroker;
+    kind = 'akis'; localSet('reportKind', kind); draw();
+  });
+}
+
+let consTok = 0;
+async function loadConsensus() {
+  const sym = $('#cSym').value.trim().toUpperCase();
+  // Fırsat listesindeki sıralama anahtarı kurum tablosunda geçersiz; mod değişince sıfırla
+  if (consSort === 'brokers' || consSort === 'median') { consSort = 'date'; consDir = -1; }
+  const tok = ++consTok;
+  $('#consList').innerHTML = '<div class="skeleton" style="height:140px;margin:8px"></div>';
+  try {
+    const d = await api(`/research/consensus${sym ? `?symbol=${encodeURIComponent(sym)}` : ''}`);
+    if (tok !== consTok) return;
+    consData = d;
+    if (d.symbol && state.quotes[d.symbol]?.price == null && d.price != null) state.quotes[d.symbol] = { symbol: d.symbol, price: d.price };
+    drawConsensus();
+  } catch (e) { if (tok === consTok) $('#consList').innerHTML = `<div class="empty">${esc(tx(e.message))}</div>`; }
+}
+$('#cGo').onclick = loadConsensus;
+$('#cSym').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadConsensus(); });
 function showFeed(id) {
   const x = feed.items.find((i) => i.id === id);
   if (!x) return;
@@ -219,6 +321,8 @@ $('#fDays').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) r
 $$('.fMine').forEach((b) => b.onclick = () => { feedMine = feedMine === b.dataset.m ? '' : b.dataset.m; localSet('feedMine', feedMine); loadFeed(); });
 $('#fSym').addEventListener('input', debounce(loadFeed, 300));
 $('#fBroker').onchange = loadFeed;
+$('#fQ').addEventListener('input', debounce(drawFeed, 200));
+$('#fCat').onchange = drawFeed;
 on('ws:research.updated', () => { if (kind === 'akis' && root.classList.contains('active')) loadFeed(); });
 $('#feedList').addEventListener('click', (e) => { if (e.target.closest('#fMore')) loadFeed(true); });
 on('research:symbol', (s) => { kind = 'akis'; localSet('reportKind', kind); $('#fSym').value = s; emit('rtab', 'reports'); draw(); });
@@ -226,6 +330,8 @@ on('research:symbol', (s) => { kind = 'akis'; localSet('reportKind', kind); $('#
 // Sekme pasifken de güncellenir; kullanıcı Raporlar'a geçince hazır bekler.
 const rLock = $('#rLock');
 on('symlock', (sym) => {
+  // Konsensüs sembol kipini paylaşır: KAP'ta seçilen hissenin kurum görüşleri açılır
+  if (kind === 'konsensus') { $('#cSym').value = sym || ''; if (sym) loadConsensus(); }
   if ($('#fSym').value === (sym || '')) return;
   $('#fSym').value = sym || '';
   rLock.hidden = !sym;

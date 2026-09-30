@@ -239,7 +239,7 @@ export class AgentManager extends EventEmitter {
     // Claude Code yerleşik komutları (/compact, /context, /cost) doğrudan iletilir
     if (/^\/(compact|context|cost)\b/.test(text) && !context && !attachments.length) prompt = text;
     const abort = new AbortController();
-    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), activity: 'Düşünüyor', lang: lang === 'en' ? 'en' : 'tr', perm: permissionMode };
+    const run = { abort, startedAt: Date.now(), title: session.title, pending: new Map(), subagents: new Map(), tools: new Map(), activity: 'Düşünüyor', lang: lang === 'en' ? 'en' : 'tr', perm: permissionMode };
     this.running.set(sessionId, run);
     this.#emit(sessionId, 'run.start', { startedAt: run.startedAt });
     this.emit('jobs');
@@ -372,6 +372,14 @@ export class AgentManager extends EventEmitter {
     return `<onceki_konusma>\nModel oturumu yenilendi. Önceki konuşmanın son kısmı (yalnız bağlam için; yeniden yanıtlama):\n${lines.join('\n\n')}\n</onceki_konusma>\n\n`;
   }
 
+  // Araç süresi: tool_use ile eşleşen ilk tool_result'ta ölçülür; sonuç gelmezse (durdurma, hata) ms null kalır
+  #toolMs(run, id) {
+    const t0 = run.tools.get(id);
+    if (!t0) return null;
+    run.tools.delete(id);
+    return Date.now() - t0;
+  }
+
   #handle(sessionId, run, msg) {
     const parent = msg.parent_tool_use_id || null;
     switch (msg.type) {
@@ -422,11 +430,14 @@ export class AgentManager extends EventEmitter {
           if (b.type === 'text' && b.text) { this.#record(sessionId, 'text', { text: b.text }); this.#emit(sessionId, 'text', { text: b.text }); }
           else if (b.type === 'thinking' && b.thinking) { this.#record(sessionId, 'thinking', { text: b.thinking }); this.#emit(sessionId, 'thinking', { text: b.thinking }); }
           else if (b.type === 'tool_use') {
-            this.#record(sessionId, 'tool_use', { id: b.id, name: b.name, input: b.input });
-            this.#emit(sessionId, 'tool_use', { id: b.id, name: b.name, input: b.input });
+            // Araç süresi defteri: ne kadar sürdüğü yalnız tool_use/tool_result çiftinden çıkar (şema değişmez, gövde JSON)
+            const startedAt = Date.now();
+            run.tools.set(b.id, startedAt);
+            this.#record(sessionId, 'tool_use', { id: b.id, name: b.name, input: b.input, startedAt });
+            this.#emit(sessionId, 'tool_use', { id: b.id, name: b.name, input: b.input, startedAt });
             run.activity = toolLabel(b.name);
             if (SUBAGENT_TOOLS.has(b.name)) {
-              const sa = { id: b.id, description: b.input?.description || b.input?.subagent_type || 'Alt ajan', kind: b.input?.subagent_type || 'general-purpose', startedAt: Date.now(), tools: 0, last: null, done: false };
+              const sa = { id: b.id, description: b.input?.description || b.input?.subagent_type || 'Alt ajan', kind: b.input?.subagent_type || 'general-purpose', startedAt, tools: 0, last: null, done: false };
               run.subagents.set(b.id, sa);
               this.#emit(sessionId, 'team.start', sa);
             }
@@ -439,13 +450,14 @@ export class AgentManager extends EventEmitter {
         }
         break;
       }
+
       case 'user': {
         if (parent) break;
         const content = Array.isArray(msg.message?.content) ? msg.message.content : [];
         for (const b of content) {
           if (b.type !== 'tool_result') continue;
           const text = Array.isArray(b.content) ? b.content.map((c) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n') : String(b.content ?? '');
-          const data = { id: b.tool_use_id, isError: !!b.is_error, text: text.length > 20000 ? text.slice(0, 20000) + '\n…(kısaltıldı)' : text };
+          const data = { id: b.tool_use_id, isError: !!b.is_error, ms: this.#toolMs(run, b.tool_use_id), text: text.length > 20000 ? text.slice(0, 20000) + '\n…(kısaltıldı)' : text };
           this.#record(sessionId, 'tool_result', data);
           this.#emit(sessionId, 'tool_result', data);
           const sa = run.subagents.get(b.tool_use_id);
@@ -530,8 +542,10 @@ export class AgentManager extends EventEmitter {
       else if (item.type === 'web_search') { name = 'WebSearch'; input = { query: item.query }; }
       else if (item.type === 'file_change') { name = 'Edit'; input = { changes: item.changes }; }
       else return false;
-      this.#record(sessionId, 'tool_use', { id: item.id, name, input });
-      this.#emit(sessionId, 'tool_use', { id: item.id, name, input });
+      const startedAt = Date.now();
+      run.tools.set(item.id, startedAt);
+      this.#record(sessionId, 'tool_use', { id: item.id, name, input, startedAt });
+      this.#emit(sessionId, 'tool_use', { id: item.id, name, input, startedAt });
       run.activity = toolLabel(name);
       this.emit('jobs');
       return true;
@@ -558,7 +572,7 @@ export class AgentManager extends EventEmitter {
             let text = item.aggregated_output ?? '';
             if (item.type === 'mcp_tool_call') text = item.error?.message || (item.result?.content || []).map((c) => c.text || `[${c.type}]`).join('\n');
             if (item.type === 'file_change') text = (item.changes || []).map((c) => `${c.kind} ${c.path}`).join('\n');
-            const data = { id: item.id, isError: item.status === 'failed' || (item.exit_code != null && item.exit_code !== 0) || !!item.error, text: String(text).slice(0, 20000) };
+            const data = { id: item.id, isError: item.status === 'failed' || (item.exit_code != null && item.exit_code !== 0) || !!item.error, ms: this.#toolMs(run, item.id), text: String(text).slice(0, 20000) };
             this.#record(sessionId, 'tool_result', data);
             this.#emit(sessionId, 'tool_result', data);
             run.activity = 'Düşünüyor';
