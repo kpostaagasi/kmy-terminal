@@ -34,7 +34,7 @@ root.innerHTML = `
         <span class="spacer"></span>
         <span class="cm-stat" id="stCostBtn" role="button" tabindex="0" style="cursor:pointer" title="${t('Nereye harcadım')}">${t('Maliyet')} <b id="stCost">$0,00</b></span>
         <span class="cm-stat" id="stBudget" hidden title="${t('Günlük asistan maliyeti')}"></span>
-        <span class="cm-stat">${t('Tur')} <b id="stTurns">0</b></span>
+        <span class="cm-stat" id="stTurnsBox" hidden>${t('Tur')} <b id="stTurns">0</b></span>
         <span class="cm-stat" title="${t('Model bağlam kullanımı')}">ctx <span class="ctxbar"><i id="stCtxBar"></i></span> <b id="stCtx">–</b></span>
       </div>
       <div class="cm-bar">
@@ -967,7 +967,9 @@ let ctxWarned = 0;
 const kTok = (n) => `${num(n / 1000, 0)}k`;
 function updateStats() {
   $('#stCost').textContent = !paid(sessionProvider) && !sessCost ? t('abonelik') : `$${num(sessCost, 2)}`;
+  // Tur sayacı ilk turdan önce gürültü: sıfırken gizleniyor, öğe kimliği değişmiyor.
   $('#stTurns').textContent = sessTurns;
+  $('#stTurnsBox').hidden = !sessTurns;
   const p = lastCtx && ctxWindow ? (lastCtx / ctxWindow) * 100 : null;
   // Oturum yeniden açıldığında canlı 'usage' olayı gelmemiş olabilir; o durumda sahte değer yerine dürüstçe "bilinmiyor"
   $('#stCtx').textContent = lastCtx ? `${kTok(lastCtx)}${ctxWindow ? `/${kTok(ctxWindow)} (${num(p, 0)}%)` : ''}` : (current ? t('bilinmiyor') : '–');
