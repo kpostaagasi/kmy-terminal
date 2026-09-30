@@ -13,7 +13,7 @@ import { WORKSPACE_DIR, ROOT } from './paths.js';
 import { buildBorsaServer, AUTO_TOOLS } from './agent-tools.js';
 import { marketStatus } from './market.js';
 import * as memory from './memory.js';
-import { ompBin, ompModels, ompModelsReady, runOmp, ensureOmpMcp } from './omp-runner.js';
+import { ompBin, ompModels, ompModelsReady, ompModelMeta, runOmp, ensureOmpMcp } from './omp-runner.js';
 
 // Claude Code yürütülebilir dosyası: SDK'nın platform paketi yoksa (DMG ile dağıtılan uygulama) kullanıcının kurduğu `claude` kullanılır
 const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
@@ -58,11 +58,15 @@ const pretty = (id) => id.replace(/^gpt/i, 'GPT').replace(/-(\w)/g, (_, c) => ` 
 const buildProviderModels = (omp) => {
   const d = defaultModels();
   const codex = d.codex ? [{ id: d.codex, label: pretty(d.codex) }] : [];
-  // omp: `models --json` yüzlerce sağlayıcıyı elediği için kullanıcının kendi varsayılanı
+  // omp: `models --json` yüzlerce modeli elediği için kullanıcının kendi varsayılanı
   // listede çıkmayabilir; seçicide görünmezse o modelle konuşmak imkânsız.
   let list = (omp || []).filter((x) => x.id);
-  // Varsayılan listede yoksa elle ekle (model elenmiş demektir, metadata'sı da yoktur).
-  if (d.omp && !list.some((m) => m.id === d.omp)) list = [{ id: d.omp, label: `${pretty(d.omp)} (varsayılan)` }, ...list];
+  // Elle eklenen varsayılanın metadatasını tam katalogdan al: openrouter gibi 40'ın üstünde
+  // modeli olan sağlayıcılar seçiciye girmiyor, ama düşünme seviyeleri yine de gerekiyor.
+  if (d.omp && !list.some((m) => m.id === d.omp)) {
+    const meta = ompModelMeta(d.omp);
+    list = [{ id: d.omp, label: `${pretty(d.omp)} (varsayılan)`, contextWindow: meta?.contextWindow || null, thinking: meta?.thinking || null }, ...list];
+  }
   return { codex, ...(PROVIDERS.omp ? { omp: list } : {}) };
 };
 export const providerModels = () => buildProviderModels(ompModels());
