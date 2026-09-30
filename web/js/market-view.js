@@ -70,7 +70,7 @@ root.innerHTML = `
   <span class="kt-clock" id="ktClock"></span>
 </header>
 <nav class="kt-fkeys" id="ktFkeys">
-  ${FKEYS.map(([k, l], i) => `<button class="kt-fk" data-pg="${k}" title="${t('Kısayol: {k}', { k: i + 1 })}"><i>${i + 1})</i> ${l}</button>`).join('')}
+  ${FKEYS.map(([k, l], i) => `<button class="kt-fk" role="tab" aria-selected="${i === 0}" data-pg="${k}" title="${t('Kısayol: {k}', { k: i + 1 })}"><i>${i + 1})</i> ${l}</button>`).join('')}
   <span class="kt-cur" id="ktCur"></span>
   <span class="kt-spacer"></span>
   <button class="kt-fk kt-tool" id="ktReload" title="${t('Bu sayfanın verilerini yenile')}">⟳ ${t('YENİLE')}</button>
@@ -267,13 +267,14 @@ function showPage(pg) {
   const changed = pg !== page;
   page = pg;
   $$('.kt-page', root).forEach((el) => { el.hidden = el.dataset.page !== pg; });
-  $$('#ktFkeys [data-pg]').forEach((b) => b.classList.toggle('active', b.dataset.pg === pg));
+  $$('#ktFkeys [data-pg]').forEach((b) => { b.classList.toggle('active', b.dataset.pg === pg); b.setAttribute('aria-selected', String(b.dataset.pg === pg)); });
   root.dataset.ktPage = pg;
   if (pg === 'home') drawRecent();
   if (changed) body.scrollTop = 0;
   hideHelp();
   ensure(pg);
   requestAnimationFrame(() => resizeCharts(pg));
+  emit('kt:page', pg);
 }
 // Başka bir modülden ya da bu sekmeden sembol açma: ÖZET (ya da istenen sayfa)
 function openSymbol(sym, pg = 'sum', name = '') {
@@ -283,6 +284,15 @@ function openSymbol(sym, pg = 'sum', name = '') {
   pendingPage = pg;
   selectSymbol(sym);
 }
+// Sembolü açan TEK giriş noktası: sekme, arama formu, tarayıcı tablosu, komut satırı,
+// palet, şerit, izleme listesi ve hash hep buradan geçer.
+export function openRoute({ sym, pg, tab } = {}) {
+  if (tab) setSumTab(tab);
+  if (sym) return openSymbol(sym, pg || 'sum');
+  if (pg) showPage(pg);
+}
+// Hash yazımı için geçerli konum
+export function ktRoute() { return { page, sym: curSym, tab: sumTab }; }
 function setSymbol(s) {
   if (s === curSym) return false;
   curSym = s;
@@ -431,7 +441,16 @@ function showSumTab() {
   $$('.kt-sg', sec('sum')).forEach((el) => { el.hidden = el.dataset.sg !== sumTab; });
   if (sumTab === 'px') requestAnimationFrame(() => resizeCharts('sum'));
 }
-$('#sumSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; sumTab = b.dataset.sg; localSet('sumTab', sumTab); segActive(); showSumTab(); };
+// ÖZET alt sekmesi dışarıdan (hash) da değiştirilebilsin
+export function setSumTab(k) {
+  if (!SUM_TABS.some(([x]) => x === k)) return;
+  sumTab = k;
+  localSet('sumTab', k);
+  segActive();
+  showSumTab();
+  emit('kt:page', page);
+}
+$('#sumSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setSumTab(b.dataset.sg); };
 $('#rangeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; range = b.dataset.r; localSet('range', range); segActive(); loadChart(); };
 $('#ovSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; overlays.has(b.dataset.o) ? overlays.delete(b.dataset.o) : overlays.add(b.dataset.o); localSet('overlays', [...overlays]); segActive(); drawChart(); };
 $('#lowSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; lower = b.dataset.l; localSet('lower', lower); segActive(); drawChart(); };

@@ -6,7 +6,7 @@ import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { WebSocketServer } from 'ws';
 import { ROOT, WEB_DIR, DATA_DIR, WORKSPACE_DIR, REPORTS_DIR } from './paths.js';
-import { db, getSettings, putSettings, restoreBackup, BACKUP_TABLES } from './db.js';
+import { db, getSettings, putSettings, restoreBackup, BACKUP_TABLES, cacheStats, cacheClear } from './db.js';
 import * as market from './market.js';
 import * as kap from './kap.js';
 import * as pf from './portfolio.js';
@@ -79,6 +79,28 @@ async function readBody(req, limit = 20 * 1024 * 1024) {
   return { text: raw };
 }
 
+// ── Hız sınırı ────────────────────────────────────────────
+// Uzak adres başına kayan pencere (sliding window). Yalnız /api/* sayılır: statik dosyalar ve
+// WebSocket (kalıcı bağlantı) dışarıda. Sınırlar gevşektir — tarayıcı + macOS WebView + birkaç sekme rahat geçer.
+const RATE = { api: 600, post: 120 }, RATE_WINDOW = 60_000;
+const rateHits = new Map(); // ip -> [tüm istekler, POST istekleri] (kayan pencereler)
+function rateLimited(ip, method) {
+  const now = Date.now();
+  let rec = rateHits.get(ip);
+  if (!rec) rateHits.set(ip, (rec = [[], []]));
+  const caps = [RATE.api, method === 'POST' ? RATE.post : Infinity];
+  let retry = 0;
+  rec.forEach((a, i) => {
+    while (a.length && now - a[0] > RATE_WINDOW) a.shift();
+    a.push(now);
+    const over = a.length - caps[i]; // >0 ise pencere aşıldı: en eski fazlalık kaydın düşmesi beklenir
+    if (over > 0) retry = Math.max(retry, RATE_WINDOW - (now - a[over - 1]));
+  });
+  return retry > 0 ? Math.max(1, Math.ceil(retry / 1000)) : 0;
+}
+// # ponytail: tek istemci hedefi (kendi makinem); paylaşımlı sunucuda IP yerine oturum/anahtar kovası kullan.
+setInterval(() => { const cut = Date.now() - RATE_WINDOW; for (const [ip, a] of rateHits) if (a[0][a[0].length - 1] < cut) rateHits.delete(ip); }, 5 * 60_000).unref();
+
 // ── Yönlendirme ───────────────────────────────────────────
 const routes = [];
 // limit: bu rotanın gövde üst sınırı (varsayılan 20 MB; yedek içe aktarımı 32 MB)
@@ -88,10 +110,13 @@ const route = (method, pattern, handler, limit = 20 * 1024 * 1024) => {
   routes.push({ method, re, keys, handler, limit });
 };
 
+const rowCount = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n; // t: dosya içi sabit tablo adı
 route('GET', '/api/health', async () => ({
   ok: true, version: VERSION, node: process.version, platform: `${os.platform()} ${os.arch()}`, uptimeSec: Math.round((Date.now() - startedAt) / 1000),
   pid: process.pid, dataDir: DATA_DIR, workspace: WORKSPACE_DIR, terminal: term.available(), claudeCli: await cliVersion('claude'), codexCli: await cliVersion('codex'), ompCli: await cliVersion('omp'),
   clients: wss?.clients.size || 0, runningSessions: agent.running.size, market: market.marketStatus(),
+  cache: cacheStats(), alerts: db.prepare('SELECT COUNT(*) AS n FROM alerts WHERE active = 1').get().n,
+  db: { transactions: rowCount('transactions'), watchlist: rowCount('watchlist'), symbols: rowCount('symbols'), alerts: rowCount('alerts'), schedules: rowCount('schedules'), chatSessions: rowCount('chat_sessions') },
   gateway: { daemon: gw.isDaemon(), pid: process.pid, startedAt: new Date(startedAt).toISOString(), port: PORT, reportPort: REPORT_PORT, activeSessions: agent.running.size, clients: wss?.clients.size || 0 },
 }));
 route('GET', '/api/meta', async () => ({
@@ -188,6 +213,7 @@ route('GET', '/api/research', async ({ q }) => research.list({
   q: q.get('q') || null, category: q.get('category') || null, scope: q.get('scope') || 'all', mine: q.get('mine') || null, limit: Number(q.get('limit') || 100), offset: Number(q.get('offset') || 0),
 }));
 route('POST', '/api/research/refresh', async () => { const d = await research.refresh(true); return { at: d.at, count: d.items.length, status: d.status }; });
+route('GET', '/api/research/consensus', async ({ q }) => research.consensus(q.get('symbol') || null));
 route('GET', '/api/research/file', async ({ q, res }) => {
   const { it, buf } = await research.fetchPdf(q.get('id'));
   send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=3600', 'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(`${it.title}.pdf`)}` });
@@ -314,7 +340,7 @@ route('GET', '/api/tool-audit', async ({ q }) => {
   return db.prepare('SELECT * FROM tool_audit ORDER BY id DESC LIMIT ?').all(limit);
 });
 route('POST', '/api/tool-audit/clear', async () => { db.exec('DELETE FROM tool_audit'); return { ok: true }; });
-route('POST', '/api/cache/clear', async () => { db.exec('DELETE FROM http_cache'); return { ok: true }; });
+route('POST', '/api/cache/clear', async () => { cacheClear(); return { ok: true }; });
 
 // ── Gateway: servis durumu, erişim anahtarı, yeniden başlatma ──
 // Servis modunda (BORSA_DAEMON=1) çıkış yeterli: launchd / systemd süreci yeniden başlatır. Elle modda kendini ayrık süreçle yeniden açar.
@@ -390,6 +416,9 @@ const server = http.createServer(async (req, res) => {
         req.scoped = pathname.startsWith('/api/tools/') ? verifyScopedToken(/^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1]) : null;
         if (!req.scoped) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
       }
+      // Gövde okunmadan sınır uygulanır: 429 alan istek indirmez
+      const wait = rateLimited(req.socket.remoteAddress || 'bilinmiyor', req.method);
+      if (wait) return send(res, 429, { error: 'Çok fazla istek' }, { 'Retry-After': String(wait) });
       for (const r of routes) {
         if (r.method !== req.method) continue;
         const m = r.re.exec(url.pathname);
@@ -507,23 +536,37 @@ function termBuffer(id) {
 
 // ── Periyodik işler: canlı fiyat, KAP ───────────────────
 let timers = [];
+// Gecikmeli tekrar: tur bittikten sonra sıradaki planlanır. setInterval yavaş ağda üst üste binerdi.
+function loop(fn, ms) {
+  let t, stopped = false;
+  const tick = async () => {
+    try { await fn(); } catch (e) { console.error('[döngü]', e.message); }
+    if (!stopped) t = setTimeout(tick, ms);
+  };
+  t = setTimeout(tick, ms);
+  return () => { stopped = true; clearTimeout(t); };
+}
 function restartTimers() {
-  timers.forEach(clearInterval);
+  timers.forEach((stop) => stop());
   const s = getSettings();
   timers = [
-    setInterval(pushQuotes, Math.max(5, Number(s.quoteRefreshSec) || 15) * 1000),
-    setInterval(pushKap, Math.max(60, Number(s.kapRefreshSec) || 120) * 1000),
-    setInterval(() => broadcast({ t: 'market', market: market.marketStatus() }), 60_000),
+    loop(pushQuotes, Math.max(5, Number(s.quoteRefreshSec) || 15) * 1000),
+    loop(pushKap, Math.max(60, Number(s.kapRefreshSec) || 120) * 1000),
+    loop(() => broadcast({ t: 'market', market: market.marketStatus() }), 60_000),
   ];
 }
 
 // Görüntülenen semboller de canlı akar: izleme listesinde olmayan hissenin fiyatı ekranda donmasın.
+// Seans kapısı: seans kapalıyken yalnız 7/24 işlem görenler (döviz, altın, Brent, kripto, S&P) tazelenir;
+// BIST hisseleri ve endeksleri atlanır, listede 7/24 sembol kalmazsa tur hiç çalışmaz.
 async function pushQuotes() {
   if (!wss.clients.size) return;
   try {
     const extra = new Set();
     for (const c of wss.clients) for (const s of c.subs || []) extra.add(s);
-    const syms = [...new Set([...store.watchlist(), ...market.OVERVIEW, ...extra])];
+    const open = market.marketStatus().open;
+    const syms = [...new Set([...store.watchlist(), ...market.OVERVIEW, ...extra])].filter((s) => open || !market.isBist(s));
+    if (!syms.length) return;
     const quotes = await market.getQuotes(syms);
     broadcast({ t: 'quotes', quotes });
   } catch (e) {

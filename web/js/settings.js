@@ -184,6 +184,10 @@ export function openSettings(section = 'genel') {
         + row(t('İzin modu'), t('Asistanın bir aracı kullanmadan önce ne zaman onay isteyeceği'), sel('sMode', Object.entries(state.meta.permissionModes).map(([k, v]) => [k, tx(v)]), s.permissionMode))
         + row(t('Ajana tam otomatik izin (yolo)'), t('Açıkken ajan hiçbir araç için onay istemez; seçilen süre dolunca kendiliğinden kapanır.'),
           `<span id="sYoloBadge"></span>${sel('sYoloDur', [[1800, t('30 dakika')], [7200, t('2 saat')], [0, t('Bu oturum')]], 1800)}${toggle('sYolo', yolo())}`, { wide: true })
+        + row(t('Günlük asistan maliyeti'), t('USD cinsinden günlük üst sınır. 0 = sınır yok, gösterge gizlenir.'),
+          `<span class="stg-path"><input id="sCostAmt" class="stg-w" type="number" min="0" step="1" placeholder="0" value="${Number(s.dailyCostLimit) > 0 ? Number(s.dailyCostLimit) : ''}"></span>`, { wide: true })
+        + row(t('Bütçe dolunca sohbeti kilitle'), t('Kapalıyken yalnız uyarılır; açıkken limit dolunca yeni tur gönderilemez.'),
+          `<span id="sCostWarn" class="stg-path">${toggle('sCostLimit', !!s.costLimitEnforce)}</span>`)
         + row(t('Çalışma alanı'), t('Asistanın kalıcı talimatları, becerileri ve bilgi dosyaları: {files}', { files: '<span class="mono">CLAUDE.md · .claude/skills · knowledge/</span>' }), `<span class="stg-path mono">${esc(h.workspace)}</span>`, { wide: true }));
       if ($('#sEffort').tagName === 'SELECT') $('#sEffort').onchange = (e) => save({ effort: e.target.value });
       else onSeg('sEffort', (v) => save({ effort: v }));
@@ -203,6 +207,11 @@ export function openSettings(section = 'genel') {
         } else await save({ permissionMode: 'default', yoloUntil: 0 });
         markYolo();
       };
+      // Günlük maliyet bütçesi: 0 = sınır yok (sohbette gösterge gizlenir), uyarı modu yalnız rozet.
+      const lockOn = () => { const l = $('#sCostLimit'); const w = $('#sCostWarn'); if (l && w) w.classList.toggle('off', !l.checked); };
+      lockOn();
+      $('#sCostLimit').onchange = (e) => { lockOn(); save({ costLimitEnforce: e.target.checked }); };
+      $('#sCostAmt').onchange = (e) => save({ dailyCostLimit: Math.max(0, Number(e.target.value) || 0) });
       markYolo();
     },
     async saglayici(el, stale, health) {
@@ -304,7 +313,7 @@ export function openSettings(section = 'genel') {
           row(t('Klasör izleme'), t('Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım, Deniz, Alnus raporları, e-posta ekleri) bu klasörden dakikada bir arşive alır. Yalnızca ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen ve son 30 günde inen PDF’ler kopyalanır; asıl dosyaya dokunulmaz.'), toggle('sInbox', !!s.inboxEnabled))
           + row(t('İzlenecek klasör'), t('Boş bırakılırsa ~/Downloads kullanılır'), `<input id="sInboxDir" class="stg-w" placeholder="${t('~/Downloads (varsayılan)')}" value="${esc(s.inboxDir || '')}">`, { id: 'sInboxRow' }),
           t('Kurum raporları için klasör izleme'))
-        + card(row(t('Yerel önbellek'), t('Geçmiş fiyat, temettü ve KAP önbelleği'), `<button class="btn sec" id="sCache">${t('Önbelleği temizle')}</button>`), t('Önbellek'))
+        + card(row(t('Yerel önbellek'), t('Geçmiş fiyat, temettü ve KAP önbelleği'), `<span class="stg-path mono" id="sCacheSize">${t('Hesaplanıyor…')}</span><button class="btn sec" id="sCache">${t('Önbelleği temizle')}</button>`), t('Önbellek'))
         + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>${t('Veri')}</th><th>${t('Kaynak')}</th><th class="r">${t('Gecikme')}</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
           <p class="stg-note">${t('Gecikme ve kaynak her fiyatın yanında da gösterilir.')}</p>`, t('Veri kaynakları'));
       const dimInbox = () => $('#sInboxRow').classList.toggle('off', !$('#sInbox').checked);
@@ -313,6 +322,11 @@ export function openSettings(section = 'genel') {
       $('#sKap').onchange = (e) => save({ kapRefreshSec: Number(e.target.value) });
       $('#sInbox').onchange = (e) => { dimInbox(); save({ inboxEnabled: e.target.checked }); };
       $('#sInboxDir').onchange = (e) => save({ inboxDir: e.target.value.trim() });
+      // Önbellek boyutu /api/health → cache alanından geliyor (sunucu tarafı eklendi).
+      api('/health').then((h) => {
+        const el = $('#sCacheSize');
+        if (el && h?.cache) el.textContent = `${h.cache.rows} ${t('kayıt')} · ${(h.cache.bytes / 1048576).toFixed(1)} MB`;
+      }).catch(() => { const el = $('#sCacheSize'); if (el) el.textContent = t('Bilinmiyor'); });
       $('#sCache').onclick = async () => { await api('/cache/clear', { method: 'POST', body: {} }); toast(t('Önbellek temizlendi'), 'ok'); };
     },
     // Gateway: sunucunun servis durumu ve yerel API erişim anahtarı
@@ -467,8 +481,9 @@ export function openSettings(section = 'genel') {
       const keys = (list) => list.map(([k, d]) => row(esc(d), '', k.map((x) => `<kbd>${esc(x)}</kbd>`).join(''), { sm: true })).join('');
       const cmds = (list) => `<div class="stg-cmds">${list.map(([c, d]) => `<code>${esc(c)}</code><span>${esc(d)}</span>`).join('')}</div>`;
       el.innerHTML = card(keys([
-        [['⌘K', 'Ctrl+K'], t('Sembol ara')], [['⌘1–4'], t('Piyasa · Portföy · Terminal · Raporlar')], [['⌘,'], t('Ayarlar')],
-        [['Enter'], t('Mesaj gönder')], [['Shift+Enter'], t('Yeni satır')], [['/'], t('Komut menüsü (sohbette)')], [['Esc'], t('Pencereyi kapat')],
+        [['⌘K', 'Ctrl+K'], t('Sembol ara')], [['⌘1–3'], t('Dashboard · kmy terminal · Portföy')],
+        [['⌘\\'], t('Sağ paneli aç/kapat')], [['⇧⌘\\'], t('KAP ↔ Raporlar')], [['⌘,'], t('Ayarlar')],
+        [['Enter'], t('Mesaj gönder')], [['Shift+Enter'], t('Yeni satır')], [['/'], t('Komut menüsü (sohbette)')], [['Esc'], t('Pencere, panel veya paleti kapat')],
         [[t('Sağ tık (izleme listesi)')], t('Grafik · asistan özeti · KAP · işlem ekle')],
       ]), t('Klavye kısayolları'))
         + card(cmds([

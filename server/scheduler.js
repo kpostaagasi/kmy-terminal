@@ -117,6 +117,9 @@ export async function checkAlerts(fire) {
 
   const open = market.marketStatus().open;
   const live = rows.filter((r) => (r.op === 'above' || r.op === 'below') && (open || !market.isBist(r.symbol)));
+  // Seans kapısı: seans dışında yalnız 7/24 semboller (döviz/altın) izlenir; temettü ve KAP eşikleri seansa kalır.
+  // İzlenecek 7/24 eşik yoksa tur hiç ağa çıkmaz.
+  if (!open && !live.length) return [];
   if (live.length) {
     const q = await market.getQuotes(live.map((r) => r.symbol));
     for (const r of live) {
@@ -126,14 +129,14 @@ export async function checkAlerts(fire) {
     }
   }
 
-  for (const r of rows.filter((x) => x.op === 'div')) {
+  for (const r of open ? rows.filter((x) => x.op === 'div') : []) {
     const d = await market.getDividends(r.symbol, '1y').catch(() => null);
     if (!d) continue;
     const since = Date.now() - 365 * 86400_000;
     latch(r, d.dividends.filter((x) => Date.parse(x.date) >= since).reduce((a, x) => a + (x.amount || 0), 0) >= r.value);
   }
 
-  const kapRows = rows.filter((x) => x.op === 'kap');
+  const kapRows = open ? rows.filter((x) => x.op === 'kap') : [];
   if (kapRows.length) {
     const { items } = await kap.recent(2).catch(() => ({ items: [] }));
     for (const r of kapRows) {

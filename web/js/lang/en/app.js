@@ -20,6 +20,19 @@ export default {
   'Sırala': 'Sort',
   'Sembol ekle: THYAO, USDTRY, GRAM…': 'Add symbol: THYAO, USDTRY, GRAM…',
   'Sembol ekle': 'Add symbol',
+  'BIST listesinden kaldırıldı': 'Delisted from BIST',
+  'son adı': 'last name',
+  'doğrulatın': 'verify',
+  '⚠ kaldırıldı': '⚠ delisted',
+  '{s} BIST listesinden kaldırıldı ({d}) — geçmiş veriler korunuyor, güncel fiyat yok.':
+    '{s} was delisted from BIST ({d}) — historical data is kept, there is no current price.',
+  '{s} sembolü {d} tarihinde BIST listesinden kaldırıldı ({n}). Yine de listeye eklensin mi?':
+    '{s} was delisted from BIST on {d} ({n}). Add it to the watchlist anyway?',
+  // watchlist.js'te 'kaldırırdı' yazım hatası var; düzeltilince bu anahtar silinecek
+  '{s} sembolü {d} tarihinde BIST listesinden kaldırırdı ({n}). Yine de listeye eklensin mi?':
+    '{s} was delisted from BIST on {d} ({n}). Add it to the watchlist anyway?',
+  '{s} sembolü BIST listesinde bulunamadı — kod yanlış yazılmış olabilir. Yine de listeye eklensin mi?':
+    '{s} was not found on BIST — the code may be mistyped. Add it to the watchlist anyway?',
   'Veri kaynakları': 'Data sources',
   'BIST hisse ve endeksleri: yaklaşık 15 dk gecikmeli (Yahoo)': 'BIST stocks and indices: delayed about 15 min (Yahoo)',
   'Döviz ve altın: serbest piyasa, yaklaşık 1 dk (Truncgil)': 'FX and gold: free market, about 1 min (Truncgil)',
@@ -31,6 +44,7 @@ export default {
   'Raporlar': 'Reports',
   'PDF sekmesini kapat': 'Close PDF tab',
   'Paneli kapat': 'Close panel',
+  'Sağ panel': 'Side panel',
 
   // app.js
   'Kurum raporu arşive eklendi: {items}': 'Broker report added to the archive: {items}',
@@ -76,4 +90,25 @@ export default {
   'Gateway aktif': 'Gateway active',
   'Bağlantı yok': 'Disconnected',
   'kmy terminal v{v} · Veri: KAP, Yahoo Finance, TCMB, İş Yatırım': 'kmy terminal v{v} · Data: KAP, Yahoo Finance, TCMB, İş Yatırım',
+  'Portföyümü değerlendir: performans, risk metrikleri, yoğunlaşma, en güçlü ve en zayıf pozisyonlar. Kısa ve maddeli.': 'Evaluate my portfolio: performance, risk metrics, concentration, strongest and weakest positions. Short and bulleted.',
+  'BIST taraması: F/K ≤ 8': 'BIST scan: P/E ≤ 8',
+  'Günün piyasa özeti': 'Market summary for today',
+  'Portföy risk sekmesi': 'Portfolio risk tab',
+  'Tema değiştir': 'Toggle theme',
+  'Sekme: Sohbet': 'Tab: Chat',
+  'Sekme: Piyasa': 'Tab: Market',
+  'Sekme: Portföy': 'Tab: Portfolio',
+  'Yeni ajan oturumu': 'New agent session',
+  'Sağ panel aç/kapat': 'Toggle side panel',
+  'Hisse, endeks, döviz veya şirket ara… (komut için > yazın)': 'Search stock, index, currency or company… (type > for commands)',
+  'Piyasa özeti alınamadı: {e}': 'Could not load the market summary: {e}',
+  'Kurumların hedef fiyat ve tavsiye konsensüsü': 'Broker target price and rating consensus',
+  'Konsensüs': 'Consensus',
+  'Başlık veya özette ara…': 'Search title or summary…',
+  'Akışta ara': 'Search the feed',
+  'Sembol (boşsa fırsat listesi)': 'Symbol (blank shows the opportunity list)',
+  'muhtemel yeni kod': 'possible new code',
+  'Yine de ekle': 'Add anyway',
+  'Komutlar': 'Commands',
+  'Komut': 'Command',
 };

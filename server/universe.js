@@ -7,7 +7,7 @@
 //   - Sermaye artırımları ve temettüler (geçmiş + ilan edilmiş gelecek tarihler)
 //   - BIST 100 / BIST 30 üyelikleri
 import { cacheGet, cachePut } from './db.js';
-import { trScore } from './fold.js';
+import { trFold, trScore } from './fold.js';
 
 const URL = 'https://www.isyatirim.com.tr/tr-tr/analiz/hisse/Sayfalar/Temel-Degerler-Ve-Oranlar.aspx';
 const TTL = 12 * 3600_000;
@@ -81,6 +81,58 @@ function membersOf(html) {
   return basic ? basic.rows.map((r) => r[0]) : [];
 }
 
+// ── Evren yaşam döngüsü: giren ve çıkan semboller ───────────
+// Evrenden silme yok. Bir sembol listeden düşse de verileri (işlem, izleme listesi, fiyat geçmişi)
+// sembole bağlıdır; kaldırma yalnız işaretlenir. Sembol yeniden listeye girerse işaret kalkar.
+// # ponytail: `first` yalnız bu dosya çalıştığından sonra eklenenleri bilir; geçmişe dönük veri yok.
+const DAY = 86400_000;
+const RECENT = 90 * DAY;
+const life = cacheGet('isy:life', 3650 * DAY) || { first: {}, delisted: {} };
+
+const isoDay = (ms) => (ms ? new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' }) : null);
+
+// Önceki listede olup şimdi olmayan semboller "kaldırıldı" olur; adı ve son görülme tarihi saklanır.
+function trackLife(stocks, prevStocks, prevAt) {
+  const now = Date.now();
+  for (const c of Object.keys(stocks)) if (!life.first[c]) life.first[c] = now;
+  for (const [c, s] of Object.entries(prevStocks || {})) {
+    if (stocks[c]) { delete life.delisted[c]; continue; }
+    if (!life.delisted[c]) life.delisted[c] = { code: c, name: s.name || null, lastSeen: prevAt || now, removedAt: now, firstSeen: life.first[c] || null };
+  }
+  cachePut('isy:life', life);
+}
+
+// Kod değişikliği / birleşme eşlemesi veri kaynağında yok. Yalnız eski adıyla evrendeki bir adın
+// örtüştüğü kod varsa "muhtemel değişiklik" olarak önerilir; eşleme uydurulmaz, kullanıcı doğrular.
+function renameCandidates(code) {
+  const d = life.delisted[code];
+  if (!d?.name) return [];
+  const base = trFold(d.name).replace(/\s*\(.*$/, '').trim();
+  if (base.length < 3) return [];
+  return Object.values(mem?.stocks || {})
+    .filter((s) => { const n = trFold(s.name); return n === base || n.startsWith(base); })
+    .slice(0, 3)
+    .map((s) => ({ symbol: s.code, name: s.name }));
+}
+
+export const isReady = () => !!mem;
+
+// Tek doğrulama noktası: arama, portföy ve izleme listesi aynı cevabı kullanır.
+// status: listed | delisted | unknown
+export function checkCode(code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return { code: c, status: 'empty' };
+  ensure();
+  const s = mem?.stocks?.[c];
+  if (s) return { code: c, status: 'listed', name: s.name };
+  const d = life.delisted[c];
+  const candidates = d ? renameCandidates(c) : [];
+  const message = d
+    ? `${c} sembolü ${isoDay(d.removedAt)} tarihinde BIST listesinden kaldırıldı (son adı: ${d.name || 'bilinmiyor'}).${candidates.length ? ` Muhtemel yeni kod: ${candidates.map((x) => x.symbol).join(', ')} — doğrulayın.` : ''}`
+    : `${c} sembolü BIST listesinde yok — kaldırıldı, kod değişti ya da yanlış yazıldı.`;
+  return { code: c, status: d ? 'delisted' : 'unknown', name: d?.name || null, lastSeen: isoDay(d?.lastSeen), removedAt: isoDay(d?.removedAt), candidates, confirm: candidates.length > 0, message };
+}
+
 // ── Bellek + kalıcı önbellek ─────────────────────────────
 let mem = cacheGet('isy:all', 30 * 86400_000); // eski de olsa başlangıçta kullan
 let idx = cacheGet('isy:idx', 30 * 86400_000);
@@ -95,9 +147,11 @@ export async function refresh(force = false) {
       const [all, b100, b30] = await Promise.all([fetchPage('09'), fetchPage('01'), fetchPage('03')]);
       const parsed = parseAll(all);
       const m100 = membersOf(b100), m30 = membersOf(b30);
+      const prev = mem;
       mem = { ...parsed, at: Date.now() };
       fetchedAt = mem.at;
       cachePut('isy:all', mem);
+      trackLife(parsed.stocks, prev?.stocks, prev?.at);
       if (m100.length >= 95 && m30.length >= 28) { idx = { bist100: m100, bist30: m30, at: Date.now() }; cachePut('isy:idx', idx); }
     } catch (e) {
       console.error('[iş yatırım]', e.message);
@@ -115,7 +169,21 @@ function ensure() { if (!mem || Date.now() - fetchedAt > TTL) refresh().catch(()
 
 export function stock(code) { ensure(); return mem?.stocks?.[code] || null; }
 export function allStocks() { ensure(); return mem ? Object.values(mem.stocks) : []; }
-export function status() { return { at: mem?.at || null, stocks: mem ? Object.keys(mem.stocks).length : 0, actions: mem?.actions?.length || 0, indexAt: idx?.at || null }; }
+// total: evrendeki + kaldırılmış toplam · delisted/added: son 90 gün · delistedList: kaldırılan kodlar
+export function status() {
+  const now = Date.now();
+  const del = Object.values(life.delisted);
+  const live = mem ? Object.keys(mem.stocks) : [];
+  return {
+    at: mem?.at || null, stocks: live.length, actions: mem?.actions?.length || 0, indexAt: idx?.at || null,
+    lastRefresh: isoDay(mem?.at) || null,
+    total: live.length + del.length,
+    delisted: del.filter((d) => now - d.removedAt <= RECENT).length,
+    added: live.filter((c) => now - life.first[c] <= RECENT).length,
+    delistedList: del.map((d) => ({ code: d.code, name: d.name, lastSeen: isoDay(d.lastSeen), removedAt: isoDay(d.removedAt), candidates: renameCandidates(d.code) })),
+    codes: live, // izleme listesi ekleme denetimi: evrende olmayan kod uyarılır
+  };
+}
 
 export async function bist100() {
   if (!idx) await refresh();
@@ -144,7 +212,14 @@ export function searchLocal(q, limit = 10) {
     const score = trScore(s.code, s.name, q);
     if (score) out.push({ ...s, score });
   }
-  return out.sort((a, b) => b.score - a.score || (b.mcapTL || 0) - (a.mcapTL || 0)).slice(0, limit);
+  out.sort((a, b) => b.score - a.score || (b.mcapTL || 0) - (a.mcapTL || 0));
+  // Kod biçiminde bir sorgu evrende hiç eşleşmediyse boş liste döndürmüyoruz: kaldırılmış ya da yanlış
+  // yazılmış kod en azından uyarı olarak görünür. 4-6 karakter sınırı TEFAS fon kodlarını (3 harf) dışarıda bırakır.
+  if (!out.length && /^[A-Z0-9]{4,6}$/.test(String(q || '').trim().toUpperCase())) {
+    const w = checkCode(q);
+    if (w.status !== 'listed') out.push({ code: w.code, name: w.message, sector: null, score: 0.5, warn: true, delisted: w.status === 'delisted', candidates: w.candidates });
+  }
+  return out.slice(0, limit);
 }
 
 // İlk açılışta arka planda yükle

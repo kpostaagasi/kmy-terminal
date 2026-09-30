@@ -97,24 +97,56 @@ export function srcTag(q) {
   return q.delayed ? `<span class="delay-tag" title="${esc(t('{src} · yaklaşık 15 dk gecikmeli · {time}', { src: q.source || '', time: timeTR(q.time) }))}">${t('15 dk')}</span>` : '';
 }
 
+// ── Odak yönetimi (modal · sağ tık menüsü) ────────
+// Sekilebilir öğeler; gizli olanlar (görünür kutu yok) elenir
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const focusables = (root) => $$(FOCUSABLE, root).filter((el) => el.getClientRects().length);
+// Modal açıkken arka plan sekmelenebilir ve tıklanabilir olmasın
+function setBgInert(on) {
+  for (const el of document.body.children) if (el.id !== 'modalRoot') el.inert = on;
+}
+function restoreFocus(el) {
+  if (el?.isConnected && el.focus) { el.focus(); return; }
+  document.body.tabIndex = -1; // gövde odak alabilsin
+  document.body.focus();
+}
+
 // Basit sağ tık menüsü
 export function contextMenu(x, y, items) {
   document.querySelector('.ctx-menu')?.remove();
   const m = h(`<div class="ctx-menu" role="menu"></div>`);
+  const prevFocus = document.activeElement;
   for (const it of items) {
     if (it === '-') { m.append(h('<hr>')); continue; }
     const b = h(`<button role="menuitem"></button>`);
     b.textContent = it.label;
-    b.onclick = () => { m.remove(); it.run(); };
+    b.onclick = () => { end(); it.run(); };
     m.append(b);
   }
   document.body.append(m);
   const r = m.getBoundingClientRect();
   m.style.left = `${Math.min(x, innerWidth - r.width - 8)}px`;
   m.style.top = `${Math.min(y, innerHeight - r.height - 8)}px`;
-  const close = (e) => { if (!m.contains(e.target)) { m.remove(); removeEventListener('mousedown', close, true); } };
-  setTimeout(() => addEventListener('mousedown', close, true));
-  addEventListener('keydown', function k(e) { if (e.key === 'Escape') { m.remove(); removeEventListener('keydown', k); } });
+  function end() {
+    if (!m.isConnected) return;
+    m.remove();
+    removeEventListener('mousedown', onDown, true);
+    removeEventListener('keydown', onKey);
+    restoreFocus(prevFocus);
+  }
+  const onDown = (e) => { if (!m.contains(e.target)) end(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); end(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables(m);
+    if (!f.length) return;
+    e.preventDefault();
+    const i = f.indexOf(document.activeElement);
+    f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  };
+  setTimeout(() => addEventListener('mousedown', onDown, true));
+  addEventListener('keydown', onKey);
+  focusables(m)[0]?.focus();
 }
 
 export function today() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' }); }
@@ -139,13 +171,35 @@ export function modal({ title, body, footer = '', wide = false, onClose }) {
     <div class="body"></div>${footer ? `<footer>${footer}</footer>` : ''}</div></div>`);
   const bodyEl = $('.body', back);
   if (typeof body === 'string') bodyEl.innerHTML = body; else if (body) bodyEl.append(body);
-  const close = (silent = false) => { if (!back.isConnected) return; back.remove(); document.removeEventListener('keydown', onKey); if (!silent) onClose?.(); };
-  // Yalnızca en üstteki pencere Esc ile kapanır
-  const onKey = (e) => { if (e.key === 'Escape' && $('#modalRoot').lastElementChild === back) { e.stopPropagation(); close(); } };
+  const prevFocus = document.activeElement;
+  const close = (silent = false) => {
+    if (!back.isConnected) return;
+    back.remove();
+    document.removeEventListener('keydown', onKey);
+    if (!$('#modalRoot').children.length) setBgInert(false);
+    restoreFocus(prevFocus);
+    if (!silent) onClose?.();
+  };
+  // Yalnızca en üstteki pencere Esc ve Tab tuzağını tutar
+  const onKey = (e) => {
+    if ($('#modalRoot').lastElementChild !== back) return;
+    if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables(back);
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && (i < 0 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+  };
   back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
   $$('[data-close]', back).forEach((b) => b.addEventListener('click', close));
   document.addEventListener('keydown', onKey);
   $('#modalRoot').append(back);
+  setBgInert(true);
+  // Odak: gövdedeki ilk alana, yoksa başlıktaki kapatma düğmesine
+  const first = focusables(bodyEl)[0] || $('[data-close]', back);
+  if (first) first.focus();
+  else { $('.modal', back).tabIndex = -1; $('.modal', back).focus(); }
   return { el: back, body: bodyEl, close };
 }
 

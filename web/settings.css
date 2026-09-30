@@ -230,3 +230,18 @@
 .cm-yolo { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border: 1px solid color-mix(in srgb, var(--down) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--down) 14%, transparent); color: var(--down); font: 600 10.5px var(--mono); letter-spacing: .03em; cursor: pointer; white-space: nowrap; }
 .cm-yolo:hover { background: color-mix(in srgb, var(--down) 24%, transparent); }
 .cm-yolo[hidden] { display: none; }
+
+/* ── Renk körlüğü: yükselen/düşen ayrımı için renk dışı kanal ────
+   BIST'te kırmızı/yeşil zorunlu; .up/.down tek başına renkten ibaret. Sayısal
+   hücrelerde yönü alt çizgi (yukarı) / üst çizgi (aşağı) ile ver: işaret zaten
+   var olan +/− ile ikinci bir renkten bağımsız kanaldır, genişlik ve düzen değiştirmez.
+
+   ponytail: .pill.up/.pill.down ve ✓/✗ kapsam dışı — metinleri zaten ayırt ediyor.
+   Genel bir `.up::after { content:'↑' }` kuralı YANLIŞ olurdu: .up/.down yalnız fiyat
+   hareketi değil, ⚠ uyarıları, ✓/✗ durum işaretleri ve fon primi (v<0 → 'up') de
+   kullanıyor; ok ters yönde görünürdü. Gerçek ok işareti gerekiyorsa ilgili JS
+   (market-view.js radar/primer fiyatları) metne eklemeli. */
+@media (prefers-contrast: more), (forced-colors: active) {
+  .num.up { text-decoration: underline; text-underline-offset: 2px; }
+  .num.down { text-decoration: overline; text-underline-offset: 2px; }
+}
