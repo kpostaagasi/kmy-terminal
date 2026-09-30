@@ -111,5 +111,20 @@ const s2 = await pf.summary();
 const stale = s2.audit.find((a) => a.code === 'stale_price');
 check('Denetim: eski fiyatlı TEFAS fonu → stale_price uyarısı', !!stale && /ZZF/.test(stale.detail), stale?.detail || '(yok)');
 
+// ── FAVÖK taban satırı (0.16.1) ────────────────────────────────────────────
+// FAVÖK, "Esas Faaliyet Karı" (3DF) üzerine değil "Net Faaliyet Kar/Zararı" (3H, finansman öncesi)
+// üzerine kurulur: 3DF, "Diğer Faaliyet Gelir/Giderleri"ni (3DD−3DE) düştüğü için FAVÖK ~%5 eksik çıkardı.
+// TUPRS 2026/6 kanıtı: 3H 62.373.927.000 + 4B 8.872.312.000 = 71.246.239.000 (kaynakla birebir).
+const ebitdaOf = (r) => (r.ebitdaBase ?? r.operatingProfit) == null || r.depreciation == null ? null : (r.ebitdaBase ?? r.operatingProfit) + r.depreciation;
+check('FAVÖK finansman öncesi tabandan kurulur (3H + amortisman)',
+  ebitdaOf({ ebitdaBase: 62373927000, operatingProfit: 59025224000, depreciation: 8872312000 }) === 71246239000, '71.246.239.000');
+check('Eski önbellek (ebitdaBase yok) 3DF tabanına düşer, değer kaybolmaz',
+  ebitdaOf({ operatingProfit: 59025224000, depreciation: 8872312000 }) === 67897536000, '67.897.536.000');
+check('Amortisman yoksa FAVÖK null — uydurma sayı üretilmiyor',
+  ebitdaOf({ ebitdaBase: 62373927000, depreciation: null }) === null, '');
+const e3h = ebitdaOf({ ebitdaBase: 62373927000, operatingProfit: 59025224000, depreciation: 8872312000 });
+const e3df = ebitdaOf({ operatingProfit: 59025224000, depreciation: 8872312000 });
+check('3H tabanı 3DF tabanından ~%4,9 yüksek', Math.abs(e3h / e3df - 1 - 0.049) < 0.002, `%${((e3h / e3df - 1) * 100).toFixed(2)}`);
+
 console.log(`\n${fail === 0 ? 'TAMAMI GEÇTİ' : 'BAŞARISIZ'}: ${pass} geçti, ${fail} kaldı`);
 process.exit(fail === 0 ? 0 : 1);

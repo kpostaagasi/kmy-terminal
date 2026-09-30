@@ -838,7 +838,10 @@ function drawFin() {
   const lines = f.type === 'banka'
     ? [[t('Net faiz geliri'), 'netInterest'], [t('Net ücret ve komisyon'), 'fees'], [t('Kredi karşılıkları'), 'provisions'], [t('Net faaliyet kârı'), 'operatingProfit'], [t('Net kâr'), 'netIncome', true]]
     : [[t('Hasılat'), 'sales'], [t('Brüt kâr'), 'grossProfit'], [t('FAVÖK'), 'ebitda'], [t('Faaliyet kârı'), 'operatingProfit'], [t('Net kâr (ana ortaklık)'), 'netIncome', true], [t('İşletme nakit akışı'), 'opCashFlow']];
-  const margin = f.type === 'banka' ? [] : [[t('Brüt marj'), (r) => pctOf(r.grossProfit, r.sales)], [t('FAVÖK marjı'), (r) => pctOf(r.ebitda ?? (r.operatingProfit != null && r.depreciation != null ? r.operatingProfit + r.depreciation : null), r.sales)], [t('Net marj'), (r) => pctOf(r.netIncome, r.sales)]];
+  // FAVÖK marjı: sunucu ebitda'yı 3H (finansman öncesi) tabanından hesaplar; eski önbellekte
+  // ebitda yoksa aynı formülü istemcide kuruyoruz (ebitdaBase da yoksa 3DF tabanı).
+  const ebitda = (r) => r.ebitda ?? ((r.ebitdaBase ?? r.operatingProfit) != null && r.depreciation != null ? (r.ebitdaBase ?? r.operatingProfit) + r.depreciation : null);
+  const margin = f.type === 'banka' ? [] : [[t('Brüt marj'), (r) => pctOf(r.grossProfit, r.sales)], [t('FAVÖK marjı'), (r) => pctOf(ebitda(r), r.sales)], [t('Net marj'), (r) => pctOf(r.netIncome, r.sales)]];
   const bal = f.cumulative.slice(0, 8);
   const balLines = f.type === 'banka' ? [[t('Krediler'), 'loans'], [t('Mevduat'), 'deposits'], [t('Özkaynak'), 'equity'], [t('Toplam varlık'), 'totalAssets']]
     : [[t('Dönen varlıklar'), 'currentAssets'], [t('Kısa vadeli yükümlülükler'), 'currentLiabilities'], [t('Net borç'), 'netDebt'], [t('Özkaynak (ana ortaklık)'), 'equity'], [t('Toplam varlık'), 'totalAssets'], [t('Net döviz pozisyonu'), 'netFx']];
