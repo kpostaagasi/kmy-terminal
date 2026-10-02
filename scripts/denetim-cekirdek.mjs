@@ -25,8 +25,23 @@ export async function guard(fn) {
 /** Ons ($) × USDTRY ÷ 31,1035 = gram altın (TL). Girdi eksikse null. */
 export const gramRef = (onsUsd, usdTry) => (sayi(onsUsd) && sayi(usdTry) ? (onsUsd * usdTry) / ONS_GRAM : null);
 
+/** Gram altın ↔ ons × kur. Truncgil yokken uygulama Yahoo vadeli yedeğini kullanır; aynı formülü kendisiyle karşılaştırmak anlamsızdır. */
+export function gramKarar(gramQ, onsQ, usdQ) {
+  if (/vadeli/.test(gramQ?.source || '')) return { durum: 'ATLANDI', neden: 'yedek kaynak (Truncgil yok)', app: gramQ.price ?? null, ref: null };
+  return karsilastir(gramQ?.price, gramRef(onsQ?.price, usdQ?.price), TOLERANS.gram);
+}
+
+// ponytail: yalnız hafta sonu/pazartesi; resmî tatilden sonraki gün için holidayOf gerekir.
+/** Döviz ↔ TCMB. TCMB kuru önceki iş günü 15:30'da belirlenir; pazar ve pazartesi sabahı sapma doğal olarak büyür. */
+export function fxKarar({ app, ref, simdi = new Date() }) {
+  const gun = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', weekday: 'short' }).format(simdi);
+  if (gun === 'Sun' || gun === 'Mon') return { durum: 'ATLANDI', neden: 'TCMB kuru önceki iş gününe ait (pazar/pazartesi)', app: app ?? null, ref: ref ?? null };
+  return karsilastir(app, ref, TOLERANS.fx);
+}
+
 /** BIST fiyatı: seans açıkken İş Yatırım kapanışıyla karşılaştırılamaz. */
-export function hisseKarar({ app, ref, seansAcik }) {
+export function hisseKarar({ app, ref, seansAcik, isyTaze = true }) {
+  if (!isyTaze) return { durum: 'ATLANDI', neden: 'İş Yatırım verisi tazelenemedi (eski önbellek)', app: app ?? null, ref: ref ?? null };
   if (seansAcik) return { durum: 'ATLANDI', neden: 'seans açık; kapanış değeri karşılaştırılamaz', app: app ?? null, ref: ref ?? null };
   return karsilastir(app, ref, TOLERANS.hisse);
 }
@@ -34,10 +49,20 @@ export function hisseKarar({ app, ref, seansAcik }) {
 /** Fiyat nesnesinin gecikme etiketi ve (verildiyse) yaşı beklentiye uyuyor mu? */
 export function etiketKarar(q, beklenenGecikmeli, maxYasMs = null, simdi = Date.now()) {
   if (!q) return { durum: 'ATLANDI', neden: 'fiyat yok' };
+  if (!beklenenGecikmeli && /vadeli/.test(q.source || '')) return { durum: 'ATLANDI', neden: 'yedek kaynak (Truncgil yok)' };
   if (Boolean(q.delayed) !== beklenenGecikmeli) return { durum: 'SAPMA', neden: `delayed=${Boolean(q.delayed)}, beklenen ${beklenenGecikmeli}` };
   const yas = simdi - q.time;
   if (maxYasMs != null && sayi(yas) && yas > maxYasMs) return { durum: 'SAPMA', neden: `veri ${Math.round(yas / 60_000)} dk eski` };
   return { durum: 'OK' };
+}
+
+/** "6/2026" ve "2026/6" biçimlerini "2026/6"ya çevirir; tanınmazsa null. */
+export function donemAnahtar(p) {
+  const m = /^(\d{1,4})\D(\d{1,4})$/.exec(String(p ?? '').trim());
+  if (!m) return null;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  const [y, mo] = a > 12 ? [a, b] : [b, a];
+  return `${y}/${mo}`;
 }
 
 /** Mali tablo ham satırlarından FAVÖK / net kâr / F/K'yı yeniden hesaplayıp uygulamanınkiyle karşılaştırır. */
@@ -53,7 +78,9 @@ export function temelKarar(f, st) {
   const q4 = (f.quarterly || []).slice(0, 4).map((q) => q.netIncome);
   const ttm = q4.length === 4 && q4.every(sayi) ? q4.reduce((a, b) => a + b, 0) : null;
   if (ttm == null || ttm <= 0 || !sayi(st?.mcapTL)) out.push({ ad: 'F/K', durum: 'ATLANDI', neden: '12 aylık net kâr veya piyasa değeri yok/≤0' });
-  else {
+  else if (donemAnahtar(st.period) && donemAnahtar(f.latest) && donemAnahtar(st.period) !== donemAnahtar(f.latest)) {
+    out.push({ ad: 'F/K', durum: 'ATLANDI', neden: `dönem uyuşmuyor: ${st.period} ↔ ${f.latest}` });
+  } else {
     // İş Yatırım F/K'yı 1 ondalığa yuvarlar (±0,05); düşük çarpanda bu tek başına %2'yi bulur.
     const ref = st.mcapTL / ttm;
     out.push({ ad: 'F/K', ...karsilastir(st.pe, ref, TOLERANS.oran + (0.05 / ref) * 100), neden: `dönem ${st.period ?? '?'} ↔ ${f.latest ?? '?'}` });

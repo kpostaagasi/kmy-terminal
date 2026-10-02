@@ -48,20 +48,23 @@ const fiyat = (s) => q[s]?.price;
 const tcmb = await tcmbRates().catch(() => null);
 const tcmbOrta = (kod) => { const r = tcmb?.rates?.[kod]; return r ? (r.forexBuying + r.forexSelling) / 2 : null; };
 for (const [s, kod] of [['USDTRY', 'USD'], ['EURTRY', 'EUR']]) {
-  await dene('Döviz', s, async () => K.karsilastir(fiyat(s), tcmbOrta(kod), K.TOLERANS.fx));
+  await dene('Döviz', s, async () => K.fxKarar({ app: fiyat(s), ref: tcmbOrta(kod) }));
 }
 
 // Altın: ons × kur ÷ 31,1035 ve geleneksel altınların saf gram karşılığı.
 const gram = K.gramRef(fiyat('ONS'), fiyat('USDTRY'));
-await dene('Altın', 'GRAM', async () => K.karsilastir(fiyat('GRAM'), gram, K.TOLERANS.gram));
+await dene('Altın', 'GRAM', async () => K.gramKarar(q.GRAM, q.ONS, q.USDTRY));
 for (const s of Object.keys(K.SAF_GR)) {
   await dene('Altın türü', s, async () => K.karsilastir(fiyat(s), gram == null ? null : gram * K.SAF_GR[s], K.TOLERANS.altinTuru));
 }
 
 // Hisse: Yahoo (uygulama) ↔ İş Yatırım kapanışı.
-await universe.refresh().catch(() => {});
+// İş Yatırım verisi zorla tazelenir: veritabanı kopyasındaki eski önbellek (gün içi kapanış) yalancı SAPMA üretirdi.
+const basla = Date.now();
+await universe.refresh(true).catch(() => {});
+const isyTaze = (universe.status().at ?? 0) >= basla;
 for (const s of HISSELER) {
-  await dene('Hisse', s, async () => K.hisseKarar({ app: fiyat(s), ref: universe.stock(s)?.close, seansAcik: seans.open }));
+  await dene('Hisse', s, async () => K.hisseKarar({ app: fiyat(s), ref: universe.stock(s)?.close, seansAcik: seans.open, isyTaze }));
 }
 
 // TEFAS: uygulamanın fiyatı ↔ TEFAS API'sinden doğrudan çekilen son fiyat.
@@ -89,7 +92,7 @@ for (const s of FONLAR) await dene('Tazelik', s, async () => K.etiketKarar(q[s],
 for (const s of ['TUPRS', 'THYAO', 'ASELS', 'GARAN']) {
   let f;
   try { f = await financials(s, 8); } catch (e) { ekle('Temel', s, { durum: 'ATLANDI', neden: e.message }); continue; }
-  for (const r of K.temelKarar(f, universe.stock(s))) ekle('Temel', `${s} ${r.ad}`, r);
+  for (const r of K.temelKarar(f, isyTaze ? universe.stock(s) : null)) ekle('Temel', `${s} ${r.ad}`, r);
 }
 
 // Portföy: toplamlar bileşenlerden yeniden toplanır (gerçek veritabanının kopyasında).
