@@ -1,5 +1,23 @@
 # Sürüm Notları
 
+## 0.19.0 — 2 Ekim 2026 (takvim sayfası)
+
+### Yeni
+- **TAKVİM sayfası** (terminal › `#/pazar/takvim`, komut `TAKVIM` / `CAL`, ana sayfada yeni kart). Temettü ve sermaye artırımı, TCMB günleri ve bilanço sezonu tek listede, gün gün ("Son günler / Bugün / Yarın / Bu hafta / Daha sonra"). Kapsam: Listem / Portföyüm / Tümü (seçim hatırlanır; hiç seçilmediyse portföy, boşsa liste); tür süzgeçleri: Temettü · Sermaye artırımı · TCMB · Bilanço. Her satırda **KESİN** ya da **TAHMİNİ** etiketi; tahmininin ipucu gerekçeyi taşır. Piyasa özetindeki Temettü takvimi paneli yerinde kalır, "Tüm takvim →" bağlantısı eklendi. `GET /api/calendar?scope=&from=&to=&kinds=`.
+- **TCMB takvimi** tcmb.gov.tr'deki resmî tablodan hücre bazlı okunur: PPK karar günü, toplantı özeti, Enflasyon Raporu, Finansal İstikrar Raporu (2026 ve 2027 Haziran'a kadar). Günde bir çekilir. Sayfa biçimi değişirse (sütun adı, 8'den az PPK tarihi) **hata verir, sessizce boş takvim göstermez**; çekilemezse son başarılı kayıt "eski" işaretiyle kullanılır.
+- **Bilanço sezonu** (yalnız Listem ve Portföyüm; KAP istek sınırı nedeniyle): açıklanan dönem **kesin** ve gerçek tarihiyle; açıklanmayan dönem için iki **tahmini** satır: "bekleniyor" (geçen yıl aynı dönemin açıklama günü, hafta sonuna denk gelirse önceki iş günü, 29 Şubat → 28 Şubat) ve "yasal son teslim" (dönem sonu + SPK II-14.1 süresi: 3 ve 9 aylık 30/40, 6 aylık 50/60, yıllık 60/70 gün, solo/konsolide; hafta sonu → pazartesi; resmî tatil hesaba katılmaz). Konsolide olup olmadığı KAP başlıklarından anlaşılır, bilinmiyorsa konsolide süre varsayılır ve belirtilir. Tümü kapsamında hisse bazlı değil, yalnız sembolsüz sezon son teslimi gösterilir.
+- **Doğruluk kanıtı:** portföy ve listedeki 8 hissede KAP'ın gerçek açıklama tarihleri hesaplanan yasal son teslimle karşılaştırıldı: 32 gözlemin **hiçbiri** son teslimi aşmadı; BIMAS üç dönemde tam son teslim gününde açıkladı (11 Kasım 2025, 11 Mart, 11 Mayıs 2026), bu da 40 ve 70 günlük konsolide sürelerini doğruluyor.
+- `server/takvim.js` (saf kurallar) için 80 çevrimdışı kontrol (`test/takvim.test.mjs`, gerçek TCMB tablosunun kopyasıyla), `npm test` zincirinde.
+
+### Düzeltilen
+- **KAP'ta yıllar sonra gelen düzeltme kayıtları ilk açıklama sayılıyordu.** 8 hissenin 5'inde `2025/1` dönemi için 2026'da (ASELS 25 Eylül, GARAN 11 Haziran, FROTO 1 Nisan, EREGL 17 Şubat, KCHOL 5 Ağustos) yayımlanmış finansal rapor kaydı var; bunlar yeniden sunum/düzeltmedir. Süzülmeseydi "geçen yılın tarihi" yanlış olabilirdi: yasal son teslimden 90 günden fazla sonra gelen kayıtlar artık atılıyor.
+
+### Bilinen
+- Bilanço tarihleri tahmindir (geçen yılın günü ve yasal süre); resmî tatiller hesaba katılmaz. Açıklanmış dönemler kesindir.
+- Temettü satırındaki "Tarih", İş Yatırım tablosundaki tek "Tarih" sütunudur; hak kullanım mı ödeme mi olduğu kaynakta belirtilmemiştir.
+- KAP şirket sorgusu 365 gün ile sınırlı olduğundan geçen yıl kaydı yalnız son 365 günde varsa "bekleniyor" satırı üretilir; yoksa yalnız yasal son teslim görünür.
+- Takvim pencerede ve günlük çözünürlüktedir (saat bilgisi yok); TÜFE açıklama günü, hatırlatıcı ve .ics dışa aktarma bu sürümde yoktur.
+
 ## 0.18.0 — 2 Ekim 2026 (sinyal bildirimi)
 
 ### Yeni
