@@ -1,5 +1,21 @@
 # Sürüm Notları
 
+## 0.20.0 — 2 Ekim 2026 (veri sağlığı rozeti)
+
+### Yeni
+- **Durum çubuğunda "VERİ" rozeti.** `npm run denetim`'in çapraz kaynak denetimi artık uygulamanın içinde: rozet son denetimin sonucunu gösterir (`VERİ ✓ 14:10` temiz, `VERİ ⚠ 2` sapma var, `VERİ ?` hiçbir şey doğrulanamadı, `VERİ · denetlenmedi`; son denetim 24 saatten eskiyse `(eski)` ve soluk). Tıklayınca **Veri sağlığı** penceresi: kontroller grup grup (SAPMA içeren gruplar ve satırlar en üstte), sapma yüzdesi, uygulama ↔ referans değeri, neden; **Şimdi denetle** düğmesi (koşu ≈40 sn, sürerken kilitli, çift tıklama ikinci koşu başlatmaz; açık diğer pencereler WebSocket ile güncellenir). Denetim **yalnız elle** çalışır (arka plan koşusu yok); sonuç `data_health` tablosunda saklanır, yeniden başlatmada rozet son sonucu gösterir. `GET /api/data-health`, `POST /api/data-health/run`.
+- **Sahte yeşil yok:** hiçbir şey doğrulanamazsa (hepsi ATLANDI: ağ yok, seans açık) rozet yeşil değil gri `?` olur. ATLANDI hata sayılmaz; seans açıkken hisse kontrolü bu yüzden rozeti bozmaz.
+- **Uygulamanın gördüğü veri sınanıyor:** kontroller sunucu içinde, kullanıcının gördüğü fiyatla aynı önbellekler üzerinden çalışır (CLI ayrı bir süreçte kendi kopyasını sınıyordu). İş Yatırım verisi her koşuda zorla tazelenir.
+- **Tek kaynak:** kontroller `server/denetim.js`'e, saf çekirdek `server/denetim-cekirdek.js`'e taşındı; `npm run denetim` aynı fonksiyonu çağırır, çıktısı ve çıkış kodları (0/1/2) aynı. Ölçüm: sunucu modülü CLI ile aynı sayıları üretti (26 OK · 0 SAPMA · 7 ATLANDI, 33 satır).
+- Rozet mantığı için 14 yeni çevrimdışı kontrol (`ozet`, `rozetDurumu`, `eskiMi`; toplam 76).
+
+### Bilinen
+- Rozet bir **izleme** değil, son denetimin kanıtıdır: elle çalışır ve 24 saatten sonra "eski" olur.
+- Hisse kontrolü seans açıkken ATLANDI'dır; tam sonuç için kapanıştan sonra denetleyin.
+- Koşu birkaç kaynağa istek yapar (TCMB, İş Yatırım, TEFAS, KAP mali tablolar) ve yaklaşık 40 sn sürer; zaman aşımı 120 sn.
+- Portföy kontrolü satırlarında tutar saklanmaz ve gösterilmez, yalnız durum ve sapma yüzdesi.
+- Dinamik neden metinleri ("hata: …", "dönem uyuşmuyor: …") İngilizce arayüzde Türkçe kalır.
+
 ## 0.19.0 — 2 Ekim 2026 (takvim sayfası)
 
 ### Yeni
