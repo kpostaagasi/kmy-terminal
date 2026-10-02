@@ -27,7 +27,7 @@ if (!process.env.DENETIM_ALT) {
 }
 
 // Evre 2: kontroller.
-const K = await import('./denetim-cekirdek.mjs');
+const K = await import('../server/denetim-cekirdek.js');
 const { getQuotes, marketStatus } = await import('../server/market.js');
 const universe = await import('../server/universe.js');
 const { tcmbRates, financials } = await import('../server/feeds.js');
