@@ -80,9 +80,9 @@ $$('.viewbar [data-view]').forEach((b) => b.addEventListener('click', () => show
 // ── Hash yönlendirme (kalıcı bağlantı) ─────────────
 // #/sohbet · #/pazar/THYAO · #/pazar/THYAO/skor · #/pazar/THYAO/ozet/fiyat · #/portfoy/risk
 const VIEW_SLUG = { agent: 'sohbet', market: 'pazar', portfolio: 'portfoy' };
-const PAGE_SLUG = { home: '', sum: '', fin: 'finans', score: 'skor', value: 'deger', comp: 'kars', screen: 'tara', sectors: 'sektorler', market: 'piyasa' }; // sum sayfası yalnız sembol + /ozet/<alt sekme> ile yazılır
+const PAGE_SLUG = { home: '', sum: '', fin: 'finans', score: 'skor', value: 'deger', comp: 'kars', screen: 'tara', sectors: 'sektorler', market: 'piyasa', calendar: 'takvim' }; // sum sayfası yalnız sembol + /ozet/<alt sekme> ile yazılır
 const SUM_SLUG = { px: 'fiyat', news: 'haber', docs: 'belge' };
-const PG_FROM = { finans: 'fin', skor: 'score', deger: 'value', kars: 'comp', tara: 'screen', sektorler: 'sectors', piyasa: 'market' };
+const PG_FROM = { finans: 'fin', skor: 'score', deger: 'value', kars: 'comp', tara: 'screen', sektorler: 'sectors', piyasa: 'market', takvim: 'calendar' };
 const SUM_FROM = { fiyat: 'px', haber: 'news', belge: 'docs' };
 const SYM_PAGE = { sum: 1, fin: 1, score: 1, value: 1, comp: 1 }; // sembol gerektiren kmy terminal sayfaları
 const pfTab = () => $('#view-portfolio .subtabs button.active')?.dataset.t || 'ozet';
