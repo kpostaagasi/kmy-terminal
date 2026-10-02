@@ -245,3 +245,5 @@
   .num.up { text-decoration: underline; text-underline-offset: 2px; }
   .num.down { text-decoration: overline; text-underline-offset: 2px; }
 }
+.stg-chips { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.stg-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }

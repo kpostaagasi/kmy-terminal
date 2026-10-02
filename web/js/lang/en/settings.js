@@ -2,6 +2,12 @@
 const n = (v, one, many) => `${v.n} ${v.n === 1 ? one : many}`;
 
 export default {
+  // ── Sinyal bildirimi ──
+  'Sinyal bildirimleri': 'Signal alerts',
+  'Yeni sinyal bildirimi': 'New signal alerts',
+  'Seans kapandıktan sonra (18:30) izleme listenizi ve portföyünüzü tarar; yalnız yeni çıkan sinyalleri bildirir. İlk tarama yalnız başlangıç durumunu kaydeder.': 'After the close (18:30) scans your watchlist and portfolio and alerts only on newly appearing signals. The first scan only records the starting state.',
+  'Bildirilecek sinyaller': 'Signals to alert on',
+  'RSI, MACD ve hacim sinyalleri sık çıktığından varsayılan kapalıdır': 'RSI, MACD and volume signals fire often, so they are off by default',
   // Bölümler
   'Bağlantı': 'Connection',
   'Sağlayıcılar': 'Providers',

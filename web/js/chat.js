@@ -1,6 +1,6 @@
 // AGENT CHAT: Claude / Codex oturumları, akışlı yanıt, katlanan araç grupları, KOMİTE (alt ajan) kartları,
 // izin ve soru kartları, dosya ekleri, eğik çizgi komutları, maliyet / tur / bağlam göstergesi
-import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR, today } from './core.js';
+import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR, today, selectSymbol } from './core.js';
 import { t, tx, lang } from './i18n.js';
 
 // Çizgi simgeler (currentColor): ataç, gönder, durdur
@@ -867,13 +867,23 @@ addEventListener('kmy:notify-action', (ev) => {
   notifyActions.delete(key);
   fns[Number(i)]?.();
 });
-function notify(body, actions = [], title) {
+export function notify(body, actions = [], title) {
   toast(body, '', 9000);
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const key = Date.now().toString(36);
   if (actions.length) { notifyActions.set(key, actions.map((a) => a.run)); setTimeout(() => notifyActions.delete(key), 300000); }
   new Notification(title || 'kmy terminal', { body, actions: actions.map((a, i) => ({ id: `${key}:${i}`, label: a.label })) });
 }
+
+// Sinyal bildirimi: seans sonrası taramada yeni çıkan sinyaller tek toplu bildirim olarak gelir.
+on('ws:signals.fired', (m) => {
+  const items = m?.items || [];
+  if (!items.length) return;
+  const short = (x) => `${x.symbol} ${tx(x.label).replace(/\s*\(.*\)$/, '')}`;
+  const body = `${t('{n} yeni sinyal', { n: items.length })}: ${items.slice(0, 4).map(short).join(' · ')}${items.length > 4 ? ' …' : ''}`;
+  notify(body, [{ label: t('Aç'), run: () => selectSymbol(items[0].symbol) }], t('Sinyal'));
+  emit('signals:changed');
+});
 
 // macOS bildirim izni artık gerçek sistem değerini Swift'ten alır; reddedildiyse sessizce düşmeyelim
 addEventListener('kmy:notifperm', (e) => {

@@ -164,6 +164,9 @@ export const DEFAULT_SETTINGS = {
   sellTaxRate: 0.10, // BIST hisse satış stopajı (varsayılan %10)
   uiMode: 'chat',
   language: 'auto', // 'auto' (sistem dili) | 'tr' | 'en'
+  // Sinyal bildirimi: seans sonrası taramada yeni çıkan sinyaller (server/sinyal.js, signal-watch.js)
+  signalNotify: true,
+  signalTypes: ['golden', 'death', 'high52', 'low52', 'sma200_up', 'sma200_dn'],
 };
 
 // 0.12: varsayılan imza rengi sarıdan turuncuya geçti; eski varsayılanı (#facc15) bir kez yeni varsayılana taşı

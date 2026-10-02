@@ -2,6 +2,9 @@
 const pl = (n, one, many) => `${n} ${Math.abs(n) === 1 ? one : many}`;
 
 export default {
+  // ── Sinyal bildirimi ──
+  '{n} yeni sinyal': (v) => pl(v.n, 'new signal', 'new signals'),
+  'Sinyal': 'Signal',
   // Mesaj kutusu ve durum çubuğu
   'Mesaj yazın…': 'Write a message…',
   'Mesaj': 'Message',
