@@ -21,6 +21,7 @@ import * as universe from './universe.js';
 import * as scheduler from './scheduler.js';
 import * as signalWatch from './signal-watch.js';
 import * as calendarSource from './takvim-kaynak.js';
+import * as dataHealth from './denetim.js';
 import * as memory from './memory.js';
 import * as documents from './documents.js';
 import * as research from './research.js';
@@ -172,6 +173,8 @@ route('GET', '/api/news', async ({ q }) => market.news(q.get('q') || 'Borsa Ista
 route('GET', '/api/dividends/:symbol', async ({ p }) => market.getDividends(p.symbol));
 route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(), items: await market.overview() }));
 route('GET', '/api/market/movers', async () => market.movers());
+route('GET', '/api/data-health', async () => dataHealth.last());
+route('POST', '/api/data-health/run', async () => { const r = await dataHealth.run(); broadcast({ t: 'data-health.updated' }); return r; });
 route('GET', '/api/calendar', async ({ q }) => calendarSource.calendar({
   scope: q.get('scope') || 'portfolio', from: q.get('from') || null, to: q.get('to') || null,
   kinds: q.get('kinds') ? q.get('kinds').split(',').filter(Boolean) : null,
