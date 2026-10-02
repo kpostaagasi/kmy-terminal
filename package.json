@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs",
+    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs",
+    "denetim": "node scripts/veri-denetimi.mjs",
     "open": "bin/kmy-terminal",
     "mcp": "node server/mcp-stdio.js",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",

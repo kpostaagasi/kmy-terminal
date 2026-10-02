@@ -1,0 +1,93 @@
+// Veri denetiminin saf (ağsız, veritabanısız) çekirdeği: karşılaştırma, karar ve rapor.
+// Canlı kaynaklara dokunan kısım scripts/veri-denetimi.mjs'tedir.
+
+// Kontrol grubu başına izin verilen sapma (%). TEFAS'ta tam eşleşme beklenir.
+export const TOLERANS = { fx: 0.5, gram: 1, altinTuru: 3, hisse: 1.5, tefas: 1e-6, oran: 0.5, portfoy: 0.1 };
+
+// Bağımsız altın sabitleri: 1 troy ons = 31,1034768 g; çeyrek altın 1,754 g, 22 ayar (0,916).
+const ONS_GRAM = 31.1034768;
+export const SAF_GR = { CEYREK: 1.754 * 0.916, YARIM: 2 * 1.754 * 0.916, TAM: 4 * 1.754 * 0.916 };
+
+const sayi = Number.isFinite;
+
+/** İki değeri karşılaştırır. Eksik/sonlu olmayan değer → ATLANDI (sıfıra bölme yok). */
+export function karsilastir(app, ref, tolPct) {
+  if (!sayi(app) || !sayi(ref)) return { durum: 'ATLANDI', neden: 'değer yok', app: app ?? null, ref: ref ?? null };
+  const sapmaPct = ref === 0 ? (app === 0 ? 0 : Infinity) : (Math.abs(app - ref) / Math.abs(ref)) * 100;
+  return { durum: sapmaPct <= tolPct ? 'OK' : 'SAPMA', sapmaPct, app, ref };
+}
+
+/** Kontrolü çalıştırır; ağ/kaynak hatası SAPMA değil ATLANDI'dır. */
+export async function guard(fn) {
+  try { return await fn(); } catch (e) { return { durum: 'ATLANDI', neden: `hata: ${e?.message || e}` }; }
+}
+
+/** Ons ($) × USDTRY ÷ 31,1035 = gram altın (TL). Girdi eksikse null. */
+export const gramRef = (onsUsd, usdTry) => (sayi(onsUsd) && sayi(usdTry) ? (onsUsd * usdTry) / ONS_GRAM : null);
+
+/** BIST fiyatı: seans açıkken İş Yatırım kapanışıyla karşılaştırılamaz. */
+export function hisseKarar({ app, ref, seansAcik }) {
+  if (seansAcik) return { durum: 'ATLANDI', neden: 'seans açık; kapanış değeri karşılaştırılamaz', app: app ?? null, ref: ref ?? null };
+  return karsilastir(app, ref, TOLERANS.hisse);
+}
+
+/** Fiyat nesnesinin gecikme etiketi ve (verildiyse) yaşı beklentiye uyuyor mu? */
+export function etiketKarar(q, beklenenGecikmeli, maxYasMs = null, simdi = Date.now()) {
+  if (!q) return { durum: 'ATLANDI', neden: 'fiyat yok' };
+  if (Boolean(q.delayed) !== beklenenGecikmeli) return { durum: 'SAPMA', neden: `delayed=${Boolean(q.delayed)}, beklenen ${beklenenGecikmeli}` };
+  const yas = simdi - q.time;
+  if (maxYasMs != null && sayi(yas) && yas > maxYasMs) return { durum: 'SAPMA', neden: `veri ${Math.round(yas / 60_000)} dk eski` };
+  return { durum: 'OK' };
+}
+
+/** Mali tablo ham satırlarından FAVÖK / net kâr / F/K'yı yeniden hesaplayıp uygulamanınkiyle karşılaştırır. */
+export function temelKarar(f, st) {
+  const item = (code) => f.lastPeriodItems?.find((x) => x.code === code)?.value ?? null;
+  const cur = f.cumulative?.[0];
+  const out = [];
+  const h = item('3H'), d = item('4B');
+  if (f.type === 'banka') out.push({ ad: 'FAVÖK', durum: 'ATLANDI', neden: 'banka için FAVÖK anlamsız' });
+  else if (sayi(h) && sayi(d) && (h !== 0 || d !== 0)) out.push({ ad: 'FAVÖK', ...karsilastir(cur?.ebitda, h + d, TOLERANS.oran) });
+  else out.push({ ad: 'FAVÖK', durum: 'ATLANDI', neden: 'ham satır yok' });
+  out.push({ ad: 'Net kâr', ...karsilastir(cur?.netIncome, item('3Z'), TOLERANS.oran) });
+  const q4 = (f.quarterly || []).slice(0, 4).map((q) => q.netIncome);
+  const ttm = q4.length === 4 && q4.every(sayi) ? q4.reduce((a, b) => a + b, 0) : null;
+  if (ttm == null || ttm <= 0 || !sayi(st?.mcapTL)) out.push({ ad: 'F/K', durum: 'ATLANDI', neden: '12 aylık net kâr veya piyasa değeri yok/≤0' });
+  else {
+    // İş Yatırım F/K'yı 1 ondalığa yuvarlar (±0,05); düşük çarpanda bu tek başına %2'yi bulur.
+    const ref = st.mcapTL / ttm;
+    out.push({ ad: 'F/K', ...karsilastir(st.pe, ref, TOLERANS.oran + (0.05 / ref) * 100), neden: `dönem ${st.period ?? '?'} ↔ ${f.latest ?? '?'}` });
+  }
+  return out;
+}
+
+/** Portföy özetinin toplamlarını bileşenlerinden bağımsız yeniden toplar. */
+export function portfoyKarar(s) {
+  const H = (s?.holdings || []).filter((h) => h.value != null);
+  if (!H.length) return [{ ad: 'Portföy', durum: 'ATLANDI', neden: 'pozisyon yok' }];
+  const kur = (c) => (c === 'TRY' ? 1 : s.fx?.[c]);
+  const holdSum = H.reduce((a, h) => a + h.qty * h.price * kur(h.currency), 0);
+  const T = s.totals;
+  const out = [{ ad: 'Σ pozisyon değeri', ...karsilastir(T.holdingsValue, holdSum, TOLERANS.portfoy) }];
+  if (H.some((h) => h.missingFx)) out.push({ ad: 'Σ platform değeri', durum: 'ATLANDI', neden: 'eksik kur var' });
+  else out.push({ ad: 'Σ platform değeri', ...karsilastir(T.holdingsValue, (s.positions || []).reduce((a, p) => a + p.value, 0), TOLERANS.portfoy) });
+  const nakit = T.cash != null ? (s.cash || []).reduce((a, c) => a + (c.valueTRY || 0), 0) : 0;
+  out.push({ ad: 'Toplam değer', ...karsilastir(T.value, holdSum + nakit, TOLERANS.portfoy) });
+  return out;
+}
+
+const fmt = (v) => (v == null ? '-' : Number(v).toPrecision(6));
+
+/** Terminal tablosu + özet satırı. */
+export function rapor(sonuc) {
+  const satir = sonuc.map((r) => [r.grup, r.ad, r.durum, r.sapmaPct == null ? '-' : `%${r.sapmaPct.toFixed(3)}`, fmt(r.app), fmt(r.ref), r.neden || ''].join(' | '));
+  const say = (d) => sonuc.filter((r) => r.durum === d).length;
+  return [...satir, '', `OK ${say('OK')} · SAPMA ${say('SAPMA')} · ATLANDI ${say('ATLANDI')}`].join('\n');
+}
+
+/** 1: SAPMA var · 2: hiçbir şey doğrulanamadı (hepsi ATLANDI) · 0: temiz. */
+export function cikisKodu(sonuc) {
+  if (sonuc.some((r) => r.durum === 'SAPMA')) return 1;
+  if (!sonuc.some((r) => r.durum === 'OK')) return 2;
+  return 0;
+}
