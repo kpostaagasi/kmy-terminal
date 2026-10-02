@@ -1,5 +1,18 @@
 # Sürüm Notları
 
+## 0.17.0 — 2 Ekim 2026 (kurum hedef fiyatı portföyde)
+
+### Yeni
+- **Kurum hedef fiyatı artık portföy ekranında.** Varlıklar tablosunda "Hedef" sütunu: kurumların medyan hedef fiyatına uzaklık (`+12,6%`), altında "2 kurum · 2 TUT"; ipucunda medyan fiyat, AL / TUT / SAT dağılımı ve en yeni rapor tarihi. Tablo altbilgisinde ve Özet'teki yeni "Kurum hedefi" şeridinde kapsam ve ağırlıklı hedef getiri: "hisse değerinin %70'i kapsamda (3/6 hisse) · ağırlıklı hedef getiri +10,3%". Veri zaten toplanıyordu (`analyst_targets`) ama yalnız Raporlar'da görünüyordu. `GET /api/portfolio` her pozisyona `target`, toplamlara `totals.target` ekler; ajanın `get_portfolio` aracı bunu otomatik görür.
+- **Doğruluk kuralları** (`server/hedef.js`, 33 çevrimdışı kontrol): kurumun en yeni görüşü 180 günden eskiyse sayılmaz (daha eski satıra düşülmez); rapordan sonra bedelsiz sermaye artırımı olan hissenin hedefi sayılmaz (fiyat ölçeği değişir); yalnız TL cinsi BIST hisseleri uygundur (fon, altın, yabancı varlık kapsam dışı); canlı fiyatı olmayan (son işlem fiyatıyla değerlenen) pozisyonda yüzde hesaplanmaz; yalnız önerisi olan kurum medyana girmez ama AL/TUT/SAT sayısına girer; ağırlıklı getiri yalnız kapsamdaki pozisyonların değeriyle ağırlıklanır ve kapsam yüzde olarak gösterilir.
+- Canlı doğrulama (gerçek veritabanı kopyası): THYAO 330 ₺ (1 kurum), ASELS 421 ₺ (2 kurum), TUPRS 352 ₺ (1 kurum) medyanları `/api/research/consensus` ile birebir aynı; 8 pozisyonun 6'sı uygun, 3'ünde hedef var.
+
+### Düzeltilen
+- **Varlıklar tablosunda uzun fon adı sütunu şişiriyordu.** TTE gibi fonların tam adı tek satırda sembol sütununu ~350 px'e çıkarıp sağdaki sütunları kaydırmanın arkasına itiyordu. Ad artık 200 px'te kısalıyor, tam ad ipucunda.
+
+### Bilinen
+- Hedef verisi yalnız dört kurumun raporundan çıkarılabiliyor (AK Yatırım, Yapı Kredi, İş Yatırım, Tacirler); bu yüzden kapsam portföyden portföye değişir ve her zaman gösterilir.
+
 ## 0.16.6 — 2 Ekim 2026 (dar pencere: fiyat şeridi, araç çubuğu, küçük hedefler)
 
 ### Düzeltilen

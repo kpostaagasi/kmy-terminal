@@ -7,6 +7,7 @@ import { db, tx, getSettings } from './db.js';
 import { getQuotes, getHistory, getDividends, normalize, sectorOf, currencyOf, SPECIAL, priceOnDate, isBist } from './market.js';
 import { annualization } from './indicators.js';
 import * as universe from './universe.js';
+import { pickTarget, targetTotals } from './hedef.js';
 import { tcmbRates, tlrefStats, tlrefIndex } from './feeds.js';
 
 // qty: miktar etkisi · cash: nakit etkisi · income: gelir niteliği
@@ -498,6 +499,18 @@ export async function summary() {
   holdings.forEach((h) => { h.weight = total && h.value != null ? (h.value / total) * 100 : 0; });
   holdings.sort((a, b) => (b.value || 0) - (a.value || 0));
 
+  // Kurum hedef fiyatı: yalnız TL cinsi BIST hisseleri uygundur (`target` anahtarı yoksa kapsam dışı; null = veri yok).
+  const tSyms = holdings.filter((h) => isBist(h.symbol) && h.currency === 'TRY').map((h) => h.symbol);
+  if (tSyms.length) {
+    const ph = tSyms.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT broker, symbol, target, rating, report_date FROM analyst_targets WHERE symbol IN (${ph})`).all(...tSyms);
+    const acts = await universe.corporateActions({ symbols: tSyms }).catch(() => []);
+    for (const h of holdings) {
+      if (!tSyms.includes(h.symbol)) continue;
+      h.target = pickTarget(rows.filter((r) => r.symbol === h.symbol), { price: h.priced ? h.price : null, actions: acts.filter((x) => x.code === h.symbol) });
+    }
+  }
+
   const positions = L.positions.map((p) => {
     const h = holdings.find((x) => x.symbol === p.symbol);
     const rate = fx[h?.currency]?.now || 1;
@@ -573,6 +586,7 @@ export async function summary() {
     asOf: new Date().toISOString(),
     fx: Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, v?.now ?? null])),
     totals: {
+      target: targetTotals(holdings),
       value: total, holdingsValue: value, cash: cashIncluded ? cashValue : null, cashTracking: L.cashTracking, cost, unrealized,
       unrealizedPct: cost ? (unrealized / cost) * 100 : null,
       dayChange, dayChangePct: value - dayChange ? (dayChange / (value - dayChange)) * 100 : null,

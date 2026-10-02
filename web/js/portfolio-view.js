@@ -99,6 +99,7 @@ function renderSummary() {
   <div class="card strip" style="margin-top:12px" title="${esc(t('Tüm pozisyonlar bugünkü fiyattan satılırsa eline geçecek tutar (stopaj sonrası).'))}">
     <b>${t('Bugün hepsini satarsan')}</b> · ${t('net {n}', { n: money(tot.sellNet) })} · ${t('stopaj kesintisi {n}', { n: money(tot.sellTax) })} · <span class="${cls(tot.sellRealized)}">${t('kâr/zarar {n}', { n: money(tot.sellRealized) })}</span>
   </div>
+  ${targetStrip(tot.target)}
   <div class="card strip" id="pfStrip" style="margin-top:12px">${t('Maliyet {v}', { v: money(tot.cost) })} · ${t('Nakit {v}', { v: `${tot.cash == null ? '—' : money(tot.cash)}${cashTip ? ` (${esc(cashTip)})` : ''}` })} · ${t('Pozisyon {n}', { n: tot.positionsCount })} · <span class="dim">${t('Getiri metrikleri hesaplanıyor…')}</span></div>
   <div class="grid g2" style="margin-top:12px">
     <div class="card"><h3>${t('Portföy ve karşılaştırma ölçütleri (TL)')} <span class="dim" id="perfNote" style="font-weight:400"></span></h3><div class="row" id="benchToggles" style="margin-bottom:6px"></div><div class="chart-box md"><canvas id="pfPerf"></canvas></div></div>
@@ -183,7 +184,7 @@ async function perfChart(canvas, mode = 'level', withStrip = false, range = { fr
 
 const HOLD_COLS = [
   ['symbol', t('Sembol')], ['assetLabel', t('Tür')], ['sector', t('Sektör')], ['qty', t('Miktar'), 'r'], ['avgCost', t('Ort. maliyet'), 'r'], ['price', t('Güncel fiyat'), 'r'],
-  ['changePct', t('Gün %'), 'r'], ['value', t('Değer ₺'), 'r'], ['weight', t('Ağırlık'), 'r'], ['pnl', t('K/Z ₺'), 'r'], ['pnlPct', t('K/Z %'), 'r'], ['dividends', t('Temettü ₺'), 'r'],
+  ['changePct', t('Gün %'), 'r'], ['targetUp', t('Hedef'), 'r', t('Kurum hedef fiyatına uzaklık (medyan, son 180 gün)')], ['value', t('Değer ₺'), 'r'], ['weight', t('Ağırlık'), 'r'], ['pnl', t('K/Z ₺'), 'r'], ['pnlPct', t('K/Z %'), 'r'], ['dividends', t('Temettü ₺'), 'r'],
 ];
 const SRC_PILL = {
   'gecikmeli': `<span class="pill" title="${esc(t('Borsa verisi yaklaşık 15 dakika gecikmeli'))}">${t('15 dk')}</span>`,
@@ -191,24 +192,44 @@ const SRC_PILL = {
   'manuel': `<span class="pill acc" title="${esc(t('Elle girilen fiyat'))}">${t('manuel')}</span>`,
   'son işlem': `<span class="pill down" title="${esc(t('Canlı fiyat yok; son işlem fiyatı kullanılıyor'))}">${t('fiyat yok')}</span>`,
 };
+const targetStripTip = (g) => t('Kapsamdaki {n}/{of} hissenin değeriyle ağırlıklı medyan hedef getirisi. Hedefi olmayan, 180 günden eski ya da bedelsiz öncesi raporlar sayılmaz.', { n: g.n, of: g.of });
+function targetStrip(g) {
+  if (!g || !g.of) return '';
+  const head = `<b>${t('Kurum hedefi')}</b> · `;
+  const body = g.n
+    ? `${t('hisse değerinin %{p}\'i kapsamda ({n}/{of} hisse)', { p: num(g.valuePct, 0), n: g.n, of: g.of })} · ${t('ağırlıklı hedef getiri')} <span class="${cls(g.weightedUpsidePct)}">${pct(g.weightedUpsidePct, 1)}</span>`
+    : t('kapsamda hisse yok ({of} hisse için son 180 günde hedef bulunamadı)', { of: g.of });
+  return `<div class="card strip" style="margin-top:12px" title="${esc(targetStripTip(g))}">${head}${body} · <span class="dim">${t('açık kurum raporlarından; yatırım tavsiyesi değildir')}</span></div>`;
+}
+// Kurum hedefi: `target` yoksa kapsam dışı (fon, altın, yabancı), null ise veri yok, nesne ise özet.
+const targetTip = (g) => t('Medyan hedef {m} · AL {al} / TUT {tut} / SAT {sat} · en yeni rapor {d}\n\nKurumların açık yayınlarından; yatırım tavsiyesi değildir.', { m: g.median == null ? '—' : price(g.median), al: g.al, tut: g.tut, sat: g.sat, d: dateTR(g.newest) });
+function targetCell(x) {
+  const g = x.target;
+  if (g === undefined) return '<td class="r dim">—</td>';
+  if (g === null) return `<td class="r dim" title="${esc(t('Son 180 günde bu hisse için kurum hedefi bulunamadı.'))}">—</td>`;
+  const top = [[t('[öneri]AL'), g.al], [t('[öneri]TUT'), g.tut], [t('[öneri]SAT'), g.sat]].find(([, n], _, a) => n > 0 && n === Math.max(...a.map(([, m]) => m)));
+  const sub = `${t('{n} kurum', { n: g.brokers })}${top ? ` · ${top[1]} ${top[0]}` : ''}`;
+  return `<td class="r num" title="${esc(targetTip(g))}">${g.upsidePct == null ? '<span class="dim">—</span>' : `<span class="${cls(g.upsidePct)}">${pct(g.upsidePct, 1)}</span>`}<div class="dim" style="font-size:10.5px;font-family:var(--sans)">${esc(sub)}</div></td>`;
+}
 function renderHoldings() {
   if (isEmpty()) return emptyState();
+  data.holdings.forEach((h) => { h.targetUp = h.target?.upsidePct ?? null; });
   const rows = [...data.holdings].sort((a, b) => {
     const x = a[sortKey], y = b[sortKey];
     return (typeof x === 'string' ? x.localeCompare(y, 'tr') : (x ?? -1e18) - (y ?? -1e18)) * sortDir;
   });
   const tot = data.totals;
   body.innerHTML = `${warningsHtml()}<div class="card"><h3>${t('Varlıklarım')} <input id="hFilter" placeholder="${esc(t('Filtrele…'))}" value="${esc(holdFilter)}" style="width:160px;font-weight:400"></h3><div class="table-wrap"><table class="t" id="hTable">
-    <thead><tr>${HOLD_COLS.map(([k, l, c]) => `<th class="sortable ${c || ''}" data-k="${k}">${l}${sortKey === k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th></th></tr></thead>
+    <thead><tr>${HOLD_COLS.map(([k, l, c, tip]) => `<th class="sortable ${c || ''}" data-k="${k}"${tip ? ` title="${esc(tip)}"` : ''}>${l}${sortKey === k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th></th></tr></thead>
     <tbody>${rows.map((x) => `<tr class="click" data-s="${esc(x.symbol)}">
-      <td class="mono"><b>${esc(x.symbol)}</b> ${SRC_PILL[x.priceSource] || ''}<div class="dim" style="font-size:10.5px;font-family:var(--sans)">${esc(x.name !== x.symbol ? x.name : '')}</div></td><td>${esc(tx(x.assetLabel))}</td><td class="muted">${esc(tx(x.sector))}</td>
+      <td class="mono"><b>${esc(x.symbol)}</b> ${SRC_PILL[x.priceSource] || ''}<div class="dim" style="font-size:10.5px;font-family:var(--sans);max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.name !== x.symbol ? x.name : '')}">${esc(x.name !== x.symbol ? x.name : '')}</div></td><td>${esc(tx(x.assetLabel))}</td><td class="muted">${esc(tx(x.sector))}</td>
       <td class="r num">${num(x.qty, x.qty % 1 ? 4 : 0)}</td><td class="r num" title="${esc(t('TL ortalama maliyet: {v} ₺', { v: price(x.avgCost) }))}">${x.currency !== 'TRY' ? `${price(x.avgCostNative)} <span class="dim">${esc(x.currency)}</span>` : price(x.avgCost)}</td><td class="r num" title="${esc(tx(x.priceSource))}${x.priceTime ? ' · ' + (typeof x.priceTime === 'number' ? timeTR(x.priceTime) : x.priceTime) : ''}">${price(x.price)} <span class="dim">${x.currency !== 'TRY' ? esc(x.currency) : ''}</span></td>
-      <td class="r num ${cls(x.changePct)}">${pct(x.changePct)}</td><td class="r num">${money(x.value)}</td>
+      <td class="r num ${cls(x.changePct)}">${pct(x.changePct)}</td>${targetCell(x)}<td class="r num">${money(x.value)}</td>
       <td class="r"><div class="row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap"><span class="num">${num(x.weight, 1)}%</span><div class="bar" style="width:50px"><i style="width:${Math.min(x.weight, 100)}%"></i></div></div></td>
       <td class="r num ${cls(x.pnl)}" title="${x.pnlFx != null ? esc(t('Fiyat etkisi {p} · kur etkisi {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) })) : ''}${x.sellNet != null ? esc(t('\n\nBugün satılırsa eline geçen: {n} ({g} brüt', { n: money(x.sellNet), g: money(x.sellGross) }) + (x.sellTax ? ` − ${t('stopaj')} ${money(x.sellTax)}` : t(' · stopaj yok')) + `) → ${t('kâr/zarar')} ${money(x.sellRealized)}`) : ''}">${money(x.pnl)}${x.pnlFx != null ? `<div class="dim" style="font-size:10px">${t('fiyat {p} · kur {f}', { p: money(x.pnlPrice), f: money(x.pnlFx) })}</div>` : ''}${x.sellTax ? `<div class="dim" style="font-size:10px">${t('satışa çevir {n}', { n: money(x.sellNet) })}</div>` : ''}</td><td class="r num ${cls(x.pnlPct)}">${pct(x.pnlPct)}</td>
       <td class="r num">${x.dividends ? money(x.dividends) : '—'}</td>
       <td style="white-space:nowrap"><button class="ghost" data-buy="${esc(x.symbol)}">${t('Al')}</button> <button class="ghost" data-sell="${esc(x.symbol)}">${t('Sat')}</button>${x.priceSource === 'son işlem' || x.priceSource === 'manuel' ? ` <button class="ghost" data-price="${esc(x.symbol)}">${t('Fiyat gir')}</button>` : ''}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td colspan="7">${t('Toplam (nakit hariç)')}</td><td class="r num">${money(tot.holdingsValue)}</td><td></td><td class="r num ${cls(tot.unrealized)}">${money(tot.unrealized)}</td><td class="r num ${cls(tot.unrealizedPct)}">${pct(tot.unrealizedPct)}</td><td class="r num">${money(data.holdings.reduce((a, x) => a + x.dividends, 0))}</td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="7">${t('Toplam (nakit hariç)')}</td><td class="r num ${cls(tot.target.weightedUpsidePct)}" title="${esc(targetStripTip(tot.target))}">${tot.target.weightedUpsidePct == null ? '—' : pct(tot.target.weightedUpsidePct, 1)}</td><td class="r num">${money(tot.holdingsValue)}</td><td></td><td class="r num ${cls(tot.unrealized)}">${money(tot.unrealized)}</td><td class="r num ${cls(tot.unrealizedPct)}">${pct(tot.unrealizedPct)}</td><td class="r num">${money(data.holdings.reduce((a, x) => a + x.dividends, 0))}</td><td></td></tr></tfoot>
   </table></div></div>
   ${data.closed.length ? `<div class="card" style="margin-top:12px"><h3>${t('Kapanmış pozisyonlar')}</h3><table class="t"><thead><tr><th>${t('Sembol')}</th><th class="r">${t('Gerçekleşen K/Z')}</th><th class="r">${t('Temettü')}</th></tr></thead><tbody>${data.closed.map((c) => `<tr class="click" data-s="${esc(c.symbol)}"><td class="mono">${esc(c.symbol)}</td><td class="r num ${cls(c.realized)}">${money(c.realized)}</td><td class="r num">${money(c.dividends)}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
   $$('th[data-k]', body).forEach((th) => th.onclick = () => { if (sortKey === th.dataset.k) sortDir *= -1; else { sortKey = th.dataset.k; sortDir = -1; } localSet('pfSort', sortKey); renderHoldings(); });
