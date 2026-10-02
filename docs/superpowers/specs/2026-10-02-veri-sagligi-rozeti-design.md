@@ -33,14 +33,15 @@ Kullanıcı onaylı kararlar: **A)** kontroller paylaşılan bir sunucu modülü
 - `yok`: `results` yok ya da boş / hiç çalışmadı.
 - `uyari`: en az bir SAPMA.
 - `dogrulanamadi`: SAPMA yok ve OK yok (hepsi ATLANDI).
-- `temiz`: SAPMA yok ve en az bir OK (ATLANDI satırları hata sayılmaz, sayısı gösterilir).
+- `temiz`: SAPMA yok ve **canlı çapraz kaynak grubunda** (`CANLI_GRUPLAR`: Döviz, Altın, Altın türü, Hisse, TEFAS) en az bir OK. Temel (aynı önbellek yükünden iki kez okur), Tazelik ve Portföy (iç tutarlılık) tek başına doğrulama sayılmaz: sunucuda `financials()` önbelleği 12 saat sıcak kalır ve ağ yokken bu gruplar OK dönmeye devam eder (inceleme bulgusu). ATLANDI satırları hata sayılmaz, sayısı gösterilir.
+- Aksi halde (`SAPMA` yok ama canlı grupta OK yok): `dogrulanamadi`.
 
 `ozet(results) → { ok, sapma, atlandi }`.
 
 ### API
 - `GET /api/data-health` → `{ at: number|null, summary: { ok, sapma, atlandi }, state, stale, results: [...], running: boolean }`; hiç çalışmadıysa `at: null`, `state: 'yok'`, `results: []`.
 - `POST /api/data-health/run` → koşar (≈40 sn; ölçüm: 8–41 sn, ağa göre değişir), aynı biçimi döner. Koşu bitince `broadcast({ t: 'data-health.updated' })`; açık diğer pencereler `GET` ile yenilenir.
-- Beklenmeyen koşu hatası 400 + ileti (rozetin önceki durumu bozulmaz).
+- Beklenmeyen koşu hatası 400 + ileti (rozetin önceki durumu bozulmaz). `data-health.updated` yayını başarısız koşuda da yapılır; istemci koşu sürerken (`running: true`) 5 sn'de bir `GET` ile yoklar, böylece kaçan bir olay pencereyi "çalışıyor"da takılı bırakmaz.
 
 ### Arayüz
 - Durum çubuğunda `#quoteFresh`'ten sonra **rozet düğmesi** (`#dhBadge`): `VERİ ✓ 14:10` (yeşil, temiz), `VERİ ⚠ 2` (turuncu/kırmızı, SAPMA sayısı), `VERİ ?` (gri, doğrulanamadı), `VERİ · denetlenmedi` (gri, yok); eskiyse sonuna `(eski)` eklenir. İpucu: `OK 26 · SAPMA 0 · ATLANDI 7 · son denetim 14:10`. `stale` istemcide `at` ile 24 saat kuralından yeniden hesaplanır ve 10 dakikada bir tazelenir (açık bırakılan uygulamada rozet kendiliğinden "eski"ye döner).
@@ -51,7 +52,7 @@ Kullanıcı onaylı kararlar: **A)** kontroller paylaşılan bir sunucu modülü
 ## Hata yönetimi
 - Kaynak hataları kontrol bazında ATLANDI'dır (mevcut `guard`); hiçbiri SAPMA üretmez.
 - Hiçbir şey doğrulanamazsa (hepsi ATLANDI) rozet `?` olur, "temiz" gösterilmez (sahte yeşil yok).
-- Eşzamanlı çağrılar tek koşuya birleşir; koşu sürerken `GET`, `running: true` döner.
+- Eşzamanlı çağrılar tek koşuya birleşir; koşu sürerken `GET`, `running: true` döner. Zaman aşımı (120 sn) bekleyenleri bırakır ama iç koşu iptal edilemez: o bitene kadar yeni koşu başlatılmaz (`Önceki denetim hâlâ sürüyor…` hatası, `running: true`), böylece KAP hız sınırına üst üste koşular binmez.
 - Tablo bozuksa ya da kayıt okunamazsa `GET`, `state: 'yok'` döner (çökme yok).
 
 ## Testler (`test/denetim.test.mjs`'e eklenir, çevrimdışı)

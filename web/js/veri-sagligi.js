@@ -85,9 +85,12 @@ async function runNow() {
   repaint();
 }
 
+let pollTimer = 0;
 async function load() {
   try { data = await api('/data-health'); } catch { /* rozet önceki durumunu korur */ }
   repaint();
+  clearTimeout(pollTimer);
+  if (data?.running) pollTimer = setTimeout(load, 5000); // başka pencerede koşu sürerken: olay kaçarsa "çalışıyor"da takılı kalmaz
 }
 
 badge.onclick = () => {
