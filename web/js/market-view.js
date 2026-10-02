@@ -187,7 +187,7 @@ root.innerHTML = `
         <button class="btn">${t('Tara')}</button>
         <span class="seg" id="scrPresets"><button type="button" data-p="value">${t('Ucuz (F/K ≤ 8, PD/DD ≤ 1,5)')}</button><button type="button" data-p="ytd">${t('YBB liderleri')}</button></span>
       </form>
-      <div class="table-wrap kt-xtall"><table class="t" id="scrTable"></table></div>
+      <div class="table-wrap kt-xtall kt-scan"><table class="t" id="scrTable"></table></div>
     </div></div>
     ${panel(`${t('Sinyal radarı')} ${sub(t('BIST 100 · günlük'))}`, `<div class="row" id="radarChips" style="margin-bottom:8px"></div>
       <div class="table-wrap kt-tall"><table class="t" id="radarTable"><tbody><tr><td class="dim">${t('Taramayı başlatmak için “Tara”ya basın. İlk tarama yaklaşık 20 sn sürer; sonuçlar 15 dk saklanır.')}</td></tr></tbody></table></div>`,
@@ -1333,8 +1333,8 @@ async function runScreen(extra = {}) {
   $('#scrTable').innerHTML = `<tbody><tr><td>${SKEL}</td></tr></tbody>`;
   try {
     const r = await api(`/screen?${new URLSearchParams(f)}`);
-    $('#scrTable').innerHTML = `<thead><tr><th>${t('Sembol')}</th><th>${t('Ad')}</th><th>${t('Sektör')}</th><th class="r">${t('Kapanış')}</th><th class="r" title="${t('Piyasa değeri, milyon ₺')}">${t('Piy. değeri (mn ₺)')}</th><th class="r">${t('F/K')}</th><th class="r">${t('PD/DD')}</th><th class="r">${t('FD/FAVÖK')}</th><th class="r">${t('YBB')}</th><th class="r">${t('1A')}</th></tr></thead><tbody>${r.items.map((x) => `<tr class="click" data-s="${esc(x.code)}" data-n="${esc(x.name)}">
-      <td class="mono"><b>${esc(x.code)}</b></td><td class="kt-name">${esc(x.name)}</td><td class="muted">${esc(sectorName(x.sector))}</td><td class="r num">${price(x.close)}</td><td class="r num">${num(x.mcapMnTL, 0)}</td>
+    $('#scrTable').innerHTML = `<thead><tr><th>${t('Sembol')}</th><th>${t('Ad')}</th><th class="c-sec">${t('Sektör')}</th><th class="r">${t('Kapanış')}</th><th class="r c-mcap" title="${t('Piyasa değeri, milyon ₺')}">${t('Piy. değeri (mn ₺)')}</th><th class="r">${t('F/K')}</th><th class="r">${t('PD/DD')}</th><th class="r">${t('FD/FAVÖK')}</th><th class="r">${t('YBB')}</th><th class="r">${t('1A')}</th></tr></thead><tbody>${r.items.map((x) => `<tr class="click" data-s="${esc(x.code)}" data-n="${esc(x.name)}">
+      <td class="mono"><b>${esc(x.code)}</b></td><td class="kt-name">${esc(x.name)}</td><td class="muted c-sec">${esc(sectorName(x.sector))}</td><td class="r num">${price(x.close)}</td><td class="r num c-mcap">${num(x.mcapMnTL, 0)}</td>
       <td class="r num">${num(x.pe, 1)}</td><td class="r num">${num(x.pb, 2)}</td><td class="r num">${num(x.evEbitda, 1)}</td><td class="r num ${cls(x.retYtd)}">${pct(x.retYtd, 1)}</td><td class="r num ${cls(x.ret1m)}">${pct(x.ret1m, 1)}</td></tr>`).join('') || `<tr><td colspan="10" class="dim">${t('Koşullara uyan hisse yok')}</td></tr>`}</tbody>
       <tfoot><tr><td colspan="10" class="dim">${t('{n} hisse', { n: r.count })}${r.asOf ? ` · ${t('veriler: {d} (önceki kapanış)', { d: dateTR(r.asOf, true) })}` : ''}</td></tr></tfoot>`;
   } catch (e) { $('#scrTable').innerHTML = `<tbody><tr><td class="dim">${esc(tx(e.message))}</td></tr></tbody>`; }

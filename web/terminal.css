@@ -93,6 +93,12 @@
 #view-market table.t tfoot td { font-weight: 600; background: var(--bg-2); }
 #view-market table.t tr.click:hover td { background: var(--accent-soft); }
 #view-market .kt-name { color: var(--text-2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+/* Tarayıcı tablosu dar panelde: filtre sütunları (kapanış, F/K, PD/DD, FD/FAVÖK) ilk ekranda kalsın */
+#view-market .kt-scan { container-type: inline-size; }
+@container (max-width: 600px) {
+  #view-market .kt-scan .c-sec, #view-market .kt-scan .c-mcap { display: none; }
+  #view-market .kt-scan .kt-name { max-width: 12ch; }
+}
 #view-market .kt-self td { background: var(--accent-soft); }
 #view-market .kt-self td:first-child { box-shadow: inset 2px 0 0 var(--accent-bg); }
 #view-market .kt-subhead { padding-top: 10px !important; font: 600 10px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
