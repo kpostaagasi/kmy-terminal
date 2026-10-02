@@ -8,7 +8,7 @@ kmy terminal'in gösterdiği verileri bağımsız ikinci kaynaklarla karşılaş
 Bağlam: ticari ürünleşme hedefi. Kısıtlar: ad küçük harf, rakip adı geçmez, kişisel veri git'e ve çıktıya girmez, UI metinleri `t()` üzerinden.
 
 ## Mimari
-- Tek dosya: `scripts/veri-denetimi.mjs`; komut `npm run denetim`.
+- İki dosya: `scripts/denetim-cekirdek.mjs` (saf mantık, çevrimdışı test edilir) ve `scripts/veri-denetimi.mjs` (canlı çalıştırıcı); komut `npm run denetim`.
 - Uygulamanın kendi fonksiyonlarını (`getQuotes`, `fundamentals`, `fundQuote`, `financials`, `tcmbRates` vb.) doğrudan import eder; kullanıcının gördüğü yol test edilir.
 - Referans değerleri bağımsız kaynaktan betik kendisi çeker.
 - Her kontrol bir nesnedir: `{ ad, grup, uygulama(), referans(), tolerans }`. Sonuç: **OK**, **SAPMA** (tolerans dışı) veya **ATLANDI** (ağ yok, piyasa kapalı vb.).
@@ -31,6 +31,7 @@ Bağlam: ticari ürünleşme hedefi. Kısıtlar: ad küçük harf, rakip adı ge
 
 - Portföy kontrolü gerçek veritabanını salt okunur açar; çıktıya yalnız sapma yüzdesi yazılır, kişisel veri yazılmaz.
 - Bankalar için FAVÖK atlanır (mevcut davranış).
+- Temel oranlarda F/K toleransı %0,5 + İş Yatırım'ın 1 ondalık yuvarlaması (±0,05 ÷ referans) kadardır; ilk canlı çalıştırmada THYAO (3,0 ↔ 2,97) ve GARAN (4,4 ↔ 4,34) yalancı SAPMA verdi.
 - Piyasa kapalıyken hisse kontrolü kapanış fiyatıyla yapılır; gecikmeli veri için tolerans zaten %1,5.
 
 ## Düzeltme akışı
