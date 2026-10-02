@@ -101,6 +101,33 @@ assert('nakit takibi kapalıyken nakit toplanmaz', K.portfoyKarar(nakitsiz).find
 const eksikKur = { ...S, holdings: [{ ...S.holdings[0] }, { ...S.holdings[1], missingFx: true }] };
 assert('eksik kurda platform toplamı ATLANDI', K.portfoyKarar(eksikKur).find((r) => r.ad === 'Σ platform değeri').durum === 'ATLANDI');
 
+// ── İnceleme düzeltmeleri ─────────────────────────────────────────────────
+// Önemli 1: İş Yatırım verisi tazelenemediyse (eski önbellek) hisse kontrolü yalancı SAPMA vermemeli.
+assert('eski İş Yatırım verisi → hisse ATLANDI', durum(K.hisseKarar({ app: 103, ref: 100, seansAcik: false, isyTaze: false })) === 'ATLANDI');
+assert('taze İş Yatırım verisi → hisse karşılaştırılır', durum(K.hisseKarar({ app: 103, ref: 100, seansAcik: false, isyTaze: true })) === 'SAPMA');
+
+// Önemli 2: Truncgil yokken gram altın Yahoo vadeli yedeğinden gelir; aynı formülü kendisiyle karşılaştırmak anlamsız.
+const gramYedek = { price: 5100, source: 'Yahoo (vadeli, yaklaşık)', delayed: true, time: NOW };
+const ons = { price: 4000 }, usd = { price: 40 };
+assert('yedek kaynaktan gram → ATLANDI', durum(K.gramKarar(gramYedek, ons, usd)) === 'ATLANDI');
+assert('Truncgil gram, doğru değer → OK', durum(K.gramKarar({ price: 5150, source: 'Truncgil', delayed: false }, ons, usd)) === 'OK');
+assert('Truncgil gram, %5 sapma → SAPMA', durum(K.gramKarar({ price: 5400, source: 'Truncgil', delayed: false }, ons, usd)) === 'SAPMA');
+assert('gram fiyatı yok → ATLANDI', durum(K.gramKarar(undefined, ons, usd)) === 'ATLANDI');
+assert('yedek kaynak etiketi tazelikte SAPMA değil ATLANDI', durum(K.etiketKarar(gramYedek, false, null, NOW)) === 'ATLANDI');
+
+// Önemli 3: İki kaynağın dönemleri farklıysa F/K karşılaştırılmaz; biçimler farklıdır (6/2026 ↔ 2026/6).
+assert('dönem anahtarı iki biçimi eşitler', K.donemAnahtar('6/2026') === '2026/6' && K.donemAnahtar('2026/6') === '2026/6');
+assert('dönem anahtarı geçersiz girdide null', K.donemAnahtar(null) === null && K.donemAnahtar('abc') === null);
+assert('gerçek biçimle (6/2026 ↔ 2026/6) eşleşen dönem OK', K.temelKarar(fOk, { ...st, period: '6/2026' }).find((r) => r.ad === 'F/K').durum === 'OK');
+assert('dönem uyuşmuyorsa F/K ATLANDI', K.temelKarar(fOk, { ...st, pe: 12, period: '3/2026' }).find((r) => r.ad === 'F/K').durum === 'ATLANDI');
+
+// Önemli 4: TCMB kuru önceki iş gününe aittir; pazar ve pazartesi sabahı sapma doğal olarak büyür.
+const CUMA = new Date('2026-10-02T11:00:00+03:00'), PZT = new Date('2026-10-05T10:00:00+03:00'), PAZ = new Date('2026-10-04T12:00:00+03:00');
+assert('hafta içi %0,9 fx sapması → SAPMA', durum(K.fxKarar({ app: 100.9, ref: 100, simdi: CUMA })) === 'SAPMA');
+assert('hafta içi %0,1 fx sapması → OK', durum(K.fxKarar({ app: 100.1, ref: 100, simdi: CUMA })) === 'OK');
+assert('pazartesi fx sapması → ATLANDI', durum(K.fxKarar({ app: 100.9, ref: 100, simdi: PZT })) === 'ATLANDI');
+assert('pazar fx sapması → ATLANDI', durum(K.fxKarar({ app: 100.9, ref: 100, simdi: PAZ })) === 'ATLANDI');
+
 // ── rapor / cikisKodu ─────────────────────────────────────────────────────
 const R = (d) => ({ grup: 'G', ad: 'a', durum: d });
 assert('SAPMA varsa çıkış 1', K.cikisKodu([R('OK'), R('SAPMA')]) === 1);

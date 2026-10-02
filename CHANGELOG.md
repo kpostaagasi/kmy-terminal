@@ -3,8 +3,8 @@
 ## 0.16.4 — 2 Ekim 2026 (veri doğruluğu denetimi)
 
 ### Yeni
-- **`npm run denetim`: çapraz kaynak veri denetimi.** Uygulamanın gösterdiği veriyi bağımsız ikinci kaynakla karşılaştırır: döviz ↔ TCMB, gram altın ↔ ons × USDTRY ÷ 31,1035, altın türleri ↔ saf gram karşılığı, BIST fiyatı ↔ İş Yatırım kapanışı, TEFAS fon fiyatı ↔ TEFAS API'sinden doğrudan son fiyat, gecikme etiketi ve veri yaşı, FAVÖK / net kâr / F/K ↔ mali tablonun ham satırlarından yeniden hesap. `-- --portfoy` portföy toplamlarını bileşenlerinden yeniden toplar (gerçek veritabanının kopyasında; çıktıya tutar yazılmaz). Her satır OK / SAPMA / ATLANDI; ağ yoksa ATLANDI, hiçbir şey doğrulanamazsa çıkış kodu 2. İlk canlı çalıştırmada uygulama verisinde sapma bulunmadı (döviz %0,09–0,18, gram altın %0,04, TEFAS birebir, FAVÖK ve net kâr birebir).
-- Denetimin saf mantığı için 47 çevrimdışı kontrol (`test/denetim.test.mjs`), `npm test` zincirinde.
+- **`npm run denetim`: çapraz kaynak veri denetimi.** Uygulamanın gösterdiği veriyi bağımsız ikinci kaynakla karşılaştırır: döviz ↔ TCMB, gram altın ↔ ons × USDTRY ÷ 31,1035, altın türleri ↔ saf gram karşılığı, BIST fiyatı ↔ İş Yatırım kapanışı, TEFAS fon fiyatı ↔ TEFAS API'sinden doğrudan son fiyat, gecikme etiketi ve veri yaşı, FAVÖK / net kâr / F/K ↔ mali tablonun ham satırlarından yeniden hesap. `-- --portfoy` portföy toplamlarını bileşenlerinden yeniden toplar (gerçek veritabanının kopyasında; çıktıya tutar yazılmaz). Her satır OK / SAPMA / ATLANDI; ağ yoksa ATLANDI, hiçbir şey doğrulanamazsa çıkış kodu 2. Yalancı alarm korumaları: yedek kaynak (Truncgil yokken Yahoo vadeli gram altın) ve eski İş Yatırım önbelleği ATLANDI sayılır, F/K iki kaynağın dönemi farklıysa karşılaştırılmaz, TCMB kuru pazar ve pazartesi sabahı karşılaştırılmaz. İlk canlı çalıştırmada uygulama verisinde sapma bulunmadı (döviz %0,09–0,18, gram altın %0,04, TEFAS birebir, FAVÖK ve net kâr birebir).
+- Denetimin saf mantığı için 62 çevrimdışı kontrol (`test/denetim.test.mjs`), `npm test` zincirinde.
 
 ## 0.16.3 — 30 Eylül 2026 (canlı yeniden yükleme, statik önbellek, dar panel bestecisi)
 
