@@ -1,6 +1,6 @@
 {
   "name": "kmy-terminal",
-  "version": "0.16.4",
+  "version": "0.16.5",
   "description": "kmy terminal — yapay zekâ destekli BIST terminali",
   "main": "server/index.js",
   "bin": {

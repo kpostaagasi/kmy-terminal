@@ -1,5 +1,15 @@
 # Sürüm Notları
 
+## 0.16.5 — 2 Ekim 2026 (kesilen değerler, dar panelde tarayıcı)
+
+### Düzeltilen
+- **Portföy değer kartlarında sayılar kesiliyordu.** Başlık kartında `₺1.127.985` yerine `₺1.127…`, Risk sekmesinde `+142,8…` (toplam getiri) ve `+40,9% / -14…` (en iyi/en kötü ay) görünüyordu: `.kpi .v` sabit 22 px (başlık 38 px), `nowrap` ve `ellipsis` ile kesiyordu. Artık değer sığana kadar yazı küçülüyor (alt sınır 13 px; altında eski üç nokta davranışı kalır). Panel boyutu, sekme, yazı tipi veya içerik değişince yeniden sığdırılıyor. Ölçüm (1440 px, sohbet paneli açık): kesilen değer 3 → 0; başlık 38 → 30 px.
+- **Hisse tarayıcısında filtre sütunları dar panelde görünmüyordu.** 900 px genişlikte yalnız Sembol, Ad ve Sektör görünüyor, Kapanış / F/K / PD/DD yatay kaydırmanın arkasında kalıyordu. Tablo kabı 600 px'in altına inince Sektör ve Piyasa değeri sütunları gizleniyor, Ad 12 karaktere kısalıyor; Kapanış, F/K, PD/DD, FD/FAVÖK ve YBB ilk ekranda. Geniş panelde 10 sütunun hepsi görünmeye devam ediyor.
+
+### Bilinen
+- Tarayıcı tablosunda iç içe iki dikey kaydırma çubuğu var; bu sürümde değişmedi.
+- Fiyat şeridi 640 px'te üst üste biniyor, KMY terminal araç çubuğu aynı genişlikte sağdan kesiliyor (dar pencere tasarımı gerektiriyor).
+
 ## 0.16.4 — 2 Ekim 2026 (veri doğruluğu denetimi)
 
 ### Yeni

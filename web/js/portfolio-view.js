@@ -47,6 +47,22 @@ function emptyState() {
   $('[data-a=imp]', body).onclick = () => { tab = 'aktar'; render(); };
 }
 
+// Değer kartlarında sayı kesilmesin: sığana kadar küçült (alt sınır 13 px; altında CSS ellipsis kalır).
+function fitKpi() {
+  for (const v of $$('.kpi .v', root)) {
+    v.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(v).fontSize);
+    while (v.scrollWidth > v.clientWidth + 1 && fs > 13) v.style.fontSize = `${--fs}px`;
+  }
+}
+let fitTimer = 0;
+const scheduleFit = () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitKpi, 16); };
+new MutationObserver(scheduleFit).observe(root, { childList: true, subtree: true });
+new ResizeObserver(scheduleFit).observe(root);
+document.fonts?.addEventListener('loadingdone', scheduleFit); // yazı tipi gelince metin genişliği değişir
+document.fonts?.ready.then(scheduleFit);
+window.addEventListener('load', scheduleFit); // geç gelen stil dosyaları
+
 function kpi(l, v, s = '', c = '', title = '') { return `<div class="card kpi" ${title ? `title="${esc(title)}"` : ''}><div class="l">${l}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`; }
 function warningsHtml() {
   // audit denetimi yeni kaynaktır: aynı olayı taşıyan eski uyarı ikinci kez gösterilmez
