@@ -139,7 +139,7 @@ assert('rapor özet satırı', metin.endsWith('OK 1 · SAPMA 1 · ATLANDI 0'), m
 assert('rapor yüzde biçimi', metin.includes('%0.123'));
 
 // ── ozet / rozetDurumu / eskiMi (veri sağlığı rozeti) ─────────────────────
-const SR = (d) => ({ grup: 'G', ad: 'a', durum: d });
+const SR = (d, grup = 'Döviz') => ({ grup, ad: 'a', durum: d });
 const o1 = K.ozet([SR('OK'), SR('OK'), SR('SAPMA'), SR('ATLANDI'), SR('ATLANDI'), SR('ATLANDI')]);
 assert('ozet sayımı', o1.ok === 2 && o1.sapma === 1 && o1.atlandi === 3, JSON.stringify(o1));
 assert('ozet boş / null girdi', K.ozet([]).ok === 0 && K.ozet(null).sapma === 0 && K.ozet(undefined).atlandi === 0);
@@ -151,6 +151,15 @@ assert('rozet: SAPMA öncelikli (çok OK olsa da)', K.rozetDurumu([...Array(20).
 assert('rozet: hepsi ATLANDI → dogrulanamadi (sahte yeşil yok)', K.rozetDurumu([SR('ATLANDI'), SR('ATLANDI')]) === 'dogrulanamadi');
 assert('rozet: OK + ATLANDI → temiz', K.rozetDurumu([SR('OK'), SR('ATLANDI')]) === 'temiz');
 assert('rozet: yalnız OK → temiz', K.rozetDurumu([SR('OK')]) === 'temiz');
+// Sahte yeşil yok: temiz yalnız CANLI çapraz kaynak grubunda (Döviz, Altın, Altın türü, Hisse, TEFAS) en az bir OK varsa.
+// Temel (aynı önbellek yükünden iki kez okur), Tazelik ve Portföy (iç tutarlılık) tek başına doğrulama sayılmaz:
+// ağ yokken sıcak önbellekten OK dönerler (inceleme bulgusu: sunucuda financials önbelleği 12 saat sıcak kalır).
+assert('rozet: OK yalnız Temel grubunda → dogrulanamadi (önbellekten sahte yeşil)', K.rozetDurumu([SR('OK', 'Temel'), SR('OK', 'Temel'), SR('ATLANDI', 'Döviz')]) === 'dogrulanamadi');
+assert('rozet: OK yalnız Tazelik + Portföy → dogrulanamadi', K.rozetDurumu([SR('OK', 'Tazelik'), SR('OK', 'Portföy'), SR('ATLANDI', 'Hisse')]) === 'dogrulanamadi');
+assert('rozet: Temel OK + Döviz OK → temiz', K.rozetDurumu([SR('OK', 'Temel'), SR('OK', 'Döviz')]) === 'temiz');
+for (const g of ['Döviz', 'Altın', 'Altın türü', 'Hisse', 'TEFAS']) assert(`rozet: canlı grup ${g} OK → temiz`, K.rozetDurumu([SR('OK', g)]) === 'temiz');
+assert('rozet: SAPMA grup fark etmeksizin uyari', K.rozetDurumu([SR('OK', 'Döviz'), SR('SAPMA', 'Temel')]) === 'uyari' && K.rozetDurumu([SR('SAPMA', 'Portföy')]) === 'uyari');
+assert('CANLI_GRUPLAR dışa aktarılır', Array.isArray(K.CANLI_GRUPLAR) && K.CANLI_GRUPLAR.length === 5);
 const H24 = 24 * 3600_000, N = 1_000_000_000_000;
 assert('eskiMi: tam 24 saat eski değil', K.eskiMi(N - H24, N) === false);
 assert('eskiMi: 24 saat + 1 ms eski', K.eskiMi(N - H24 - 1, N) === true);

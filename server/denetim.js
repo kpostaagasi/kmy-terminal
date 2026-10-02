@@ -84,7 +84,8 @@ export async function runChecks({ portfoy = true } = {}) {
 }
 
 // ── Son sonuç: kalıcılık, tek koşu, görünüm ──────────────────────────────
-let inflight = null;
+let inflight = null;    // bekleyen çağrıların paylaştığı söz
+let innerBusy = false;  // zaman aşımından sonra bile iç koşu bitene kadar true: iptal edilemeyen koşu varken yeni koşu çakışmasın
 
 const withTimeout = (p, ms) => new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('Denetim zaman aşımı')), ms);
@@ -95,7 +96,7 @@ const view = (results, at, running) => ({ at, summary: K.ozet(results), state: K
 
 /** Kayıtlı son sonuç (hiç çalışmadıysa ya da kayıt bozuksa state: 'yok'). */
 export function last() {
-  const running = !!inflight;
+  const running = !!inflight || innerBusy;
   try {
     const row = db.prepare('SELECT at, results FROM data_health WHERE id = 1').get();
     if (row) return view(JSON.parse(row.results), Number(row.at), running);
@@ -103,16 +104,22 @@ export function last() {
   return view([], null, running);
 }
 
-/** Denetimi çalıştırıp kaydeder. Koşu sürerken gelen ikinci çağrı aynı koşunun sonucunu bekler. */
-export function run() {
-  if (!inflight) {
-    inflight = withTimeout(runChecks(), 120_000)
-      .then((results) => {
-        const at = Date.now();
-        db.prepare('INSERT INTO data_health(id, at, results) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, results = excluded.results').run(at, JSON.stringify(results));
-        return view(results, at, false);
-      })
-      .finally(() => { inflight = null; });
-  }
+/**
+ * Denetimi çalıştırıp kaydeder. Koşu sürerken gelen ikinci çağrı aynı koşunun sonucunu bekler.
+ * Zaman aşımı bekleyenleri bırakır ama iç koşu iptal edilemez: o bitene kadar yeni koşu başlatılmaz (KAP hız sınırı).
+ */
+export function run({ timeoutMs = 120_000 } = {}) {
+  if (inflight) return inflight;
+  if (innerBusy) return Promise.reject(new Error('Önceki denetim hâlâ sürüyor; biraz sonra yeniden deneyin'));
+  const work = runChecks();
+  innerBusy = true;
+  work.then(() => {}, () => {}).then(() => { innerBusy = false; });
+  inflight = withTimeout(work, timeoutMs)
+    .then((results) => {
+      const at = Date.now();
+      db.prepare('INSERT INTO data_health(id, at, results) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, results = excluded.results').run(at, JSON.stringify(results));
+      return view(results, at, false);
+    })
+    .finally(() => { inflight = null; });
   return inflight;
 }

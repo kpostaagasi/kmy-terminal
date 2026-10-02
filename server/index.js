@@ -174,7 +174,7 @@ route('GET', '/api/dividends/:symbol', async ({ p }) => market.getDividends(p.sy
 route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(), items: await market.overview() }));
 route('GET', '/api/market/movers', async () => market.movers());
 route('GET', '/api/data-health', async () => dataHealth.last());
-route('POST', '/api/data-health/run', async () => { const r = await dataHealth.run(); broadcast({ t: 'data-health.updated' }); return r; });
+route('POST', '/api/data-health/run', async () => { try { return await dataHealth.run(); } finally { broadcast({ t: 'data-health.updated' }); } }); // hata durumunda da: diğer pencereler "çalışıyor"da takılı kalmasın
 route('GET', '/api/calendar', async ({ q }) => calendarSource.calendar({
   scope: q.get('scope') || 'portfolio', from: q.get('from') || null, to: q.get('to') || null,
   kinds: q.get('kinds') ? q.get('kinds').split(',').filter(Boolean) : null,

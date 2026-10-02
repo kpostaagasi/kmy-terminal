@@ -125,12 +125,21 @@ export function ozet(results) {
   return { ok: say('OK'), sapma: say('SAPMA'), atlandi: say('ATLANDI') };
 }
 
-/** Rozet durumu: 'yok' (hiç çalışmadı) · 'uyari' (SAPMA var) · 'dogrulanamadi' (hepsi ATLANDI: sahte yeşil yok) · 'temiz'. */
+/**
+ * Canlı çapraz kaynak grupları: uygulamanın değeri bağımsız bir dış kaynakla her koşuda yeniden karşılaştırılır.
+ * Temel (aynı önbellek yükünden iki kez okur), Tazelik ve Portföy (iç tutarlılık) tek başına doğrulama sayılmaz:
+ * sunucuda financials önbelleği 12 saat sıcak kalır, ağ yokken bunlar OK dönmeye devam eder.
+ */
+export const CANLI_GRUPLAR = ['Döviz', 'Altın', 'Altın türü', 'Hisse', 'TEFAS'];
+
+/**
+ * Rozet durumu: 'yok' (hiç çalışmadı) · 'uyari' (SAPMA var) · 'temiz' (SAPMA yok ve canlı çapraz kaynak grubunda en az bir OK)
+ * · 'dogrulanamadi' (aksi halde: sahte yeşil yok).
+ */
 export function rozetDurumu(results) {
   if (!results || !results.length) return 'yok';
-  const o = ozet(results);
-  if (o.sapma) return 'uyari';
-  return o.ok ? 'temiz' : 'dogrulanamadi';
+  if (ozet(results).sapma) return 'uyari';
+  return results.some((r) => r.durum === 'OK' && CANLI_GRUPLAR.includes(r.grup)) ? 'temiz' : 'dogrulanamadi';
 }
 
 /** Son denetim bu süreden eskiyse rozet "eski" işaretlenir. */
