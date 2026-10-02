@@ -94,6 +94,21 @@ export function candidatePeriods(today) {
   return all.filter((c) => c.end < today).sort((a, b) => b.end.localeCompare(a.end)).slice(0, 2);
 }
 
+/**
+ * KAP finansal rapor başlıklarından konsolide olup olmadığı. Gerçek başlıklar "(Konsolide)" ve "(Konsolide Olmayan)";
+ * ikincisi de "konsolide" sözcüğünü içerir, bu yüzden "olmayan" ayrıca denetlenir. Türkçe büyük/küçük harf (KONSOLİDE) desteklenir.
+ * true: konsolide · false: solo (yalnız "Konsolide Olmayan" görülmüş) · null: bilinmiyor (başlıklarda konsolidasyon ifadesi yok).
+ */
+export function isConsolidated(subjects) {
+  let cons = 0, solo = 0;
+  for (const subject of subjects) {
+    const x = String(subject ?? '').toLocaleLowerCase('tr');
+    if (!x.includes('konsolide')) continue;
+    if (x.includes('olmayan')) solo++; else cons++;
+  }
+  return cons ? true : solo ? false : null;
+}
+
 /** Yasal son teslimden bu kadar gün sonra gelen KAP kaydı ilk açıklama sayılmaz. */
 export const LATE_GRACE_DAYS = 90;
 
