@@ -18,7 +18,7 @@ Bu spec'in kullanıcı onayı alınmış kararları: **A) birleşik TAKVİM sayf
 ## Mimari
 Üç sağlayıcı tek olay listesine birleşir; sunucuda saf mantık ayrı dosyada (çevrimdışı test edilir), ağ ve veritabanı ayrı dosyada.
 
-- `server/takvim.js` (yeni, **saf**): ayrıştırıcılar ve kurallar. `parseTcmb(html)`, `legalDeadline({ period, year, consolidated })`, `expectedDate(lastYearIso, deadlineIso)`, `bilancoEvents({ symbol, today, announced, consolidated })`, `corporateEvents(actions)`, `buildCalendar({ today, from, to, events, kinds })`, `groupKey(date, today)`. Veritabanı ve ağ içe aktarmaz.
+- `server/takvim.js` (yeni, **saf**): ayrıştırıcılar ve kurallar. `parseTcmb(html)`, `legalDeadline({ period, year, consolidated })`, `expectedDate(lastYearIso, deadlineIso)`, `bilancoEvents({ symbol, today, announced, consolidated })`, `plausibleAnnouncements(records, consolidated)`, `marketSeasonEvents(today)`, `defaultWindow(today)`, `istanbulToday(nowMs)`, `corporateEvents(actions)`, `buildCalendar({ from, to, events, kinds })`, `groupKey(date, today)`. Veritabanı ve ağ içe aktarmaz.
 - `server/takvim-kaynak.js` (yeni): ağ ve önbellek. `tcmbEvents()` (günde bir çeker, `http_cache`), `announcedFor(symbol)` (KAP, sembol başına 24 saat önbellek), `calendar({ scope, from, to })` bunları birleştirir. Hata yönetimi burada.
 - `server/index.js`: `GET /api/calendar`.
 - `web/js/market-view.js`: yeni `TAKVİM` sayfası, ana sayfada yeni kart, hash yönlendirme (`#/pazar/takvim`), mevcut temettü paneline "Tüm takvim →" bağlantısı. `web/js/app.js`: `PAGE_SLUG` ve `PG_FROM` girdileri.
@@ -47,14 +47,15 @@ Metinleri sunucu değil **istemci** kurar (`t()` ile); sunucu yalnız `type` ve 
    - **Aday dönemler:** bugünden önceki son iki dönem sonu (ör. 2 Ekim 2026'da 2026/3 ve 2026/2).
    - Aday dönemin (dönem, yıl) kaydı varsa → `bilanco_aciklandi` (kesin, gerçek tarih; yalnız pencerede ise görünür).
    - Yoksa iki olay: `bilanco_son_teslim` (tahmini): dönem sonu + yasal gün sayısı, konsolide değilse ilk sütun: **1 ve 3: 30 / 40**, **2: 50 / 60**, **4: 60 / 70** gün (SPK II-14.1'e göre `[solo, konsolide]`); hafta sonuna denk gelirse sonraki pazartesi, resmî tatiller hesaba katılmaz. Ve `bilanco_beklenen` (tahmini): geçen yılın aynı dönemi için açıklama tarihi (`data.lastYear`) bir yıl ileri taşınır (29 Şubat → 28 Şubat), hafta sonuna denk gelirse önceki iş günü, son teslim tarihini geçmez. Geçen yıl kaydı yoksa (yeni halka arz) yalnız son teslim üretilir.
-   - Konsolide olup olmadığı hiç bilinmiyorsa (kayıt yok) solo süre değil **konsolide** süre kullanılır (daha geniş, yanlış alarm üretmez) ve `data.assumed: true` ile işaretlenir.
+   - KAP'ta yıllar sonra gelen düzeltme/yeniden sunum kayıtları (ör. 2025/1 dönemi için 2026'da yayımlanan) ilk açıklama sayılmaz: yasal son teslimden 90 gün (`LATE_GRACE_DAYS`) sonra gelen kayıtlar atılır (`plausibleAnnouncements`); aksi halde "geçen yılın tarihi" yanlış çıkar. 8 hissede 37 gözlemin 5'i bu kayıtlardı; kalan 32'sinin hiçbiri hesaplanan son teslimi aşmadı.
+  - Konsolide olup olmadığı hiç bilinmiyorsa (kayıt yok) solo süre değil **konsolide** süre kullanılır (daha geniş, yanlış alarm üretmez) ve `data.assumed: true` ile işaretlenir.
 4. **Tümü** kapsamı: bilanço hisse bazlı hesaplanmaz; onun yerine her aday dönem için tek bir sembolsüz `bilanco_son_teslim` olayı (konsolide süreyle, `data.market: true`) üretilir.
 
 ### API
 `GET /api/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD&scope=watchlist|portfolio|all&kinds=temettu,sermaye,tcmb,bilanco`
 - Varsayılan `from = bugün − 7 gün`, `to = bugün + 60 gün`; `to − from` en çok 366 gün.
-- `scope=watchlist|portfolio`: sembol kümesi sunucuda `store.watchlist()` / portföy pozisyonlarından alınır (istemci liste göndermez). Küme boşsa olaylar boş döner ve `emptyScope: true`.
-- Yanıt: `{ today, from, to, scope, events: [...], warnings: [{ source, message }], stale: [source…] }`; olaylar tarihe, sonra türe, sonra sembole göre sıralı.
+- `scope=watchlist|portfolio`: sembol kümesi sunucuda `store.watchlist()` / portföy pozisyonlarından alınır (istemci liste göndermez). Küme boşsa sembole bağlı olaylar boş döner (TCMB olayları yine görünür) ve `emptyScope: true`.
+- Yanıt: `{ today, from, to, scope, events: [...], warnings: [{ source, message }], stale: [source…], emptyScope, mine: [...] }`; `mine` listedeki ve portföydeki BIST sembolleridir (Tümü kapsamında "listede" işareti için); olaylar tarihe, sonra türe, sonra sembole göre sıralı.
 - TCMB olayları `scope`'tan bağımsızdır (hepsinde görünür). Temettü / sermaye artırımı: `all` hepsi, diğerlerinde küme ile süzülür.
 - Sunucu tarafında gün gruplaması yoktur (istemci, İstanbul saatiyle `today` değerini yanıttan okuyarak gruplar).
 
