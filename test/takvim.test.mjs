@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import {
   trDate, parseTcmb, legalDeadline, expectedDate, candidatePeriods, bilancoEvents, marketSeasonEvents,
-  corporateEvents, buildCalendar, defaultWindow, groupKey, istanbulToday, addDays, plausibleAnnouncements, LATE_GRACE_DAYS,
+  corporateEvents, buildCalendar, defaultWindow, groupKey, istanbulToday, addDays, plausibleAnnouncements, LATE_GRACE_DAYS, isConsolidated,
 } from '../server/takvim.js';
 
 let pass = 0, fail = 0;
@@ -76,6 +76,17 @@ assert('gerçekten geç ama makul açıklama kalır (son teslimden 20 gün sonra
 assert('bilinmeyen dönem numarası atılır, çökmez', plausibleAnnouncements([rec(7, 2025, '2025-11-04'), rec(0, 2025, '2025-11-04')], true).length === 0);
 assert('konsolide bilinmiyorsa (null) konsolide süre', plausibleAnnouncements([rec(3, 2025, '2025-11-04')], null).length === 1);
 assert('boş girdi boş liste', plausibleAnnouncements([], true).length === 0);
+
+// ── isConsolidated ────────────────────────────────────────────────────────
+// Gerçek KAP başlıkları: "(Konsolide)" ve "(Konsolide Olmayan)"; ikincisi solo şirkettir ve "konsolide" sözcüğünü de içerir.
+assert('(Konsolide) → konsolide', isConsolidated(['Faaliyet Raporu (Konsolide)', 'Finansal Rapor']) === true);
+assert('(Konsolide Olmayan) → solo (konsolide sayılmaz)', isConsolidated(['Sorumluluk Beyanı (Konsolide Olmayan)']) === false);
+assert('büyük harf Türkçe: KONSOLİDE', isConsolidated(['SORUMLULUK BEYANI (KONSOLİDE)']) === true);
+assert('büyük harf Türkçe: KONSOLİDE OLMAYAN', isConsolidated(['FAALİYET RAPORU (KONSOLİDE OLMAYAN)']) === false);
+assert('konsolidasyon ifadesi yoksa bilinmiyor (null), solo varsayılmaz', isConsolidated(['Finansal Rapor', 'Entegre Rapor', 'TSRS Uyumlu Sürdürülebilirlik Raporu']) === null);
+assert('hiç kayıt yoksa null', isConsolidated([]) === null);
+assert('null / boş başlıklar çökmez', isConsolidated([null, undefined, '']) === null);
+assert('karışık kayıtta konsolide öncelikli', isConsolidated(['Faaliyet Raporu (Konsolide)', 'Sorumluluk Beyanı (Konsolide Olmayan)']) === true);
 
 // ── bilancoEvents ─────────────────────────────────────────────────────────
 const T = '2026-10-02';

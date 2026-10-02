@@ -291,7 +291,7 @@ function showPage(pg) {
   if (pg === 'home') drawRecent();
   if (changed) body.scrollTop = 0;
   hideHelp();
-  ensure(pg);
+  ensure(pg, pg === 'calendar'); // takvim her gösterilişte yenilenir: gece yarısından sonra "Bugün" ve "Yarın" eski kalmasın
   requestAnimationFrame(() => resizeCharts(pg));
   emit('kt:page', pg);
 }

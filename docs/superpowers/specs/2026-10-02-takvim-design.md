@@ -42,7 +42,7 @@ Metinleri sunucu değil **istemci** kurar (`t()` ile); sunucu yalnız `type` ve 
 ### Sağlayıcı kuralları
 1. **Temettü / sermaye artırımı** (kesin). Her `corporateActions` kaydı, doldurulmuş alanına göre bir ya da birkaç olaya ayrılır: `cashGrossPct > 0` ya da `dpsGross > 0` → `temettu` (`data: { dps, grossPct }`); `bonusPct > 0` → `bedelsiz`; `bonusDivPct > 0` → `bedelsiz_temettu`; `rightsPct > 0` → `bedelli`. `kind`: temettü → `temettu`, diğerleri → `sermaye`.
 2. **TCMB** (kesin, resmî). Sayfadaki tablodan hücre bazlı: sütun 1 → `ppk_karar`, 2 → `ppk_ozet`, 3 → `enflasyon_raporu`, 4 → `fin_istikrar`; boş hücre atlanır; `symbol: null`. Tarih "22 Ocak 2026" biçiminden çevrilir (Türkçe ay adları). **Sağlamlık:** başlık satırında dört beklenen sütun adı yoksa ya da geçerli PPK karar tarihi 8'den azsa `parseTcmb` **hata fırlatır**; sessizce boş liste dönmez. Sayfa günde bir çekilir; çekilemezse son başarılı kayıt (30 güne kadar) `stale: true` ile kullanılır; hiç kayıt yoksa TCMB olayları yanıtta `warnings` ile belirtilip atlanır.
-3. **Bilanço** (yalnız Listem ve Portföyüm). Sembol başına KAP'ın son 365 günü (`companyDisclosures(symbol, 365)`) çekilir, `cls === 'FR'` kayıtlarından (dönem, yıl) başına **en erken** `publishDate` alınır (düzeltme bildirimleri sonradan gelir); aynı kayıtların başlığında "Konsolide" geçiyorsa `consolidated = true`. Önbellek: sembol başına 24 saat.
+3. **Bilanço** (yalnız Listem ve Portföyüm). Sembol başına KAP'ın son 365 günü (`companyDisclosures(symbol, 365)`) çekilir, `cls === 'FR'` kayıtlarından (dönem, yıl) başına **en erken** `publishDate` alınır (düzeltme bildirimleri sonradan gelir); başlıklardan `isConsolidated` ile anlaşılır: "(Konsolide)" → `true`, "(Konsolide Olmayan)" → `false` (bu başlık da "konsolide" sözcüğünü içerir, ayrıca denetlenir; Türkçe büyük harf desteklenir), konsolidasyon ifadesi yoksa `null` (bilinmiyor → konsolide süre varsayılır). Önbellek: sembol başına 24 saat.
    - **Dönem sonları:** 1 → 31 Mart, 2 → 30 Haziran, 3 → 30 Eylül, 4 → 31 Aralık.
    - **Aday dönemler:** bugünden önceki son iki dönem sonu (ör. 2 Ekim 2026'da 2026/3 ve 2026/2).
    - Aday dönemin (dönem, yıl) kaydı varsa → `bilanco_aciklandi` (kesin, gerçek tarih; yalnız pencerede ise görünür).
@@ -69,6 +69,9 @@ Metinleri sunucu değil **istemci** kurar (`t()` ile); sunucu yalnız `type` ve 
 - Mevcut Piyasa özeti "Temettü takvimi" paneli değişmez; başlığına "Tüm takvim →" bağlantısı eklenir.
 
 ## Hata yönetimi
+- **İstek hacmi:** yalnız istenen türlerin kaynağına gidilir (`kinds` içinde `bilanco` yoksa KAP'a, `tcmb` yoksa TCMB'ye, ikisi de temettü/sermaye yoksa İş Yatırım'a gidilmez); aynı sembol için eşzamanlı KAP çağrıları tek isteğe birleştirilir; geçersiz `from`/`to` ağ işinden önce reddedilir.
+- **TCMB hatası:** hata sonrası 5 dakika yeniden denenmez (son başarılı kayıt `stale` ile kullanılır), zaman aşımı 10 sn, TCMB diğer kaynaklarla paralel çekilir.
+- **Gün değişimi:** takvim sayfası her gösterildiğinde yeniden çizilir; açık bırakılan sayfa gece yarısından sonra eski "Bugün"/"Yarın" göstermez.
 - KAP bir sembolde hata verirse (HTTP 500, hız sınırı) yalnız o sembolün bilanço olayları atlanır, `warnings`'e `{ source: 'kap', message: 'THYAO: …' }` eklenir; diğerleri döner. Hız sınırı sırasında sembol başına istekler sıralı (en çok 2 eşzamanlı) çalışır.
 - TCMB ayrıştırması hata verirse son başarılı kayıt (`stale`), o da yoksa `warnings`. Sayfanın geri kalanı çalışır.
 - `corporateActions` İş Yatırım çekilemezse mevcut davranış (bellekteki son veri) geçerli.
