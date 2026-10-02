@@ -111,6 +111,17 @@ a { color: var(--info); text-underline-offset: 2px; }
 .mkt-status.open::before { background: var(--up); }
 .statusbar .freshness { color: var(--text-3); cursor: help; }
 .statusbar .freshness:empty { display: none; }
+.statusbar .dh-badge { background: none; border: 0; padding: 0 4px; min-height: 22px; font: inherit; letter-spacing: .04em; color: var(--text-3); cursor: pointer; white-space: nowrap; }
+.statusbar .dh-badge:hover { color: var(--text); }
+.statusbar .dh-badge.dh-ok { color: var(--up); }
+.statusbar .dh-badge.dh-warn { color: var(--down); }
+.statusbar .dh-badge.dh-old { opacity: .6; }
+/* Veri sağlığı penceresi: her grubun tablosu aynı sütun hizasını kullanır */
+.dh-tbl { table-layout: fixed; width: 100%; }
+.dh-tbl td:nth-child(1) { width: 26%; }
+.dh-tbl td:nth-child(2) { width: 13%; }
+.dh-tbl td:nth-child(3) { width: 12%; }
+.dh-tbl td:nth-child(4) { width: 28%; white-space: normal; overflow-wrap: anywhere; }
 .statusbar .freshness.stale { color: var(--warn, #f5a524); font-weight: 700; }
 .clock { font-family: var(--mono); color: var(--text-2); }
 
