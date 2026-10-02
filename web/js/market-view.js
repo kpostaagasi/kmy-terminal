@@ -10,7 +10,7 @@ import { t, tx, lang, locale } from './i18n.js';
 const root = $('#view-market');
 const enc = encodeURIComponent;
 const SYM_PAGES = ['sum', 'fin', 'score', 'value', 'comp'];
-const PAGES = ['home', ...SYM_PAGES, 'screen', 'sectors', 'market'];
+const PAGES = ['home', ...SYM_PAGES, 'screen', 'sectors', 'market', 'calendar'];
 const FKEYS = [['sum', t('ÖZET')], ['fin', t('FİNANS')], ['score', t('SKOR')], ['value', t('DEĞER')], ['comp', t('KARŞ')]];
 const SHORT = [t('[kısa]ÖZET'), t('[kısa]FİN'), t('[kısa]SKOR'), t('[kısa]DEĞER'), t('[kısa]KARŞ')];
 const RANGES = [['1d', t('1G')], ['5d', t('1H')], ['1mo', t('1A')], ['3mo', t('3A')], ['6mo', t('6A')], ['ytd', t('YBB')], ['1y', t('1Y')], ['5y', t('5Y')], ['max', t('Tümü')]];
@@ -30,6 +30,10 @@ const overlays = new Set(localGet('overlays', ['sma20', 'sma50']));
 let lower = localGet('lower', 'rsi');
 let moversTab = 'gainers';
 let calScope = localGet('calScope', 'watchlist');
+// TAKVİM sayfası: kapsam '' ise hiç seçilmedi (portföy, boşsa liste); tür seçimi en az bir tür içerir
+const CAL_KINDS = ['temettu', 'sermaye', 'tcmb', 'bilanco'];
+let calPageScope = localGet('calPageScope', '');
+let calKinds = (() => { const k = localGet('calKinds', CAL_KINDS); const ok = Array.isArray(k) ? k.filter((x) => CAL_KINDS.includes(x)) : []; return ok.length ? ok : CAL_KINDS; })();
 let lastHist = null;
 let symToken = 0;
 let page = 'home';
@@ -91,6 +95,7 @@ root.innerHTML = `
         <button class="kt-qbtn" data-go="screen"><b>${t('HİSSE TARAYICI')}</b><span id="ktQScreen">${t('{n}+ hisseyi filtrele', { n: 500 })}</span></button>
         <button class="kt-qbtn" data-go="sectors"><b>${t('SEKTÖR HARİTASI')}</b><span>${t('piyasa genel bakış')}</span></button>
         <button class="kt-qbtn" data-go="market"><b>${t('PİYASA ÖZETİ')}</b><span>${t('endeksler, hareketliler, takvim')}</span></button>
+        <button class="kt-qbtn" data-go="calendar"><b>${t('TAKVİM')}</b><span>${t('temettü, TCMB, bilanço günleri')}</span></button>
       </div>
     </div>
     <div class="kt-statcards" id="ktStats"></div>
@@ -209,9 +214,21 @@ root.innerHTML = `
     <div class="kt-grid kt-g2">
       ${moversPanel()}
       ${panel(`${t('Temettü takvimi')} ${sub(t('ilan edilenler'))}`, '<div class="table-wrap kt-tall"><table class="t" id="calendar"></table></div>',
-        { extra: `<span class="seg" id="calSeg"><button data-c="watchlist">${t('Listem')}</button><button data-c="portfolio">${t('Portföyüm')}</button><button data-c="all">${t('Tümü')}</button></span>` })}
+        { extra: `<span class="row" style="gap:6px"><button class="ghost xs" id="calAll">${t('Tüm takvim →')}</button><span class="seg" id="calSeg"><button data-c="watchlist">${t('Listem')}</button><button data-c="portfolio">${t('Portföyüm')}</button><button data-c="all">${t('Tümü')}</button></span></span>` })}
     </div>
     ${panel(t('Ekonomi haberleri'), '<div class="news" id="econNews"></div>', { extra: `<select id="newsSrc"><option value="">${t('Tüm kaynaklar')}</option></select>` })}
+  </section>
+
+  <section class="kt-page" data-page="calendar" hidden>
+    <div class="kt-pagehead"><span>${t('TAKVİM')}</span><span class="dim">${t('yaklaşan temettü, TCMB ve bilanço günleri')}</span></div>
+    <div class="kt-panel"><div class="kt-pb">
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="seg" id="cpScope"><button data-c="watchlist">${t('Listem')}</button><button data-c="portfolio">${t('Portföyüm')}</button><button data-c="all">${t('Tümü')}</button></span>
+        <span class="seg" id="cpKinds"><button data-k="temettu">${t('Temettü')}</button><button data-k="sermaye">${t('Sermaye artırımı')}</button><button data-k="tcmb">TCMB</button><button data-k="bilanco">${t('Bilanço')}</button></span>
+      </div>
+      <div class="kt-note" id="cpWarn" hidden></div>
+      <div id="cpBody"></div>
+    </div></div>
   </section>
 </div>
 <footer class="kt-cmd">
@@ -252,7 +269,7 @@ const D = {
 const purge = (test) => { for (const k of [...memo.keys()]) if (test(k)) memo.delete(k); };
 
 // ── Sayfa yönetimi ────────────────────────────────
-const RENDER = { home: renderHome, sum: renderSum, fin: renderFin, score: renderScore, value: renderValue, comp: renderComp, screen: () => runScreen(), sectors: loadMarket, market: renderMarketPage };
+const RENDER = { home: renderHome, sum: renderSum, fin: renderFin, score: renderScore, value: renderValue, comp: renderComp, screen: () => runScreen(), sectors: loadMarket, market: renderMarketPage, calendar: loadCalPage };
 function ensure(pg, force = false) {
   const key = SYM_PAGES.includes(pg) ? curSym : '*';
   if (!force && rendered[pg] === key) return;
@@ -1435,6 +1452,89 @@ root.addEventListener('click', (e) => {
 });
 $('#calSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; calScope = b.dataset.c; localSet('calScope', calScope); segActive(); loadCalendar(); };
 
+// ── TAKVİM sayfası: temettü + TCMB + bilanço, gün gün (GET /api/calendar) ───────────
+const CAL_KIND_LBL = { temettu: t('Temettü'), sermaye: t('Sermaye artırımı'), tcmb: 'TCMB', bilanco: t('Bilanço') };
+const CAL_GROUPS = [['son_gunler', t('Son günler')], ['bugun', t('Bugün')], ['yarin', t('Yarın')], ['hafta', t('Bu hafta')], ['tarih', t('Daha sonra')]];
+const CAL_PERIOD = { 1: t('3 aylık'), 2: t('6 aylık'), 3: t('9 aylık'), 4: t('[dönem]yıllık') };
+const isoPlus = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+// Sunucudaki groupKey ile aynı kural (server/takvim.js); gün grubu istemcide, yanıttaki `today` ile hesaplanır
+const calGroup = (date, today) => (date < today ? 'son_gunler' : date === today ? 'bugun' : date === isoPlus(today, 1) ? 'yarin' : date <= isoPlus(today, 6) ? 'hafta' : 'tarih');
+const calWeekday = (date) => new Date(`${date}T12:00:00`).toLocaleDateString(locale, { weekday: 'short' });
+function calText(e) {
+  const d = e.data || {};
+  const per = d.period ? `${d.year} ${CAL_PERIOD[d.period]}` : '';
+  switch (e.type) {
+    case 'temettu': return d.dps ? t('Nakit temettü · hisse başı brüt {v} ₺', { v: num(d.dps, 4) }) : t('Nakit temettü');
+    case 'bedelsiz': return t('Bedelsiz sermaye artırımı %{v}', { v: num(d.pct, 2) });
+    case 'bedelsiz_temettu': return t('Bedelsiz (temettüden) %{v}', { v: num(d.pct, 2) });
+    case 'bedelli': return t('Bedelli sermaye artırımı %{v}', { v: num(d.pct, 2) });
+    case 'ppk_karar': return t('TCMB PPK faiz kararı');
+    case 'ppk_ozet': return t('TCMB PPK toplantı özeti');
+    case 'enflasyon_raporu': return t('TCMB Enflasyon Raporu');
+    case 'fin_istikrar': return t('TCMB Finansal İstikrar Raporu');
+    case 'bilanco_aciklandi': return t('Bilanço açıkladı · {p}', { p: per });
+    case 'bilanco_beklenen': return t('Bilanço bekleniyor · {p}', { p: per });
+    case 'bilanco_son_teslim': return d.market ? t('Bilanço sezonu yasal son teslim · {p}', { p: per }) : t('Bilanço yasal son teslim · {p}', { p: per });
+    default: return e.type;
+  }
+}
+// KESİN / TAHMİNİ etiketinin ipucu: tahminin gerekçesi
+function calTip(e) {
+  const d = e.data || {};
+  if (e.type === 'bilanco_beklenen') return t('Geçen yıl {a} tarihinde açıkladı; yasal son teslim {b}. Tahmindir.', { a: dateTR(d.lastYear), b: dateTR(d.deadline) });
+  if (e.type === 'bilanco_son_teslim') return `${t('Dönem sonu + yasal süre (SPK II-14.1); hafta sonuna denk gelirse sonraki iş günü, resmî tatiller hesaba katılmaz.')}${d.assumed ? ` ${t('Konsolide süre varsayıldı.')}` : ''}`;
+  return t('Resmî ya da ilan edilmiş tarih.');
+}
+let calPageSeq = 0; // eski yanıt yeni seçimi ezmesin
+async function loadCalPage() {
+  const body = $('#cpBody'), seq = ++calPageSeq;
+  const fetchCal = (scope) => api(`/calendar?scope=${scope}&kinds=${enc(calKinds.join(','))}`);
+  body.innerHTML = `<div class="dim"><span class="spinner"></span> ${t('yükleniyor…')}</div>`;
+  let scope = calPageScope || 'portfolio', r;
+  try {
+    r = await fetchCal(scope);
+    if (!calPageScope && r.emptyScope) { scope = 'watchlist'; r = await fetchCal(scope); } // hiç seçilmediyse: portföy boşsa liste
+  } catch (e) { if (seq === calPageSeq) body.innerHTML = `<div class="dim">${esc(tx(e.message))}</div>`; return; }
+  if (seq !== calPageSeq) return;
+  $$('#cpScope button').forEach((b) => b.classList.toggle('active', b.dataset.c === scope));
+  $$('#cpKinds button').forEach((b) => b.classList.toggle('active', calKinds.includes(b.dataset.k)));
+  const notes = [...r.stale.map((s) => t('{s} verisi eski (son başarılı kayıt)', { s: s.toUpperCase() })), ...r.warnings.map((w) => `${w.source.toUpperCase()}: ${tx(w.message)}`)];
+  $('#cpWarn').hidden = !notes.length;
+  $('#cpWarn').textContent = notes.join(' · ');
+  if (!r.events.length) {
+    body.innerHTML = `<div class="dim">${r.emptyScope ? (scope === 'portfolio' ? t('Portföy boş') : t('İzleme listesi boş')) : t('Bu kapsamda ve pencerede olay yok')}</div>`;
+    return;
+  }
+  const mine = new Set(r.mine);
+  body.innerHTML = CAL_GROUPS.map(([g, title]) => {
+    const list = r.events.filter((e) => calGroup(e.date, r.today) === g);
+    if (!list.length) return '';
+    let prev = '';
+    return `<div class="kt-mini-h" style="margin-top:10px">${title} · ${list.length}</div><div class="table-wrap kt-cal"><table class="t"><tbody>${list.map((e) => {
+      const first = e.date !== prev; prev = e.date;
+      return `<tr${e.symbol ? ` class="click" data-s="${esc(e.symbol)}"` : ''}>
+        <td class="num" style="white-space:nowrap">${first ? `${dateTR(e.date)} <span class="dim">${esc(calWeekday(e.date))}</span>` : ''}</td>
+        <td class="c-kind"><span class="pill">${esc(CAL_KIND_LBL[e.kind])}</span></td>
+        <td class="mono">${e.symbol ? `<b>${esc(e.symbol)}</b>${scope === 'all' && mine.has(e.symbol) ? ` <span class="pill acc">${t('listede')}</span>` : ''}` : '<span class="dim">—</span>'}</td>
+        <td class="kt-wrap">${esc(calText(e))}</td>
+        <td class="r"><span class="pill ${e.certainty === 'kesin' ? 'up' : ''}" title="${esc(calTip(e))}">${e.certainty === 'kesin' ? t('KESİN') : t('TAHMİNİ')}</span></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }).join('');
+}
+$('#cpScope').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; calPageScope = b.dataset.c; localSet('calPageScope', calPageScope); loadCalPage(); };
+$('#cpKinds').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const k = b.dataset.k;
+  const next = calKinds.includes(k) ? calKinds.filter((x) => x !== k) : [...calKinds, k];
+  if (!next.length) return; // en az bir tür açık kalır
+  calKinds = CAL_KINDS.filter((x) => next.includes(x));
+  localSet('calKinds', calKinds);
+  loadCalPage();
+};
+$('#cpBody').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
+$('#calAll').onclick = () => showPage('calendar');
+
 // Temettü takvimi: ilan edilmiş, bugünden sonraki olaylar
 async function loadCalendar() {
   let symbols = null;
@@ -1483,6 +1583,7 @@ alias('home', 'HOME', 'ANA', 'ANAEKRAN');
 alias('screen', 'TARA', 'TARAYICI', 'SCREEN', 'SCREENER');
 alias('sectors', 'SEKTOR', 'SEKTORLER', 'SECTORS', 'SECTOR');
 alias('market', 'PIYASA', 'MARKET');
+alias('calendar', 'TAKVIM', 'CAL', 'CALENDAR');
 const HELP_WORDS = new Set(['HELP', 'YARDIM', '?']);
 const isTicker = (s) => /^[A-Z0-9][A-Z0-9.=^-]{0,14}$/.test(s);
 function exec(raw) {
@@ -1503,6 +1604,7 @@ function showHelp() {
     [L ? 'THYAO FIN · SCORE · VALUE · COMP' : 'THYAO FIN · SKOR · DEGER · KARS', t('hisseyi o sayfada açar')],
     ['1 – 5', t('sembol sayfaları')],
     [L ? 'SCREEN · SECTORS · MARKET' : 'TARA · SEKTOR · PIYASA', t('tarayıcı, sektör haritası, piyasa özeti')],
+    [L ? 'CALENDAR · CAL' : 'TAKVIM · CAL', t('yaklaşan temettü, TCMB ve bilanço günleri')],
     [L ? 'HOME' : 'ANA · HOME', t('ana ekran (Esc)')],
     ['/', t('komut satırına geçer')],
   ];

@@ -307,3 +307,6 @@
   .kt-qbtn { min-width: 0; flex: 1 1 100%; }
 }
 .kt-fv-range .kt-fv-v { grid-column: 3 / 5; white-space: nowrap; }
+/* TAKVİM: dar sütunda tür sütunu gizlenir (sembol ve metin yeter) */
+.kt-cal { container-type: inline-size; }
+@container (max-width: 520px) { .kt-cal .c-kind { display: none; } }
