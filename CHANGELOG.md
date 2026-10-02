@@ -1,5 +1,17 @@
 # Sürüm Notları
 
+## 0.16.6 — 2 Ekim 2026 (dar pencere: fiyat şeridi, araç çubuğu, küçük hedefler)
+
+### Düzeltilen
+- **Fiyat şeridi dar ekranda hücreleri üst üste bindiriyordu.** Hücreler daralabildiği için `fitTicker()` sığmayanları gizleme koşulunu hiç sağlamıyordu (`scrollWidth > clientWidth` hiçbir zaman doğru olmuyordu), içerik komşu hücreye taşıyordu (640 px'te 7 hücre ~96 px'e sıkışıyordu). Artık koşul "içerik kendi hücresinin sınırını aşıyor mu?" ve aşıyorsa sağdaki hücre gizleniyor. Ölçüm: 640 px'te 5 hücre, taşma 0; 1440 px'te 11 hücre, taşma 0 (önceden 12 hücre, bir kısmı sıkışık).
+- **KMY terminal araç çubuğu dar sütunda kesiliyordu** (YENİLE düğmesi yarım, sembol özeti "THYAO 2…"). Çubuk artık kendi genişliğine göre uyum sağlıyor: 760 px'in altında sembol özeti, 560 px'in altında sekme numaraları ("1)", "2)"…), YENİLE yazısı gizleniyor ve dolgular daralıyor. Düğmeler ⟳ ve ⌂ simgesiyle her zaman görünüyor; kısayol numaraları ipucunda duruyor. Ölçüm: 900 px'te (sütun 495 px) hiçbir düğme kesilmiyor, kaydırma gerekmiyor.
+- **Küçük tıklama hedefleri en az 22 px oldu:** izleme listesi sıralama düğmesi (16×24 → 24×24), "ARKA PLAN İŞİ" düğmesi (13 → 22 px), `ghost.xs` düğmeleri (19 → 22 px), terminal başlığındaki KMY TERMINAL düğmesi (13 → 22 px). 9,5 px yazılar 10 px'e çıkarıldı ("15 dk" etiketi, sayaç kartı başlıkları).
+
+### Bilinen
+- Tarayıcı tablosundaki iki dikey kaydırma çubuğu kasıtlı: sayfa, tablonun altındaki Sinyal radarına ulaşmak için kayıyor; tablonun iç kaydırması sabit başlığı koruyor.
+- macOS uygulamasının asgari pencere genişliği 760 px'tir; 640 px yalnız tarayıcıda görülür.
+- Boyut değişimi `resize` olayı gönderen gerçek pencerelerde şeridi yeniden sığdırır; geliştirici aracındaki boyut emülasyonu olayı göndermediği için orada sayfayı yenilemek gerekir.
+
 ## 0.16.5 — 2 Ekim 2026 (kesilen değerler, dar panelde tarayıcı)
 
 ### Düzeltilen
