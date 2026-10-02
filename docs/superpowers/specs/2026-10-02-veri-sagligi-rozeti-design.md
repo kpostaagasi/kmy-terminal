@@ -39,14 +39,14 @@ Kullanıcı onaylı kararlar: **A)** kontroller paylaşılan bir sunucu modülü
 
 ### API
 - `GET /api/data-health` → `{ at: number|null, summary: { ok, sapma, atlandi }, state, stale, results: [...], running: boolean }`; hiç çalışmadıysa `at: null`, `state: 'yok'`, `results: []`.
-- `POST /api/data-health/run` → koşar (≈20 sn), aynı biçimi döner. Koşu bitince `broadcast({ t: 'data-health.updated' })`; açık diğer pencereler `GET` ile yenilenir.
+- `POST /api/data-health/run` → koşar (≈40 sn; ölçüm: 8–41 sn, ağa göre değişir), aynı biçimi döner. Koşu bitince `broadcast({ t: 'data-health.updated' })`; açık diğer pencereler `GET` ile yenilenir.
 - Beklenmeyen koşu hatası 400 + ileti (rozetin önceki durumu bozulmaz).
 
 ### Arayüz
 - Durum çubuğunda `#quoteFresh`'ten sonra **rozet düğmesi** (`#dhBadge`): `VERİ ✓ 14:10` (yeşil, temiz), `VERİ ⚠ 2` (turuncu/kırmızı, SAPMA sayısı), `VERİ ?` (gri, doğrulanamadı), `VERİ · denetlenmedi` (gri, yok); eskiyse sonuna `(eski)` eklenir. İpucu: `OK 26 · SAPMA 0 · ATLANDI 7 · son denetim 14:10`. `stale` istemcide `at` ile 24 saat kuralından yeniden hesaplanır ve 10 dakikada bir tazelenir (açık bırakılan uygulamada rozet kendiliğinden "eski"ye döner).
 - Tıklayınca **"Veri sağlığı" penceresi** (`modal`): başlıkta rozet durumu ve son denetim zamanı; **Şimdi denetle** düğmesi (koşu sürerken kilitli, dönen gösterge, çift tıklama yeni koşu başlatmaz); kontroller **grup grup** tabloda (kontrol · durum etiketi · sapma % · neden), **SAPMA satırları en üstte**; piyasa verisi satırlarında uygulama ve referans değeri görünür, portföy satırlarında yalnız yüzde. Altta açıklama: "ATLANDI hata değildir, doğrulanamadı demektir (seans açık, kaynak erişilemedi…). Denetim bağımsız ikinci kaynaklarla karşılaştırır: TCMB, İş Yatırım, TEFAS, KAP mali tabloları."
 - Ağ yok / koşu hatası: pencerede hata iletisi, rozet son geçerli durumu korur.
-- Türkçe/İngilizce (`web/js/lang/en/*`), 760 px'te taşma yok.
+- Türkçe/İngilizce (`web/js/lang/en/*`), 760 px'te taşma yok. Koşu sürerken düğme "denetleniyor… (≈40 sn)" der. Grup adları, kontrol adları ve bilinen neden metinleri (ör. "değer yok", "seans açık; kapanış değeri karşılaştırılamaz") bağlamlı anahtarlarla çevrilir; dinamik nedenler ("hata: …", "dönem uyuşmuyor: …") Türkçe kalır. Pencere tabloları sabit sütun genişliğiyle gruplar arası hizalıdır.
 
 ## Hata yönetimi
 - Kaynak hataları kontrol bazında ATLANDI'dır (mevcut `guard`); hiçbiri SAPMA üretmez.
@@ -67,7 +67,7 @@ Arka plan/zamanlanmış denetim, bildirim, sonuç geçmişi ve grafiği, toleran
 ## Bilinen sınırlar (belgelenecek)
 - Denetim elle çalışır: rozet son koşuyu gösterir ve 24 saatten sonra "eski" olur; bu bir sağlık **izlemesi** değil son denetimin kanıtıdır.
 - Hisse kontrolü seans açıkken ATLANDI'dır; tam sonuç için kapanıştan sonra denetleyin.
-- Koşu birkaç kaynağa istek yapar (TCMB, İş Yatırım, TEFAS, KAP mali tablolar) ve yaklaşık 20 sn sürer; İş Yatırım verisi her koşuda zorla tazelenir.
+- Koşu birkaç kaynağa istek yapar (TCMB, İş Yatırım, TEFAS, KAP mali tablolar) ve yaklaşık 40 sn'ye kadar sürer (ölçüm: 8–41 sn); İş Yatırım verisi her koşuda zorla tazelenir.
 
 ## Başarı ölçütü
 Durum çubuğundaki rozet son denetimin sonucunu doğru ve dürüst gösterir (sahte yeşil yok); **Şimdi denetle** sunucu içinde çalışıp CLI ile aynı sayıları üretir; tutarlar arayüze ve kayda yazılmaz; `npm run denetim` aynı çıktı ve çıkış koduyla çalışır; `npm test` yeşil; 760 px'te taşma yok.
