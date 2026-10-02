@@ -118,3 +118,21 @@ export function cikisKodu(sonuc) {
   if (!sonuc.some((r) => r.durum === 'OK')) return 2;
   return 0;
 }
+
+/** { ok, sapma, atlandi } sayımı; bilinmeyen durumlu satırlar sayılmaz. */
+export function ozet(results) {
+  const say = (d) => (results || []).filter((r) => r.durum === d).length;
+  return { ok: say('OK'), sapma: say('SAPMA'), atlandi: say('ATLANDI') };
+}
+
+/** Rozet durumu: 'yok' (hiç çalışmadı) · 'uyari' (SAPMA var) · 'dogrulanamadi' (hepsi ATLANDI: sahte yeşil yok) · 'temiz'. */
+export function rozetDurumu(results) {
+  if (!results || !results.length) return 'yok';
+  const o = ozet(results);
+  if (o.sapma) return 'uyari';
+  return o.ok ? 'temiz' : 'dogrulanamadi';
+}
+
+/** Son denetim bu süreden eskiyse rozet "eski" işaretlenir. */
+export const ESKI_MS = 24 * 3600_000;
+export const eskiMi = (at, now = Date.now()) => at != null && now - at > ESKI_MS;

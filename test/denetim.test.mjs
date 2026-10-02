@@ -1,5 +1,5 @@
 // Veri denetimi çekirdeği: çevrimdışı, ağsız, veritabansız.
-import * as K from '../scripts/denetim-cekirdek.mjs';
+import * as K from '../server/denetim-cekirdek.js';
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail = '') {
@@ -137,6 +137,25 @@ assert('OK + ATLANDI çıkış 0', K.cikisKodu([R('OK'), R('ATLANDI')]) === 0);
 const metin = K.rapor([{ grup: 'Döviz', ad: 'USDTRY', durum: 'OK', sapmaPct: 0.1234, app: 41.5, ref: 41.45 }, R('SAPMA')]);
 assert('rapor özet satırı', metin.endsWith('OK 1 · SAPMA 1 · ATLANDI 0'), metin.split('\n').at(-1));
 assert('rapor yüzde biçimi', metin.includes('%0.123'));
+
+// ── ozet / rozetDurumu / eskiMi (veri sağlığı rozeti) ─────────────────────
+const SR = (d) => ({ grup: 'G', ad: 'a', durum: d });
+const o1 = K.ozet([SR('OK'), SR('OK'), SR('SAPMA'), SR('ATLANDI'), SR('ATLANDI'), SR('ATLANDI')]);
+assert('ozet sayımı', o1.ok === 2 && o1.sapma === 1 && o1.atlandi === 3, JSON.stringify(o1));
+assert('ozet boş / null girdi', K.ozet([]).ok === 0 && K.ozet(null).sapma === 0 && K.ozet(undefined).atlandi === 0);
+assert('ozet bilinmeyen durum satırını saymaz', (() => { const o = K.ozet([SR('OK'), SR('???')]); return o.ok === 1 && o.sapma === 0 && o.atlandi === 0; })());
+assert('rozet: sonuç yok (null) → yok', K.rozetDurumu(null) === 'yok' && K.rozetDurumu(undefined) === 'yok');
+assert('rozet: boş liste → yok', K.rozetDurumu([]) === 'yok');
+assert('rozet: 1 SAPMA → uyari', K.rozetDurumu([SR('OK'), SR('SAPMA')]) === 'uyari');
+assert('rozet: SAPMA öncelikli (çok OK olsa da)', K.rozetDurumu([...Array(20).fill(SR('OK')), SR('SAPMA')]) === 'uyari');
+assert('rozet: hepsi ATLANDI → dogrulanamadi (sahte yeşil yok)', K.rozetDurumu([SR('ATLANDI'), SR('ATLANDI')]) === 'dogrulanamadi');
+assert('rozet: OK + ATLANDI → temiz', K.rozetDurumu([SR('OK'), SR('ATLANDI')]) === 'temiz');
+assert('rozet: yalnız OK → temiz', K.rozetDurumu([SR('OK')]) === 'temiz');
+const H24 = 24 * 3600_000, N = 1_000_000_000_000;
+assert('eskiMi: tam 24 saat eski değil', K.eskiMi(N - H24, N) === false);
+assert('eskiMi: 24 saat + 1 ms eski', K.eskiMi(N - H24 - 1, N) === true);
+assert('eskiMi: yeni sonuç değil', K.eskiMi(N - 1000, N) === false);
+assert('eskiMi: at null → false', K.eskiMi(null, N) === false && K.eskiMi(undefined, N) === false);
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);
