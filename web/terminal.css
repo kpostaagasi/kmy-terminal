@@ -25,7 +25,7 @@
 
 /* ── Başlık ───────────────────────────────────── */
 .kt-head { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; flex: none; background: var(--bg-2); border-bottom: 1px solid var(--line-2); }
-.kt-brand { background: none; border: 0; padding: 0; cursor: pointer; font: 700 13px/1 var(--mono); letter-spacing: .16em; color: var(--text); white-space: nowrap; }
+.kt-brand { min-height: 22px; background: none; border: 0; padding: 0; cursor: pointer; font: 700 13px/1 var(--mono); letter-spacing: .16em; color: var(--text); white-space: nowrap; }
 .kt-brand .acc, .kt-title .acc { color: var(--accent); }
 .kt-search { display: flex; gap: 4px; margin-left: auto; min-width: 0; }
 .kt-search input { width: 200px; min-width: 0; height: 26px; padding: 0 8px; background: var(--bg); color: var(--text); border: 1px solid var(--line-2); font: 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
@@ -45,6 +45,13 @@
 /* ── İşlev tuşları ────────────────────────────── */
 .kt-fkeys { display: flex; align-items: center; gap: 3px; padding: 4px 8px; flex: none; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .kt-fkeys::-webkit-scrollbar { display: none; }
+.kt-fkeys { container-type: inline-size; }
+/* Dar sütun: önce sembol özeti, sonra numaralar ve YENİLE yazısı gizlenir; düğmeler sığar */
+@container (max-width: 760px) { .kt-fkeys .kt-cur { display: none; } }
+@container (max-width: 560px) {
+  .kt-fkeys .kt-fk i, .kt-fkeys .kt-lbl { display: none; }
+  .kt-fkeys .kt-fk { padding: 0 7px; }
+}
 .kt-fk { flex: none; height: 24px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 2px; background: transparent; color: var(--text-2); cursor: pointer; font: 600 11px/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .kt-fk i { font-style: normal; color: var(--text-3); margin-right: 2px; }
 .kt-fk:hover { color: var(--text); border-color: var(--accent); }
@@ -165,7 +172,7 @@
 .kt-stat { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; min-width: 0; }
 .kt-stat svg { width: 22px; height: 22px; flex: none; color: var(--accent); margin-top: 2px; }
 .kt-stat div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.kt-stat small { font: 600 9.5px var(--mono); letter-spacing: .1em; color: var(--text-3); }
+.kt-stat small { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--text-3); }
 .kt-stat b { font: 700 16px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kt-stat span { font-size: 11px; color: var(--text-3); }
 .kt-sec { width: min(980px, 100%); display: flex; flex-direction: column; gap: 8px; }

@@ -87,6 +87,7 @@ a { color: var(--info); text-underline-offset: 2px; }
 .icon-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .icon-btn.sm { width: 24px; height: 24px; font-size: 12px; }
 .icon-btn.sm svg { width: 14px; height: 14px; }
+#wlSort { flex: none; }
 #btnToggleRight.off { color: var(--text-3); }
 .only-narrow { display: none; }
 .chip { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 3px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-family: var(--mono); }
@@ -115,7 +116,7 @@ a { color: var(--info); text-underline-offset: 2px; }
 
 .ghost { background: none; border: 1px solid var(--line-2); color: var(--text-2); border-radius: 2px; padding: 3px 9px; transition: background .12s, color .12s, border-color .12s; cursor: pointer; font: 500 11px/1.4 var(--mono); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .ghost:hover { color: var(--accent); border-color: var(--accent); }
-.ghost.xs { padding: 1px 7px; font-size: 10.5px; }
+.ghost.xs { padding: 1px 7px; font-size: 10.5px; min-height: 22px; }
 .ghost.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 a.ghost { text-decoration: none; display: inline-flex; align-items: center; }
 
@@ -189,7 +190,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .wl-row .spark { width: 40px; height: 16px; display: block; }
 .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .dot.live { background: var(--up); } .dot.delayed { background: var(--accent-bg); }
-.delay-tag { font: 500 9.5px/1.4 var(--mono); color: var(--text-3); border: 1px solid var(--line-2); border-radius: 2px; padding: 0 3px; margin-left: 5px; vertical-align: 2px; text-transform: uppercase; }
+.delay-tag { font: 500 10px/1.4 var(--mono); color: var(--text-3); border: 1px solid var(--line-2); border-radius: 2px; padding: 0 3px; margin-left: 5px; vertical-align: 2px; text-transform: uppercase; }
 
 /* ── Kartlar, tablolar, düğmeler ─────────────────── */
 .pad { padding: 14px; }
@@ -434,7 +435,7 @@ table.fin-sum th.r { font-weight: 600; }
 .cm-send:hover { filter: brightness(1.08); } .cm-send:active { transform: scale(.95); }
 .cm-send.stop { background: var(--down); color: #fff; }
 .cm-status { display: flex; align-items: center; gap: 12px; padding: 0 4px; font: 10.5px var(--mono); color: var(--text-3); }
-.cm-jobs { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; text-transform: uppercase; letter-spacing: .04em; }
+.cm-jobs { min-height: 22px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; text-transform: uppercase; letter-spacing: .04em; }
 .cm-jobs:hover { color: var(--text); }
 .cm-jobs i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
 .cm-jobs.on { color: var(--text); } .cm-jobs.on i { background: var(--up); }

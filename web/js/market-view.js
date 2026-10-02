@@ -73,7 +73,7 @@ root.innerHTML = `
   ${FKEYS.map(([k, l], i) => `<button class="kt-fk" role="tab" aria-selected="${i === 0}" data-pg="${k}" title="${t('Kısayol: {k}', { k: i + 1 })}"><i>${i + 1})</i> ${l}</button>`).join('')}
   <span class="kt-cur" id="ktCur"></span>
   <span class="kt-spacer"></span>
-  <button class="kt-fk kt-tool" id="ktReload" title="${t('Bu sayfanın verilerini yenile')}">⟳ ${t('YENİLE')}</button>
+  <button class="kt-fk kt-tool" id="ktReload" title="${t('Bu sayfanın verilerini yenile')}" aria-label="${t('Bu sayfanın verilerini yenile')}">⟳<span class="kt-lbl"> ${t('YENİLE')}</span></button>
   <button class="kt-fk kt-tool" id="ktHome" title="${t('Ana ekran (Esc)')}" aria-label="${t('Ana ekran')}">⌂</button>
 </nav>
 <div class="kt-body" id="ktBody">

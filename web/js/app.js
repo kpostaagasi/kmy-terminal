@@ -257,7 +257,9 @@ function fitTicker() {
   const cells = [...el.children];
   cells.forEach((c) => { c.style.display = ''; });
   if (!bar.clientWidth) return;
-  for (let i = cells.length - 1; i >= 0 && el.scrollWidth > bar.clientWidth; i--) cells[i].style.display = 'none';
+  // Hücreler daralabilir; içerik hücre sınırını aşıyorsa komşuya binmesin diye sağdan gizle
+  const spill = (c) => { const r = c.getBoundingClientRect().right; return [...c.children].some((k) => k.getBoundingClientRect().right > r + 0.5); };
+  for (let i = cells.length - 1; i >= 0 && (el.scrollWidth > bar.clientWidth || cells.some((c) => c.style.display !== 'none' && spill(c))); i--) cells[i].style.display = 'none';
 }
 addEventListener('resize', fitTicker);
 $('#ticker').addEventListener('click', (e) => { const t = e.target.closest('.tick'); if (t) selectSymbol(t.dataset.s); });
