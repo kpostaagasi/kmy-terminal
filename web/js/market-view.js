@@ -2,6 +2,7 @@
 // piyasa sayfaları (tarayıcı · sektör haritası · piyasa özeti) ve alttaki komut satırı
 import { state, on, emit, api, $, $$, h, esc, md, num, price, pct, cls, compact, dateTR, css, toast, modal, selectSymbol, askAgent, localGet, localSet, timeTR, sqlDate, srcTag, debounce, confirmBox, openPdfViewer, today } from './core.js';
 import { baseOptions, makeChart, palette } from './charts.js';
+import { notify } from './chat.js';
 import { openTxModal } from './portfolio-view.js';
 import { openKapDetail, signalPill } from './kap.js';
 import { t, tx, lang, locale } from './i18n.js';
@@ -192,6 +193,7 @@ root.innerHTML = `
     ${panel(`${t('Sinyal radarı')} ${sub(t('BIST 100 · günlük'))}`, `<div class="row" id="radarChips" style="margin-bottom:8px"></div>
       <div class="table-wrap kt-tall"><table class="t" id="radarTable"><tbody><tr><td class="dim">${t('Taramayı başlatmak için “Tara”ya basın. İlk tarama yaklaşık 20 sn sürer; sonuçlar 15 dk saklanır.')}</td></tr></tbody></table></div>`,
       { extra: `<span class="row" style="gap:6px"><span class="dim" id="radarInfo"></span><button class="ghost" id="radarRun">${t('Tara')}</button><button class="ghost" id="radarAsk">${t('Asistanla yorumla')}</button></span>` })}
+    ${panel(`${t('Son sinyal bildirimleri')} ${sub(t('izleme listesi ve portföy · seans sonrası · son 14 gün'))}`, `<div id="sigRecent" class="dim"></div>`)}
   </section>
 
   <section class="kt-page" data-page="sectors" hidden>
@@ -503,9 +505,10 @@ $('#bAlert').onclick = () => {
 };
 on('ws:alerts.fired', (m) => {
   const a = m?.alert;
-  if (!a || a.symbol !== curSym) return;
-  toast(t('🔔 {s}: {c}', { s: a.symbol, c: alertText(a) }), 'ok');
-  loadAlerts();
+  if (!a) return;
+  const text = t('🔔 {s}: {c}', { s: a.symbol, c: alertText(a) });
+  // Açık sembolün eşiği ekran içi toast; diğer semboller sistem bildirimi de gönderir (önceden hiçbir şey göstermiyordu)
+  if (a.symbol === curSym) { toast(text, 'ok'); loadAlerts(); } else notify(text, [{ label: t('Aç'), run: () => selectSymbol(a.symbol) }]);
 });
 
 $('#bWatch').onclick = async () => { try { await api('/watchlist', { method: 'POST', body: { symbol: curSym } }); toast(t('{s} izleme listesine eklendi', { s: curSym }), 'ok'); } catch (e) { toast(tx(e.message), 'err'); } };
@@ -1371,6 +1374,20 @@ function drawRadar() {
   $$('#radarChips [data-k]').forEach((b) => b.onclick = () => { radarFilter = radarFilter === b.dataset.k ? null : b.dataset.k; drawRadar(); });
 }
 $('#radarRun').onclick = loadRadar;
+// Yeni sinyal bildirimleri (sunucu seans sonrası tarar; uygulama kapalıyken kaçırılanlar burada görünür)
+async function loadSigRecent() {
+  let rows = [];
+  try { rows = await api('/signals/recent?days=14'); } catch { /* liste boş kalır */ }
+  $('#sigRecent').innerHTML = rows.length
+    ? `<div class="table-wrap kt-tall"><table class="t"><thead><tr><th>${t('Tarih')}</th><th>${t('Sembol')}</th><th>${t('Sinyal')}</th><th class="r">${t('Fiyat')}</th><th class="r">${t('Gün %')}</th></tr></thead><tbody>${rows.map((x) => `<tr class="click" data-s="${esc(x.symbol)}">
+        <td class="dim">${dateTR(x.firedAt.replace(' ', 'T') + 'Z')}</td><td class="mono"><b>${esc(x.symbol)}</b></td>
+        <td><span class="pill ${x.dir === 'up' ? 'up' : x.dir === 'down' ? 'down' : ''}">${esc(tx(x.label))}</span></td>
+        <td class="r num">${price(x.price)}</td><td class="r num ${cls(x.changePct)}">${pct(x.changePct)}</td></tr>`).join('')}</tbody></table></div>`
+    : t('Henüz bildirim yok. Yeni sinyaller seans kapandıktan sonra (18:30) taranır; ilk tarama yalnız başlangıç durumunu kaydeder.');
+}
+$('#sigRecent').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
+on('signals:changed', loadSigRecent);
+loadSigRecent();
 $('#radarTable').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
 $('#radarAsk').onclick = () => askAgent(t('signal_scan aracıyla BIST 100 sinyal taramasını çalıştır. İzleme listem ve portföyümdeki hisselerde çıkan sinyalleri öne alarak en dikkat çekici sinyalleri yorumla; hangi sinyallerin hacimle teyit edildiğini belirt.'));
 

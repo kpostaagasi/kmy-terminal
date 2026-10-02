@@ -2,6 +2,10 @@
 const n = (v, one, many) => `${v.n} ${Number(v.n) === 1 ? one : many}`;
 
 export default {
+  // ── Sinyal bildirimi ──
+  'Son sinyal bildirimleri': 'Recent signal alerts',
+  'izleme listesi ve portföy · seans sonrası · son 14 gün': 'watchlist and portfolio · after the close · last 14 days',
+  'Henüz bildirim yok. Yeni sinyaller seans kapandıktan sonra (18:30) taranır; ilk tarama yalnız başlangıç durumunu kaydeder.': 'No alerts yet. New signals are scanned after the close (18:30); the first scan only records the starting state.',
   // Aralık düğmeleri
   '1G': '1D',
   '1H': '1W',

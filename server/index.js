@@ -19,6 +19,7 @@ import { watchWeb } from './devwatch.js';
 import { radar } from './radar.js';
 import * as universe from './universe.js';
 import * as scheduler from './scheduler.js';
+import * as signalWatch from './signal-watch.js';
 import * as memory from './memory.js';
 import * as documents from './documents.js';
 import * as research from './research.js';
@@ -170,6 +171,8 @@ route('GET', '/api/news', async ({ q }) => market.news(q.get('q') || 'Borsa Ista
 route('GET', '/api/dividends/:symbol', async ({ p }) => market.getDividends(p.symbol));
 route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(), items: await market.overview() }));
 route('GET', '/api/market/movers', async () => market.movers());
+route('GET', '/api/signals/types', async () => signalWatch.types());
+route('GET', '/api/signals/recent', async ({ q }) => signalWatch.recent(q.get('days')));
 route('GET', '/api/market/radar', async ({ q }) => radar((q.get('symbols') || '').split(',').filter(Boolean)));
 // Araç çağrısı sunucu tarafında izin kapısından geçer; onay yalnız Claude SDK'sının canUseTool'unda değil.
 // Alt süreç imzalı kapsamlı jetonla gelirse izin kipi ve oturum jetondan okunur, gövdeden gelen `mode`a güvenilmez.
@@ -650,6 +653,8 @@ listenWithRetry(server, PORT, () => {
   scheduler.start(agent, (s) => broadcast({ t: 'schedule.ran', name: s.name }), (a) => broadcast({ t: 'alerts.fired', alert: a }));
   // Kurum raporu akışını arka planda hazır tut (ilk açılışta beklemeyi önler)
   // Kurum raporu klasör izleme (varsayılan açık; Ayarlar › Veri'den kapatılabilir)
+  // Sinyal bildirimi: seans kapandıktan sonra günde bir kez (zamanı gelmediyse dakikalık çağrı hiçbir şey yapmaz)
+  setInterval(() => signalWatch.tick((items) => broadcast({ t: 'signals.fired', items })).catch((e) => console.error('[sinyal]', e.message)), 60_000);
   setInterval(() => inbox.scan({ notify: inboxNotify }).catch((e) => console.error('[klasör izleme]', e.message)), 60_000);
   // Kurum raporu akışı: açılışta ve 30 dakikada bir; yeni rapor gelince açık arayüzler kendiliğinden yenilenir
   let lastResearch = 0;

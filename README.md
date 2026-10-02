@@ -13,7 +13,7 @@ Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tara
 
 Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı), `omp` CLI ve omp içinde `/login` (oh-my-pi sağlayıcısı; CLI bulunursa model seçicide görünür).
 
-Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 264 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 28, denetim çekirdeği 62, hedef fiyat 33; gerçek verinize dokunmaz).
+Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 301 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 28, denetim çekirdeği 62, hedef fiyat 33, sinyal bildirimi 37; gerçek verinize dokunmaz).
 
 Verinin doğruluğunu canlı kaynaklara karşı denetlemek için: `npm run denetim` (ağ gerekir; `npm test` zincirinde değildir). Döviz (TCMB), gram altın (ons × kur), altın türleri, hisse fiyatı (İş Yatırım), TEFAS fon fiyatı, gecikme etiketleri ve temel oranlar (FAVÖK, net kâr, F/K; mali tablo ham satırlarından yeniden hesap) ikinci bir kaynakla karşılaştırılır. `-- --portfoy` portföy toplamlarını gerçek veritabanının **kopyasında** yeniden toplar; çıktıya tutar yazılmaz. `-- --json` makine okunur çıktı verir. Hisse fiyatı kontrolü seans açıkken atlanır (kapanıştan sonra çalıştırın). Çıkış kodu: 0 temiz, 1 sapma var, 2 hiçbir şey doğrulanamadı.
 
@@ -93,6 +93,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
 | **KAP** (sağ panel) | Watchlist / portföy / tüm / sembol kapsamı (şirket bazında 1 yıla kadar); TEZ · YAP · FİN · KUR · DİĞER sinyal filtreleri; bildirim içeriği uygulama içinde; ekler uygulama içi PDF görüntüleyicide, arşive kaydetme; okundu takibi |
 | **RAPORLAR + PDF** (sağ panel) | Kurum raporu akışı (12 aracı kurumun açık raporları; kendi hesabınla indirdiklerin için klasör izleme; filtre, YENİ etiketi, uygulama içi PDF, arşive kaydet, ajanla analiz), ajan raporları, yüklenen kurum raporları (kurum + sembol etiketi), sunum modu, yazdır, indir; rapor PDF sekmesinde açılır (ANALİZ / İNDİR / YENİ SEKMEDE AÇ / KAPAT) |
 | **Zamanlanmış görevler** | Günlük kapanış raporu, sabah KAP taraması, haftalık portföy raporu, sinyal radarı, fon fiyatı güncelleme şablonları |
+| **Sinyal bildirimi** | Seans kapandıktan sonra (18:30; yarım günde 12:50) izleme listesi ve portföydeki BIST hisselerini tarar, yalnız **yeni** çıkan sinyalleri (altın/ölüm kesişimi, 52 hafta zirvesi/dibi, SMA200 kırılımı; RSI, MACD ve hacim isteğe bağlı) tek toplu bildirimle haber verir. İlk tarama ve listeye yeni eklenen hisse yalnız taban çizgisi kaydeder. Ayarlar › Veri'den kapatılır / türleri seçilir; son 14 günün bildirimleri Dashboard › Tarayıcı'daki "Son sinyal bildirimleri" panelinde. Fiyat eşikleri de artık açık olmayan semboller için bildirim verir |
 | **Ayarlar** | Tema, arayüz modu (Chat / Terminal), yazı boyutları, sağlayıcılar ve giriş, MCP bağlantıları, yenileme aralıkları, önbellek, sistem sağlığı ve yeniden başlatma, WebSocket mesaj logu, sürüm notları, kısayollar. Başlıktaki ⤓ ile masaüstüne uygulama olarak kurulabilir (Chrome / Edge). |
 
 Kısayollar: `⌘K` sembol ara, `⌘1–3` sekmeler (TERMINAL, DASHBOARD, PORTFÖY), `⌘,` ayarlar. Sohbette `/help` tüm komutları listeler.

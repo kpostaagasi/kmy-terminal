@@ -1,5 +1,22 @@
 # Sürüm Notları
 
+## 0.18.0 — 2 Ekim 2026 (sinyal bildirimi)
+
+### Yeni
+- **Sinyal bildirimi.** Sunucu, seans kapandıktan sonra günde bir kez (normal gün 18:30, yarım gün 12:50) izleme listesini ve portföydeki BIST hisselerini tarar; yalnız **yeni** çıkan sinyalleri tek toplu bildirimle haber verir: "3 yeni sinyal: THYAO Altın kesişim · ASELS 52 hafta zirvesi · …", "Aç" düğmesi ilk sembolü açar. Günlük mum kesinleştikten sonra taranır, gün içinde belirip kaybolan sinyal bildirim üretmez. Bildirim izni yoksa ekran içi bildirime düşer.
+- **Yeni sinyal ne demek (server/sinyal.js, 37 çevrimdışı kontrol):** önceki taramada yoktu, şimdi var. Sinyal kaybolup geri gelirse yeniden bildirilir. Durum tüm sinyal türlerini saklar; bir türü sonradan açmak mevcut sinyalleri bildirim yağmuruna çevirmez. İlk çalıştırma ve listeye yeni eklenen sembol sessizce taban çizgisine alınır. Taranamayan sembolün önceki durumu korunur, kapsamdan çıkan sembol durumdan düşer. Taramaların yarısından azı başarılıysa tamamlanmış sayılmaz ve 10 dakikada bir yeniden denenir. Hafta sonu, resmî tatil, seans öncesi ve kapanış seansı taranmaz.
+- **Varsayılan açık sinyaller:** altın kesişim, ölüm kesişimi, 52 hafta zirvesi, 52 hafta dibi, SMA200 yukarı/aşağı kırılım (seyrek, trend belirleyici). RSI, MACD ve hacim sık çıktığından varsayılan kapalı. Ayarlar › Veri › "Sinyal bildirimleri": genel anahtar ve sinyal başına onay kutusu (`signalNotify`, `signalTypes`).
+- **"Son sinyal bildirimleri" paneli** (Dashboard › Tarayıcı, Sinyal radarının altı): son 14 günün bildirimleri; uygulama kapalıyken kaçırılanlar burada görünür. `GET /api/signals/recent`, `GET /api/signals/types`; tablolar `signal_state`, `signal_log`, `signal_meta`.
+- Canlı doğrulama (gerçek veritabanı kopyası): kapsam 8 BIST hissesi; ilk tarama 0 bildirim (taban çizgisi: ASELS SMA200 yukarı kırılım, FROTO 52 hafta dibi), ikinci tarama 0 bildirim; durumdan bir sinyal silince yeniden taramada tam o sinyal "yeni" olarak çıktı ve kayda yazıldı. İstemci tarafı WebSocket mesajı simüle edilerek (Türkçe ve İngilizce) doğrulandı.
+
+### Düzeltilen
+- **Fiyat eşikleri yalnız ekranda açık olan sembol için bildirim veriyordu.** `alerts.fired` mesajı sunucudan tüm eşikler için geliyordu ama istemci `a.symbol !== curSym` ise hiçbir şey göstermiyordu: THYAO eşiği tetiklendiğinde GARAN açıksa haber yoktu. Artık açık olmayan semboller ekran içi bildirim ve sistem bildirimi alıyor (açık sembol için eski toast aynen kalıyor, çift bildirim yok).
+
+### Bilinen
+- Gerçek macOS uygulamasında doğrulanmadı: pencere kapatıldığında uygulama pencereyi yalnız gizliyor (`orderOut`) ve web görünümü canlı kalıyor, bu yüzden bildirimin gelmesi beklenir; ancak uygulama tamamen kapalıyken (gateway çalışırken bile) sistem bildirimi gelmez, kaçırılanlar "Son sinyal bildirimleri" panelinde görünür.
+- Tarama yalnız seans kapandıktan sonra yapılır; uygulama o gün 18:30 ile gece yarısı arasında hiç çalışmazsa o günün taraması atlanır, sonraki işlem günü önceki taramaya göre "yeni" olanları bildirir.
+- Seans kapanışından sonra tarama için Yahoo'nun ~15 dk gecikmesi gözetilerek 18:30 seçildi; kapanış mumu 18:30'da hâlâ eksikse bir sonraki gün düzelir.
+
 ## 0.17.0 — 2 Ekim 2026 (kurum hedef fiyatı portföyde)
 
 ### Yeni

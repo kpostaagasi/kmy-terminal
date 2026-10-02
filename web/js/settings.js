@@ -313,6 +313,10 @@ export function openSettings(section = 'genel') {
           row(t('Klasör izleme'), t('Kendi hesabınızla indirdiğiniz aracı kurum raporlarını (ör. Halk Yatırım, Deniz, Alnus raporları, e-posta ekleri) bu klasörden dakikada bir arşive alır. Yalnızca ilk sayfasında aracı kurum adı ve araştırma ifadesi (hedef fiyat, tavsiye, şirket raporu…) geçen ve son 30 günde inen PDF’ler kopyalanır; asıl dosyaya dokunulmaz.'), toggle('sInbox', !!s.inboxEnabled))
           + row(t('İzlenecek klasör'), t('Boş bırakılırsa ~/Downloads kullanılır'), `<input id="sInboxDir" class="stg-w" placeholder="${t('~/Downloads (varsayılan)')}" value="${esc(s.inboxDir || '')}">`, { id: 'sInboxRow' }),
           t('Kurum raporları için klasör izleme'))
+        + card(
+          row(t('Yeni sinyal bildirimi'), t('Seans kapandıktan sonra (18:30) izleme listenizi ve portföyünüzü tarar; yalnız yeni çıkan sinyalleri bildirir. İlk tarama yalnız başlangıç durumunu kaydeder.'), toggle('sSig', s.signalNotify))
+          + row(t('Bildirilecek sinyaller'), t('RSI, MACD ve hacim sinyalleri sık çıktığından varsayılan kapalıdır'), `<div id="sSigTypes" class="stg-chips"></div>`, { wide: true, id: 'sSigRow' }),
+          t('Sinyal bildirimleri'))
         + card(row(t('Yerel önbellek'), t('Geçmiş fiyat, temettü ve KAP önbelleği'), `<span class="stg-path mono" id="sCacheSize">${t('Hesaplanıyor…')}</span><button class="btn sec" id="sCache">${t('Önbelleği temizle')}</button>`), t('Önbellek'))
         + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>${t('Veri')}</th><th>${t('Kaynak')}</th><th class="r">${t('Gecikme')}</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
           <p class="stg-note">${t('Gecikme ve kaynak her fiyatın yanında da gösterilir.')}</p>`, t('Veri kaynakları'));
@@ -322,6 +326,14 @@ export function openSettings(section = 'genel') {
       $('#sKap').onchange = (e) => save({ kapRefreshSec: Number(e.target.value) });
       $('#sInbox').onchange = (e) => { dimInbox(); save({ inboxEnabled: e.target.checked }); };
       $('#sInboxDir').onchange = (e) => save({ inboxDir: e.target.value.trim() });
+      const dimSig = () => $('#sSigRow').classList.toggle('off', !$('#sSig').checked);
+      dimSig();
+      $('#sSig').onchange = (e) => { dimSig(); save({ signalNotify: e.target.checked }); };
+      api('/signals/types').then((types) => {
+        const on = new Set(s.signalTypes);
+        $('#sSigTypes').innerHTML = types.map((x) => `<label class="stg-chk"><input type="checkbox" data-sig="${esc(x.key)}" ${on.has(x.key) ? 'checked' : ''}> ${esc(tx(x.label))}</label>`).join('');
+        $('#sSigTypes').onchange = () => save({ signalTypes: $$('#sSigTypes [data-sig]').filter((b) => b.checked).map((b) => b.dataset.sig) });
+      }).catch(() => {});
       // Önbellek boyutu /api/health → cache alanından geliyor (sunucu tarafı eklendi).
       api('/health').then((h) => {
         const el = $('#sCacheSize');
