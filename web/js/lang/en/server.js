@@ -250,6 +250,23 @@ const EN = {
   'Önceki hesap hâlâ sürüyor; biraz sonra yeniden deneyin': 'The previous computation is still running; try again shortly',
   'XU100 geçmişi alınamadı': 'Could not fetch XU100 history',
 
+  'Sınıfta sembol yok; sembol payı girin': 'No symbols in this class; enter a symbol share',
+  'Kur bulunamadı': 'FX rate not found',
+  'Güncel fiyat yok': 'No current price',
+  'Nakit takibi kapalı olduğundan nakit hedefi yok sayıldı': 'Cash target ignored because cash tracking is off',
+  'classTargets bir nesne olmalı': 'classTargets must be an object',
+  'symbolTargets bir nesne olmalı': 'symbolTargets must be an object',
+  'Gövde classTargets ve symbolTargets nesnelerini içermeli': 'The body must contain classTargets and symbolTargets objects',
+  'Fiyat yok': 'No price',
+  'İşlem gerekmez': 'No action needed',
+  'Satış önerilmez (ek nakit modu)': 'No sale suggested (extra-cash mode)',
+  'Tutar bir adetten az': 'Amount is less than one share',
+  'Nakit sınıfı yalnız bilgi': 'Cash class is informational only',
+  'Portföy değeri sıfır; öneri üretilemez': 'Portfolio value is zero; no suggestion possible',
+  'Net alım mevcut nakitten büyük; nakit yetmeyebilir': 'Net buys exceed available cash; cash may not suffice',
+  'Ek nakit 0 veya pozitif olmalı': 'Extra cash must be 0 or positive',
+  'Nakit hedefi için nakit takibi açık olmalı (önce bir nakit girişi kaydedin)': 'Cash tracking must be on for a cash target (record a cash deposit first)',
+
   // ── Sinyal radarı (server/radar.js SIGNALS) ──
   'RSI aşırı satım (<30)': 'RSI oversold (<30)',
   'RSI aşırı alım (>70)': 'RSI overbought (>70)',
@@ -392,6 +409,21 @@ export const patterns = [
   [/^(Seans öncesi|Açılış seansı|Sürekli işlem|Kapanış seansı) \(yarım gün: (.+)\)$/, (m, s, h) => `${EN[s]} (half day: ${HOLIDAYS[h] || h})`],
 
   [/^Hisse verisi yetersiz \((\d+)\/(\d+)\)$/, 'Not enough stock data ($1/$2)'],
+
+  // ── Dengeleme (server/dengeleme.js) ──
+  [/^(.+): sınıf içinde %(.+) pay dağıtılmadı \(hedefsiz bırakıldı\)$/, '$1: $2% of the class share was left unassigned'],
+  [/^(.+): (\w+) sınıfı hedefsiz olduğundan sembol payı yok sayıldı$/, '$1: share ignored because class $2 has no target'],
+  [/^Ek nakitten (.+) TL dağıtılmadı; nakit olarak kalır$/, '$1 TRY of the extra cash was not allocated; it stays as cash'],
+  [/^(\d+) satır atlandı; net nakit değişimi eksik$/, '$1 row(s) skipped; net cash change is incomplete'],
+  [/^Sınıf hedefleri toplamı %100'ü aşamaz \(şu an %(.+)\)$/, 'Class targets cannot exceed 100% (currently $1%)'],
+  [/^(.+): sembol payları toplamı %100'ü aşamaz \(şu an %(.+)\)$/, '$1: symbol shares cannot exceed 100% (currently $2%)'],
+  [/^(.+): hedef 0–100 arasında bir sayı olmalı$/, '$1: target must be a number between 0 and 100'],
+  [/^(.+): pay 0–100 arasında bir sayı olmalı$/, '$1: share must be a number between 0 and 100'],
+  [/^Bilinmeyen sınıf: (.+)$/, 'Unknown class: $1'],
+  [/^Geçersiz sembol: (.+)$/, 'Invalid symbol: $1'],
+  [/^Aynı sembol iki kez: (.+)$/, 'Symbol listed twice: $1'],
+  [/^(.+): portföyde (\w+) olarak tutuluyor; (\w+) sınıfındaki payı yok sayıldı$/, '$1: held in the portfolio as $2; its share in class $3 was ignored'],
+  [/^(.+): geçerli bir sınıf gerekli$/, '$1: a valid class is required'],
 
   // ── Ajan etkinliği / sohbet bildirimleri ──
   [/^Onay bekliyor: (.+)$/, 'Awaiting approval: $1'],

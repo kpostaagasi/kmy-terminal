@@ -23,6 +23,7 @@ import * as signalWatch from './signal-watch.js';
 import * as calendarSource from './takvim-kaynak.js';
 import * as dataHealth from './denetim.js';
 import * as backtest from './backtest-run.js';
+import * as rebalance from './dengeleme-kaynak.js';
 import * as memory from './memory.js';
 import * as documents from './documents.js';
 import * as research from './research.js';
@@ -179,6 +180,13 @@ route('POST', '/api/data-health/run', async () => { try { return await dataHealt
 backtest.onUpdate(() => broadcast({ t: 'backtest.updated' })); // zaman aşımından sonra biten koşu
 route('GET', '/api/backtest', async () => backtest.last());
 route('POST', '/api/backtest/run', async () => { try { return await backtest.run(); } finally { broadcast({ t: 'backtest.updated' }); } }); // hata durumunda da: diğer pencereler "hesaplanıyor"da takılı kalmasın
+route('GET', '/api/rebalance/targets', async () => rebalance.getTargets());
+route('PUT', '/api/rebalance/targets', async ({ body }) => { const r = await rebalance.saveTargets(body); broadcast({ t: 'rebalance.updated' }); return r; });
+route('GET', '/api/rebalance', async ({ q }) => {
+  const extra = q.get('extra') == null || q.get('extra') === '' ? 0 : Number(q.get('extra'));
+  if (!Number.isFinite(extra) || extra < 0) throw new Error('Ek nakit 0 veya pozitif olmalı');
+  return rebalance.compute({ extra });
+});
 route('GET', '/api/calendar', async ({ q }) => calendarSource.calendar({
   scope: q.get('scope') || 'portfolio', from: q.get('from') || null, to: q.get('to') || null,
   kinds: q.get('kinds') ? q.get('kinds').split(',').filter(Boolean) : null,
