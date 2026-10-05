@@ -6,6 +6,7 @@ import { notify } from './chat.js';
 import { openTxModal } from './portfolio-view.js';
 import { openKapDetail, signalPill } from './kap.js';
 import { t, tx, lang, locale } from './i18n.js';
+import { initBacktest } from './backtest-view.js';
 
 const root = $('#view-market');
 const enc = encodeURIComponent;
@@ -199,6 +200,7 @@ root.innerHTML = `
       <div class="table-wrap kt-tall"><table class="t" id="radarTable"><tbody><tr><td class="dim">${t('Taramayı başlatmak için “Tara”ya basın. İlk tarama yaklaşık 20 sn sürer; sonuçlar 15 dk saklanır.')}</td></tr></tbody></table></div>`,
       { extra: `<span class="row" style="gap:6px"><span class="dim" id="radarInfo"></span><button class="ghost" id="radarRun">${t('Tara')}</button><button class="ghost" id="radarAsk">${t('Asistanla yorumla')}</button></span>` })}
     ${panel(`${t('Son sinyal bildirimleri')} ${sub(t('izleme listesi ve portföy · seans sonrası · son 14 gün'))}`, `<div id="sigRecent" class="dim"></div>`)}
+    ${panel(`${t('Sinyal geçmiş performansı')} ${sub(t('BIST 100 · 10 yıl · sonraki 5/20/60 işlem günü'))}`, `<div id="backtestBox"></div>`)}
   </section>
 
   <section class="kt-page" data-page="sectors" hidden>
@@ -1405,6 +1407,7 @@ async function loadSigRecent() {
 $('#sigRecent').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
 on('signals:changed', loadSigRecent);
 loadSigRecent();
+initBacktest($('#backtestBox'));
 $('#radarTable').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
 $('#radarAsk').onclick = () => askAgent(t('signal_scan aracıyla BIST 100 sinyal taramasını çalıştır. İzleme listem ve portföyümdeki hisselerde çıkan sinyalleri öne alarak en dikkat çekici sinyalleri yorumla; hangi sinyallerin hacimle teyit edildiğini belirt.'));
 
