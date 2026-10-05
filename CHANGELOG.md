@@ -7,7 +7,11 @@
 - **Dürüstlük:** fiyatı ya da kuru olmayan satır önerilmez ("atlandı", net nakit "eksik" uyarısı); sınıf hedefi olmayan sınıflara dokunulmaz; hedef toplamı > %100 ya da negatif/geçersiz giriş reddedilir ve önceki hedefler bozulmaz. **Emir gönderilmez**, panel "hesaptır, yatırım tavsiyesi değildir" notunu taşır; komisyon modellenmez.
 - **API:** `GET/PUT /api/rebalance/targets`, `GET /api/rebalance?extra=<TL>`; WebSocket olayı `rebalance.updated`. Hedefler yerel `rebalance_targets` tablosunda kalır (git'e ve DMG'ye girmez).
 - **Ölçüm** (boş test örneği, 100 THYAO @300 + 500 AKBNK @60 + 300 000 TL nakit; hedef: hisse %60, THYAO payı %50, nakit %20): toplam 303 700 TL; THYAO 211 adet (61 664,75 TL) ve AKBNK 821 adet (56 607,95 TL) alımı, net nakit −118 272,70 TL, yuvarlama artığı 247,30 TL: elle hesapla birebir. Ek nakit 50 000 TL ile satış yok, THYAO 88 adet, AKBNK 349 adet.
-- **Testler:** 413 → 549 kontrol (`dengeleme` 49) + kalıcılık kontrolü 6 (`npm test` zincirinde).
+- **Döviz cinsi varlıklar:** adet TL birim fiyatıyla (değer / adet) hesaplanır; portföyde olmayan yabancı sembolün fiyatı kurla TL'ye çevrilir (kur yoksa atlanır). Eskiden USD cinsi hissede adet fiyatla bölünüp pozisyonun tamamı satış önerilebiliyordu (taze inceleme yakaladı).
+- **Bayat fiyat önerilmez:** kotasyonu ya da elle fiyatı olmayan ("son işlem") satır "Güncel fiyat yok" diye atlanır.
+- **Sekme kilitlenmez:** kayıtlı nakit hedefi varken nakit takibi kapanırsa (nakit girişi silindi/portföy sıfırlandı) hedef uyarıyla yok sayılır; `PUT` gövdesi `null`, dizi ya da `{}` ise hedefleri silmez, 400 döner (bilinçli silme iki boş nesne ister); sembol anahtarı biçim denetiminden geçer, `THYAO`/`thyao` çakışması reddedilir; portföydeki sembolün hedefi başka sınıftaysa uyarı verilir.
+- **Kesirli adetler aşağı yuvarlanır** (satışta elde olandan, alımda istenen tutardan fazlası çıkmaz); ek nakit alanı Türkçe sayı biçimini okur ("50.000" = 50 000; geçersiz giriş hata verir, sessizce 0 olmaz).
+- **Testler:** 413 → 563 kontrol (`dengeleme` 63) + kalıcılık kontrolü 11 (`npm test` zincirinde).
 
 ## 0.21.1 — 5 Ekim 2026 (backtest küçük düzeltmeler)
 
