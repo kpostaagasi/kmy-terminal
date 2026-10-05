@@ -2,9 +2,10 @@
 import { state, on, emit, api, $, $$, h, esc, num, price, pct, cls, money, dateTR, today, toast, modal, confirmBox, selectSymbol, askAgent, localGet, localSet, css, debounce, timeTR } from './core.js';
 import { baseOptions, makeChart, doughnut, palette } from './charts.js';
 import { t, tx, lang, locale } from './i18n.js';
+import { renderRebalance } from './rebalance-view.js';
 
 const root = $('#view-portfolio');
-const TABS = [['ozet', t('Özet')], ['varliklar', t('Varlıklar')], ['pozisyonlar', t('Pozisyonlar ve nakit')], ['islemler', t('İşlemler')], ['dagilim', t('Dağılım')], ['temettu', t('Temettü')], ['risk', t('Risk')], ['aktar', t('İçe aktar')], ['ayarlar', t('Ayarlar')]];
+const TABS = [['ozet', t('Özet')], ['varliklar', t('Varlıklar')], ['pozisyonlar', t('Pozisyonlar ve nakit')], ['islemler', t('İşlemler')], ['dagilim', t('Dağılım')], ['dengeleme', t('Dengeleme')], ['temettu', t('Temettü')], ['risk', t('Risk')], ['aktar', t('İçe aktar')], ['ayarlar', t('Ayarlar')]];
 let tab = localGet('pfTab', 'ozet');
 let data = null;
 let sortKey = localGet('pfSort', 'value'), sortDir = -1;
@@ -34,7 +35,7 @@ async function load() {
 function render() {
   $$('.subtabs [data-t]', root).forEach((b) => b.classList.toggle('active', b.dataset.t === tab));
   const scroll = root.scrollTop;
-  const fn = { ozet: renderSummary, varliklar: renderHoldings, pozisyonlar: renderPositions, islemler: renderTx, dagilim: renderDist, temettu: renderDiv, risk: renderRisk, aktar: renderImport, ayarlar: renderSettings }[tab];
+  const fn = { ozet: renderSummary, varliklar: renderHoldings, pozisyonlar: renderPositions, islemler: renderTx, dagilim: renderDist, temettu: renderDiv, dengeleme: () => renderRebalance(body, () => tab === 'dengeleme'), risk: renderRisk, aktar: renderImport, ayarlar: renderSettings }[tab];
   Promise.resolve(fn()).then(() => { root.scrollTop = scroll; });
 }
 
