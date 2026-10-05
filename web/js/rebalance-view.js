@@ -1,13 +1,14 @@
 // Portföy › Dengeleme sekmesi: hedef ağırlık girişi, sapma tablosu ve al/sat önerisi. Hesap sunucudadır (/api/rebalance).
 import { on, api, $, $$, esc, num, money, cls, toast, localGet, localSet } from './core.js';
 import { t, tx } from './i18n.js';
+import { parseTr } from './trnum.js';
 
 let active = () => false;
 let res = null, extra = localGet('rbExtra', ''), draft = null, err = '', busy = false, host = null;
 const ACT = { al: [t('AL'), 'up'], sat: [t('SAT'), 'down'], yok: ['—', ''], atlandi: [t('ATLANDI'), ''] };
 const p1 = (x) => (x == null ? '—' : `${num(x, 1)}%`);
 const sgn = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${num(x, 1)}`);
-const pctVal = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+const pctVal = parseTr;
 
 function fresh() { // sunucudaki hedeflerden düzenlenebilir kopya (değerler metin)
   draft = {
@@ -20,7 +21,8 @@ const label = (k) => (k === 'cash' ? t('Nakit') : tx(res.classLabels[k] || k));
 
 async function load() {
   try {
-    const q = Number(String(extra).replace(',', '.'));
+    const q = parseTr(extra);
+    if (Number.isNaN(q) || q < 0) { err = t('Geçersiz sayı: {k}', { k: t('Ek nakit (TL)') }); paint(); return; } // sessizce 0'a düşmesin
     res = await api(`/rebalance${q > 0 ? `?extra=${q}` : ''}`);
     err = '';
     if (!draft) fresh();
@@ -101,6 +103,7 @@ function bind() {
   $('#rbAdd', host).onclick = () => {
     const s = $('#rbNewS', host).value.trim().toUpperCase(), c = $('#rbNewC', host).value;
     if (!s) return;
+    if (res.holdings.some((h) => h.symbol === s)) { toast(t('Portföyde zaten var: payı yukarıdaki listeden girin'), 'err'); return; }
     readDraft();
     if (!draft.sym.some((x) => x.s === s)) draft.sym.push({ s, cls: c, pct: '0' });
     paint();

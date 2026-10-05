@@ -8,10 +8,15 @@ const THRESHOLD = 1; // puan: altındaki sapma için işlem önerilmez (E = 0 mo
 const isPct = (x) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100;
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const r2 = (x) => Math.round(x * 100) / 100;
+const f4 = (x) => Math.floor(x * 1e4 + EPS) / 1e4; // adet aşağı yuvarlanır: satışta elde olandan, alımda istenen tutardan fazlası çıkmasın
+const SYMBOL_RE = /^[A-Z0-9][A-Z0-9.^=-]{0,19}$/;
+const isObj = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
 
 /** Hedef girişini doğrular. Döner: { ok, errors: string[] } */
 export function validateTargets({ classTargets = {}, symbolTargets = {}, cashTracking = false } = {}) {
   const errors = [];
+  if (!isObj(classTargets)) return { ok: false, errors: ['classTargets bir nesne olmalı'] };
+  if (!isObj(symbolTargets)) return { ok: false, errors: ['symbolTargets bir nesne olmalı'] };
   let sum = 0;
   for (const [k, v] of Object.entries(classTargets)) {
     if (!CLASS_KEYS.includes(k)) errors.push(`Bilinmeyen sınıf: ${k}`);
@@ -19,8 +24,12 @@ export function validateTargets({ classTargets = {}, symbolTargets = {}, cashTra
     if (!isPct(v)) errors.push(`${k}: hedef 0–100 arasında bir sayı olmalı`); else sum += v;
   }
   if (sum > 100 + EPS) errors.push(`Sınıf hedefleri toplamı %100'ü aşamaz (şu an %${r2(sum)})`);
-  const perClass = {};
+  const perClass = {}, seen = new Set();
   for (const [s, e] of Object.entries(symbolTargets)) {
+    const key = s.toUpperCase();
+    if (!SYMBOL_RE.test(key)) { errors.push(`Geçersiz sembol: ${s}`); continue; }
+    if (seen.has(key)) { errors.push(`Aynı sembol iki kez: ${key}`); continue; }
+    seen.add(key);
     if (!e || typeof e !== 'object' || !CLASS_KEYS.includes(e.cls) || e.cls === 'cash') { errors.push(`${s}: geçerli bir sınıf gerekli`); continue; }
     if (!isPct(e.pct)) { errors.push(`${s}: pay 0–100 arasında bir sayı olmalı`); continue; }
     perClass[e.cls] = (perClass[e.cls] || 0) + e.pct;
@@ -68,14 +77,16 @@ export function plan({ holdings = [], totalValue, cash = null, cashTracking = fa
     for (const m of members) items.push({ symbol: m.symbol, cls, held: m.held, targetPct: (ct * m.share) / 100 });
   }
   for (const [s, e] of Object.entries(symbolTargets)) if (!(e.cls in classTargets)) warnings.push(`${s}: ${e.cls} sınıfı hedefsiz olduğundan sembol payı yok sayıldı`);
+  for (const [s, e] of Object.entries(symbolTargets)) { const h = held.get(s); if (h && h.asset_type !== e.cls) warnings.push(`${s}: portföyde ${h.asset_type} olarak tutuluyor; ${e.cls} sınıfındaki payı yok sayıldı`); }
 
   const lines = []; // hesaplanabilir satırlar
   for (const it of items) {
     const h = held.get(it.symbol);
-    const price = h ? h.price : fresh[it.symbol]?.price;
+    // value TL'dir, h.price ise varlığın kendi para birimindedir (USD hissede farklı): adet TL birim fiyatıyla (value/qty) hesaplanır
+    const price = h ? (h.qty > 0 && h.value != null ? h.value / h.qty : h.price) : fresh[it.symbol]?.price;
     const value = h ? h.value : 0;
     const base = { key: it.symbol, kind: 'symbol', class: it.cls, targetPct: r4(it.targetPct), price: price ?? null, qty: null, tl: 0, taxEst: 0 };
-    if (value == null || h?.missingFx || !(price > 0)) { rows.push({ ...base, currentPct: value == null ? null : r4((value / V) * 100), deviation: null, action: 'atlandi', reason: h?.missingFx ? 'Kur bulunamadı' : 'Fiyat yok' }); continue; }
+    if (value == null || h?.missingFx || h?.priced === false || !(price > 0)) { rows.push({ ...base, currentPct: value == null ? null : r4((value / V) * 100), deviation: null, action: 'atlandi', reason: h?.missingFx ? 'Kur bulunamadı' : h?.priced === false ? 'Güncel fiyat yok' : 'Fiyat yok' }); continue; }
     const currentPct = (value / V) * 100;
     lines.push({ ...base, h, price, value, currentPct: r4(currentPct), deviation: r4(currentPct - it.targetPct), delta: (it.targetPct / 100) * V - value });
   }
@@ -101,7 +112,7 @@ export function plan({ holdings = [], totalValue, cash = null, cashTracking = fa
     const int = INTEGER_TYPES.has(l.class);
     let qty = Math.abs(w) / l.price;
     if (w < 0) qty = Math.min(qty, l.h.qty);
-    qty = int ? Math.floor(qty + EPS) : r4(qty);
+    qty = int ? Math.floor(qty + EPS) : f4(qty);
     planned += Math.abs(w);
     if (!(qty > 0)) { out.reason = 'Tutar bir adetten az'; rows.push(out); continue; }
     const tl = r2(qty * l.price);

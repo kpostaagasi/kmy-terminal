@@ -1,5 +1,6 @@
 // Dengeleme: hedef doğrulama, etkin hedef, sapma, al/sat, ek nakit, adet yuvarlama, vergi, atlama. Çevrimdışı, saf.
 import { plan, validateTargets } from '../server/dengeleme.js';
+import { parseTr } from '../web/js/trnum.js';
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail = '') { cond ? pass++ : fail++; console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${detail ? `: ${detail}` : ''}`); }
@@ -41,7 +42,7 @@ const p3 = plan({ holdings: [H('A', 'stock', 50500, 10, 5050), H('GRAM', 'gold',
 assert('0,5 puanlık sapma: işlem gerekmez', row(p3, 'A').action === 'yok' && row(p3, 'GRAM').action === 'yok' && /gerekmez/.test(row(p3, 'A').reason));
 
 // ── Tam sayı adet ve yuvarlama ────────────────────────────────────────────
-const p4 = plan({ holdings: [H('X', 'stock', 10000, 33, 303.03), H('GRAM', 'gold', 90000, 100, 900)], totalValue: 100000, classTargets: { stock: 30, gold: 70 }, symbolTargets: { X: { cls: 'stock', pct: 100 } } });
+const p4 = plan({ holdings: [H('X', 'stock', 10000, 33, 10000 / 33), H('GRAM', 'gold', 90000, 100, 900)], totalValue: 100000, classTargets: { stock: 30, gold: 70 }, symbolTargets: { X: { cls: 'stock', pct: 100 } } });
 // X hedef 30000: al 20000 TL / 33 = 606,06 → 606 adet = 19998 TL
 assert('hisse alımı tam sayıya aşağı yuvarlanır (606 adet, 19998 TL)', row(p4, 'X').qty === 606 && near(row(p4, 'X').tl, 19998));
 assert('yuvarlama artığı raporlanır (≈ 2 TL)', near(p4.summary.rounding, 2, 0.02), String(p4.summary.rounding));
@@ -103,6 +104,32 @@ assert('ek nakit negatif/NaN reddedilir', (() => { try { plan({ holdings: hold, 
 assert('geçersiz hedef plan() içinde de reddedilir', (() => { try { plan({ holdings: hold, totalValue: 1, classTargets: { stock: 150 } }); return false; } catch { return true; } })());
 assert('değeri null olan pozisyon atlanır', plan({ holdings: [H('A', 'stock', null, null, 10)], totalValue: 100, classTargets: { stock: 100 }, symbolTargets: {} }).rows[0].action === 'atlandi');
 assert('tutar bir adetten azsa işlem yok ve neden yazar', (() => { const r = plan({ holdings: [H('A', 'stock', 99.9, 1000, 0.1), H('GRAM', 'gold', 99900.1, 100, 999)], totalValue: 100000, classTargets: { stock: 1, gold: 99 }, symbolTargets: {} }); const a = row(r, 'A'); return a.action === 'yok' && /adetten az|gerekmez/.test(a.reason); })());
+
+// ── İnceleme düzeltmeleri ─────────────────────────────────────────────────
+// Döviz cinsi varlık: value TL, price yerel para birimi (USD). Adet TL birim fiyatıyla (value/qty) hesaplanır.
+const fx1 = plan({ holdings: [H('AAPL.US', 'stock', 70000, 200, 10), H('GRAM', 'gold', 30000, 3000, 10)], totalValue: 100000, classTargets: { stock: 50, gold: 50 }, symbolTargets: { 'AAPL.US': { cls: 'stock', pct: 100 } } });
+assert('döviz cinsi varlık: TL birim fiyatıyla hesaplanır (7000 TL), tam hisse 2 adet = 14000 TL; pozisyonun tamamı satılmaz', row(fx1, 'AAPL.US').action === 'sat' && row(fx1, 'AAPL.US').price === 7000 && row(fx1, 'AAPL.US').qty === 2 && near(row(fx1, 'AAPL.US').tl, 14000), JSON.stringify(row(fx1, 'AAPL.US')));
+assert('döviz cinsi varlık: net nakit ve artık tutarlı (−5999,8; artık 6000,2)', near(fx1.summary.netCash, -5999.8, 0.05) && near(fx1.summary.rounding, 6000.2, 0.05), JSON.stringify(fx1.summary));
+// Bayat fiyat (kotasyon yok, son işlem fiyatı): öneri yok
+const st1 = plan({ holdings: [H('ZZZ', 'stock', 50000, 100, 500, { priced: false }), H('GRAM', 'gold', 50000, 100, 500)], totalValue: 100000, classTargets: { stock: 20, gold: 80 }, symbolTargets: {} });
+assert('güncel fiyatı olmayan (son işlem) satır önerilmez, atlandı', row(st1, 'ZZZ').action === 'atlandi' && /fiyat/i.test(row(st1, 'ZZZ').reason));
+assert('priced alanı yoksa (undefined) atlanmaz', row(plan({ holdings: [H('A', 'stock', 100000, 10, 10000)], totalValue: 100000, classTargets: { stock: 50 }, symbolTargets: {} }), 'A').action === 'sat');
+// Portföydeki sembolün hedefi başka sınıfta: yok sayılır ve söylenir
+const mm = plan({ holdings: [H('THYAO', 'stock', 100000, 100, 1000)], totalValue: 100000, classTargets: { stock: 50, fund: 50 }, symbolTargets: { THYAO: { cls: 'fund', pct: 100 } } });
+assert('portföydeki sembolün hedef sınıfı varlık türüyle uyuşmuyorsa uyarı verilir', mm.warnings.some((w) => /THYAO/.test(w) && /yok sayıldı/.test(w)), JSON.stringify(mm.warnings));
+// Kesirli satış elde olandan fazla olamaz, tutar istenenden fazla olmaz
+const fr = plan({ holdings: [H('F', 'fund', 12345.6, 100000, 0.123456)], totalValue: 12345.6, classTargets: { fund: 0 }, symbolTargets: {} });
+assert('kesirli satış adedi mevcut adedi aşmaz (0,1234)', row(fr, 'F').qty <= 0.123456 && row(fr, 'F').qty === 0.1234, String(row(fr, 'F').qty));
+assert('kesirli alımda tutar istenen tutarı aşmaz', (() => { const r = plan({ holdings: [H('F', 'fund', 1000, 3, 333.3333), H('G', 'gold', 99000, 100, 990)], totalValue: 100000, classTargets: { fund: 10, gold: 90 }, symbolTargets: {} }); return row(r, 'F').tl <= 9000 + 0.005; })());
+// Doğrulama: biçim, anahtar, büyük/küçük harf
+assert('classTargets dizi/null/metin reddedilir', !validateTargets({ classTargets: [] }).ok && !validateTargets({ classTargets: null }).ok && !validateTargets({ classTargets: 'abc' }).ok);
+assert('symbolTargets dizi/null/metin reddedilir', !validateTargets({ symbolTargets: [{ cls: 'stock', pct: 1 }] }).ok && !validateTargets({ symbolTargets: null }).ok && !validateTargets({ symbolTargets: 'x' }).ok);
+assert('boş ve geçersiz sembol anahtarı reddedilir', !validateTargets({ symbolTargets: { '': { cls: 'stock', pct: 1 } } }).ok && !validateTargets({ symbolTargets: { '<img onerror=1>': { cls: 'stock', pct: 1 } } }).ok);
+assert('THYAO ve thyao aynı anahtar sayılır (çakışma reddedilir)', !validateTargets({ classTargets: { stock: 50, fund: 50 }, symbolTargets: { THYAO: { cls: 'stock', pct: 10 }, thyao: { cls: 'fund', pct: 10 } } }).ok);
+assert('geçerli semboller kabul edilir (AAPL.US, BRK-B, GC=F)', validateTargets({ classTargets: { stock: 100 }, symbolTargets: { 'AAPL.US': { cls: 'stock', pct: 10 }, 'BRK-B': { cls: 'stock', pct: 10 }, 'GC=F': { cls: 'stock', pct: 10 } } }).ok);
+// Türkçe sayı girişi
+assert('parseTr: 50.000 → 50000, 50.000,5 → 50000,5, 12,5 → 12,5, 1234.5 → 1234,5', parseTr('50.000') === 50000 && parseTr('50.000,5') === 50000.5 && parseTr('12,5') === 12.5 && parseTr('1234.5') === 1234.5 && parseTr(' 7 ') === 7);
+assert('parseTr: geçersiz → NaN, boş → null', Number.isNaN(parseTr('abc')) && Number.isNaN(parseTr('1,2,3')) && Number.isNaN(parseTr('5 bin')) && parseTr('') === null && parseTr(null) === null);
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

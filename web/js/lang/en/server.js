@@ -252,6 +252,11 @@ const EN = {
 
   'Sınıfta sembol yok; sembol payı girin': 'No symbols in this class; enter a symbol share',
   'Kur bulunamadı': 'FX rate not found',
+  'Güncel fiyat yok': 'No current price',
+  'Nakit takibi kapalı olduğundan nakit hedefi yok sayıldı': 'Cash target ignored because cash tracking is off',
+  'classTargets bir nesne olmalı': 'classTargets must be an object',
+  'symbolTargets bir nesne olmalı': 'symbolTargets must be an object',
+  'Gövde classTargets ve symbolTargets nesnelerini içermeli': 'The body must contain classTargets and symbolTargets objects',
   'Fiyat yok': 'No price',
   'İşlem gerekmez': 'No action needed',
   'Satış önerilmez (ek nakit modu)': 'No sale suggested (extra-cash mode)',
@@ -415,6 +420,9 @@ export const patterns = [
   [/^(.+): hedef 0–100 arasında bir sayı olmalı$/, '$1: target must be a number between 0 and 100'],
   [/^(.+): pay 0–100 arasında bir sayı olmalı$/, '$1: share must be a number between 0 and 100'],
   [/^Bilinmeyen sınıf: (.+)$/, 'Unknown class: $1'],
+  [/^Geçersiz sembol: (.+)$/, 'Invalid symbol: $1'],
+  [/^Aynı sembol iki kez: (.+)$/, 'Symbol listed twice: $1'],
+  [/^(.+): portföyde (\w+) olarak tutuluyor; (\w+) sınıfındaki payı yok sayıldı$/, '$1: held in the portfolio as $2; its share in class $3 was ignored'],
   [/^(.+): geçerli bir sınıf gerekli$/, '$1: a valid class is required'],
 
   // ── Ajan etkinliği / sohbet bildirimleri ──

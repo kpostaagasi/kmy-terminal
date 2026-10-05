@@ -11,6 +11,7 @@ export default {
   'Dağılım': 'Allocation',
   'Temettü': 'Dividends',
   'Dengeleme': 'Rebalancing',
+  'Portföyde zaten var: payı yukarıdaki listeden girin': 'Already in the portfolio: enter its share in the list above',
   'AL': 'BUY',
   'SAT': 'SELL',
   'portföyde yok': 'not held',
