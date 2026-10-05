@@ -24,5 +24,15 @@ assert('last() kaydı döndürür', bt.last().result.params.symbols === 1 && Num
 let e3; await bt.run({ work: async () => { throw new Error('XU100 geçmişi alınamadı'); } }).catch((e) => { e3 = e; });
 assert('başarısız koşu hata verir', /XU100/.test(e3?.message));
 assert('başarısız koşu önceki kaydı bozmaz', bt.last().result.params.symbols === 1 && bt.last().running === false);
+// XU100 başarısız olsa bile hisse çekimleri bitmeden koşu reddedilmez (sahipsiz arka plan çekimi kilidi delmesin)
+let pending = 0, started = 0;
+const history = async (s) => {
+  if (s === 'XU100') throw new Error('XU100 geçmişi alınamadı');
+  started++; pending++; await new Promise((r) => setTimeout(r, 30)); pending--;
+  return [];
+};
+let e4; await bt.compute({ history, symbols: Array.from({ length: 20 }, (_, i) => 'S' + i) }).catch((e) => { e4 = e; });
+assert('XU100 hatasında compute hata verir', /XU100/.test(e4?.message));
+assert('hata verdiğinde bekleyen hisse çekimi kalmaz (kilit gerçeği yansıtır)', pending === 0 && started === 20);
 console.log(`\n${ok} geçti, ${bad} başarısız`);
 process.exit(bad ? 1 : 0);

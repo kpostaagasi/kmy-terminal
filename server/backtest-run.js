@@ -16,18 +16,18 @@ async function pool(items, n, fn) {
 }
 
 /** BIST100 + XU100 geçmişini çekip hesaplar. XU100 zorunlu; hisselerin yarısından azı gelirse hata. */
-export async function compute() {
-  const symbols = await universe.bist100();
+export async function compute({ history = getHistory, symbols = null } = {}) {
+  symbols = symbols || await universe.bist100();
   const series = [], failed = [];
-  let bench;
-  const [b] = await Promise.all([
-    getHistory('XU100', RANGE, '1d'),
+  // allSettled: XU100 hata verse de hisse çekimleri bitmeden dönülmez; yoksa sahipsiz çekimler kilidin dışında sürer
+  const [b] = await Promise.allSettled([
+    history('XU100', RANGE, '1d'),
     pool(symbols, 8, async (s) => {
-      try { series.push({ symbol: s, bars: await getHistory(s, RANGE, '1d') }); } catch { failed.push(s); }
+      try { series.push({ symbol: s, bars: await history(s, RANGE, '1d') }); } catch { failed.push(s); }
     }),
   ]);
-  bench = b;
-  if (!bench?.length) throw new Error('XU100 geçmişi alınamadı');
+  const bench = b.status === 'fulfilled' ? b.value : null;
+  if (!bench?.length) throw new Error(b.reason?.message || 'XU100 geçmişi alınamadı');
   if (series.length < symbols.length / 2) throw new Error(`Hisse verisi yetersiz (${series.length}/${symbols.length})`);
   series.sort((a, c) => a.symbol.localeCompare(c.symbol));
   const result = computeBacktest({ series, bench });
