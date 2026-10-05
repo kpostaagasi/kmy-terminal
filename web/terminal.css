@@ -310,3 +310,6 @@
 /* TAKVİM: dar sütunda tür sütunu gizlenir (sembol ve metin yeter) */
 .kt-cal { container-type: inline-size; }
 @container (max-width: 520px) { .kt-cal .c-kind { display: none; } }
+
+#backtestBox table.t { min-width: 760px; }
+#backtestBox th[rowspan] { vertical-align: bottom; }

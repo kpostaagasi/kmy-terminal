@@ -1,5 +1,17 @@
 # Sürüm Notları
 
+## 0.21.0 — 5 Ekim 2026 (sinyal geçmiş performansı)
+
+### Yeni
+- **"Sinyal geçmiş performansı" paneli** (KMY TERMINAL › tarayıcı sayfası). Radardaki 11 sinyalin BIST 100'de 10 yıllık günlük veride, sinyal gününü izleyen günün açılışından sonraki 5/20/60. işlem günü kapanışına kadar ne yaptığı: olay sayısı (n), ortalama getiri, isabet (yöne duyarlı: düşüş sinyalinde getiri < 0), **XU100'a göre fark** ve **taban farkı** (her günün ortalamasına göre). Taban satırı tablonun başındadır; n < 30 olanlar soluk ve ⚠. Hesap **yalnız elle** başlar ("Hesapla"), sonuç `backtest_result` tablosunda saklanır. `GET /api/backtest`, `POST /api/backtest/run` (300 sn zaman aşımı; iç koşu bitene kadar yeni koşu başlamaz; hata durumunda da diğer pencerelere bildirilir, istemci koşu sürerken yoklar).
+- **Dürüstlük:** olay = sinyalin yeni belirdiği gün (devam eden gün sayılmaz), aynı sinyalde 20 işlem günü içindeki tekrar sayılmaz; yalnız bugünkü BIST 100 (hayatta kalma yanlılığı), nominal TL, işlem maliyeti yok, örtüşen olaylar; panelde bu uyarılar yazılıdır. Ölçüm (test örneği): 99 hisse, 2017-07 → 2026-10, 13 bölünme kırılması düzeltildi; tablo 11 sinyal × 3 ufuk, taban 20 günde +%3,1 (enflasyonlu TL).
+- **Bölünme düzeltmesi** (`server/seri.js`): Yahoo BIST serileri bölünmeye göre düzeltilmemiş; günlük kapanış oranı < 0,75 veya > 1,30 ise önceki mumlar oranla çarpılır (hacim bölünür). Sınır dahil değildir (−%25 ve +%30 kırılma değil).
+- **Tek sinyal tanımı** (`server/sinyal-tanim.js`): radar, bildirim ve backtest aynı kuralları kullanır. Refactor davranışı değiştirmedi: 930 noktalık altın-referansta çıktı birebir aynı; önek eşdeğerliği (ileriye bakma yok) 396/396.
+
+### Dikkat
+- Bölünme düzeltmesi **canlı radar ve sinyal bildirimlerine de** uygulanır: son bölünmeden sonra sahte sinyal (ör. sahte 52 hafta dibi) üretmez. Bu yüzden bildirimlerde tek seferlik "yeni sinyal" görülebilir.
+- Testler: 413 → 495 kontrol (`radar` 12, `seri` 25, `backtest` 45); koşu kilidi `test/backtest-run.check.mjs` ile (`BORSA_DATA_DIR=$(mktemp -d) node test/backtest-run.check.mjs`, zincirde değil).
+
 ## 0.20.0 — 2 Ekim 2026 (veri sağlığı rozeti)
 
 ### Yeni
