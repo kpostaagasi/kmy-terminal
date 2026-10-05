@@ -246,6 +246,10 @@ const EN = {
   'Geçersiz KAP eki: dosya bağlantısı veya kimliği bekleniyor': 'Invalid KAP attachment: expected a file link or ID',
   'Ek çok büyük (80 MB üstü); KAP sayfasından indirin': 'Attachment is too large (over 80 MB); download it from the KAP website',
 
+  'Geçmiş performans hesabı zaman aşımına uğradı': 'The track-record computation timed out',
+  'Önceki hesap hâlâ sürüyor; biraz sonra yeniden deneyin': 'The previous computation is still running; try again shortly',
+  'XU100 geçmişi alınamadı': 'Could not fetch XU100 history',
+
   // ── Sinyal radarı (server/radar.js SIGNALS) ──
   'RSI aşırı satım (<30)': 'RSI oversold (<30)',
   'RSI aşırı alım (>70)': 'RSI overbought (>70)',
@@ -386,6 +390,8 @@ export const patterns = [
   // ── Piyasa durumu ──
   [/^Tatil: (.+)$/, (m, h) => `Holiday: ${HOLIDAYS[h] || h}`],
   [/^(Seans öncesi|Açılış seansı|Sürekli işlem|Kapanış seansı) \(yarım gün: (.+)\)$/, (m, s, h) => `${EN[s]} (half day: ${HOLIDAYS[h] || h})`],
+
+  [/^Hisse verisi yetersiz \((\d+)\/(\d+)\)$/, 'Not enough stock data ($1/$2)'],
 
   // ── Ajan etkinliği / sohbet bildirimleri ──
   [/^Onay bekliyor: (.+)$/, 'Awaiting approval: $1'],

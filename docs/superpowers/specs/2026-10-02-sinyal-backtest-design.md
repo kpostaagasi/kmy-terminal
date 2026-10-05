@@ -30,7 +30,7 @@ Kullanıcı onaylı kararlar: **A)** ortak sinyal tanımı + bölünme düzeltme
 - **Testler:** `test/radar.test.mjs` (altın-referans, önek eşdeğerliği), `test/seri.test.mjs`, `test/backtest.test.mjs`; fixture `test/fixtures/radar-golden.json`. Hepsi çevrimdışı, `npm test` zincirinde.
 
 ### Olay ve getiri tanımı
-- **Olay:** `signalsAt(S, i)` kümesinde sinyal `k` var ve `signalsAt(S, i−1)` kümesinde yok. Seri başlangıcında ısınma için `i ≥ WARMUP = 210` (SMA200 ve MACD tam otursun).
+- **Olay:** `signalsAt(S, i)` kümesinde sinyal `k` var ve `signalsAt(S, i−1)` kümesinde yok. Seri başlangıcında ısınma için `i ≥ WARMUP = 252` (52 hafta penceresi ve SMA200 tam otursun).
 - **Tekilleştirme:** aynı hisse ve aynı sinyal türü için son **kabul edilmiş** olaydan itibaren `GAP = 20` işlem günü içindeki olaylar sayılmaz. (60 günlük ufukta örtüşme sürer; bilinen sınır.)
 - **Getiri (ufuk h ∈ {5, 20, 60}):** sinyal günü `i`'nin kapanışından sonra görülür (bildirim de seans sonrası gelir). **Giriş `bars[i+1].o`, çıkış `bars[i+h].c`**, `getiri = çıkış / giriş − 1`. `i+h` seri dışındaysa ya da giriş açılışı geçersizse (`≤ 0`/sayı değil) o olay o ufukta **dışarıda**. Veri sonuna yakın olaylar bu yüzden daha az ufukta sayılır (`n` ufuk başına ayrı).
 - **Taban:** aynı hisselerde `WARMUP ≤ i ≤ n−1−h` olan **her gün** için **aynı giriş/çıkış kuralıyla** getiri (sinyal olan günler dahil). Taban satırı: `n, ortalama, medyan, hitUp (getiri > 0 payı), hitDown (getiri < 0 payı), excess (XU100'a göre ortalama fark)`.
@@ -43,7 +43,7 @@ Kullanıcı onaylı kararlar: **A)** ortak sinyal tanımı + bölünme düzeltme
 ### Sonuç biçimi (kalıcı, API'nin döndüğü)
 ```
 { at: number,
-  params: { horizons: [5, 20, 60], gap: 20, warmup: 210, minN: 30, universe: 'BIST100', range: '10y',
+  params: { horizons: [5, 20, 60], gap: 20, warmup: 252, minN: 30, universe: 'BIST100', range: '10y',
             symbols: number, skipped: string[], bars: number, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', splitBreaks: number },
   baseline: { '5': { n, mean, median, hitUp, hitDown, excess, excessN }, '20': {…}, '60': {…} },
   signals: { rsi_os: { dir, label, '5': { n, mean, median, hit, excess, excessN, delta, low }, '20': {…}, '60': {…} }, … } }

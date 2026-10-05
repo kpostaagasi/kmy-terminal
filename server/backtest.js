@@ -2,11 +2,11 @@
 // Olay = sinyalin YENİ belirdiği gün. Sinyal kapanıştan sonra görülür: giriş ertesi günün açılışı, çıkış sinyalden h işlem günü
 // sonraki kapanış. Taban = aynı hisselerde her gün için aynı giriş/çıkış kuralı. Ayrıntı: docs/superpowers/specs/2026-10-02-sinyal-backtest-design.md
 import { SIGNALS, signalSeries, signalsAt } from './sinyal-tanim.js';
-import { adjustSplits } from './seri.js';
+import { adjustSplits, validBars } from './seri.js';
 
 export const HORIZONS = [5, 20, 60];
 export const GAP = 20;       // aynı hisse + sinyal için bu kadar işlem günü içindeki tekrarlar sayılmaz
-export const WARMUP = 210;   // SMA200 ve MACD tam otursun
+export const WARMUP = 252;   // 52 hafta penceresi (252 mum) ve SMA200 tam otursun
 export const MIN_N = 30;     // altı "az örnek"
 export const MIN_BARS = 300; // daha kısa seri atlanır
 
@@ -99,13 +99,14 @@ export function aggregate(all, { horizons = HORIZONS, minN = MIN_N } = {}) {
  *  series: [{ symbol, bars }] (ham mumlar; bölünmeler burada düzeltilir), bench: endeks mumları
  * Döner: { baseline, signals, params: { horizons, gap, warmup, minN, symbols, skipped, bars, from, to, splitBreaks } }
  */
-export function computeBacktest({ series, bench, horizons = HORIZONS, gap = GAP, warmup = WARMUP, minN = MIN_N, minBars = MIN_BARS, signals = null }) {
+export async function computeBacktest({ series, bench, horizons = HORIZONS, gap = GAP, warmup = WARMUP, minN = MIN_N, minBars = MIN_BARS, signals = null }) {
   const all = { base: Object.fromEntries(horizons.map((h) => [h, []])), events: {} };
   const skipped = [];
   let bars = 0, splitBreaks = 0, from = null, to = null, used = 0;
   for (const { symbol, bars: raw } of series) {
     if (!raw || raw.length < minBars) { skipped.push(symbol); continue; }
-    const adj = adjustSplits(raw);
+    await new Promise((r) => setImmediate(r)); // hisseler arasında olay döngüsüne dön: gateway trafiği ~1 sn bloklanmasın
+    const adj = adjustSplits(validBars(raw));
     splitBreaks += adj.breaks.length;
     const obs = symbolObservations(adj.bars, bench, { horizons, gap, warmup, signals });
     for (const h of horizons) all.base[h].push(...obs.base[h]);

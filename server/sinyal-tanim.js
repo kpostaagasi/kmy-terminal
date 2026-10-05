@@ -1,7 +1,7 @@
 // Sinyal tanımları: radar (son mum), sinyal bildirimi ve backtest (her mum) AYNI kuralları kullanır. Saf (veritabanı ve ağ yok).
 // Göstergeler nedenseldir: i. mumdaki değer yalnız ≤ i verisini kullanır (ileriye bakma yok).
 import { sma, rsi, macd } from './indicators.js';
-import { adjustSplits } from './seri.js';
+import { adjustSplits, validBars } from './seri.js';
 
 export const SIGNALS = {
   rsi_os: { label: 'RSI aşırı satım (<30)', dir: 'up' },
@@ -60,7 +60,7 @@ export function signalsAt(S, i) {
 /** Radar için son mumun özeti. Bölünme/birleşme günleri önce düzeltilir (bkz. seri.js). */
 export function scanBars(bars) {
   if (bars.length < 60) return null;
-  const S = signalSeries(adjustSplits(bars).bars);
+  const S = signalSeries(adjustSplits(validBars(bars)).bars);
   const L = S.c.length - 1;
   const avg20 = volAvg(S, L);
   return { price: S.c[L], changePct: (S.c[L] / S.c[L - 1] - 1) * 100, rsi: S.r[L], volRatio: avg20 ? S.v[L] / avg20 : null, signals: signalsAt(S, L) };
