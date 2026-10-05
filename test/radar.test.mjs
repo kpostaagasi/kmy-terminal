@@ -78,5 +78,12 @@ assert('scanBars bölünmeyi düzeltir: sahte 52 hafta dibi / SMA200 aşağı k�
 assert('scanBars bölünme gününde günlük değişim makul (|%| < 15)', Math.abs(adj.changePct) < 15, String(adj.changePct));
 assert('scanBars fiyatı ham güncel kapanıştır (son mum düzeltilmez)', adj.price === split.at(-1).c);
 
+// Sıfır kapanışlı bozuk mum sahte sinyal üretmemeli: mum atılmış seriyle aynı sonuç
+{
+  const b = makeBars(3, 400); const broken = b.map((x, i) => (i === 150 ? { ...x, c: 0 } : x));
+  const clean = b.filter((_, i) => i !== 150);
+  const a1 = scanBars(broken.slice(0, 160)), a2 = scanBars(clean.slice(0, 159));
+  assert('sıfır kapanışlı mum seriden atılmış gibi davranır (160. mumda sinyal ve fiyat aynı)', JSON.stringify(a1) === JSON.stringify(a2));
+}
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

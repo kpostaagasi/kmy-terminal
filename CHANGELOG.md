@@ -1,5 +1,17 @@
 # Sürüm Notları
 
+## 0.21.1 — 5 Ekim 2026 (backtest küçük düzeltmeler)
+
+### Düzeltilen
+- **Bozuk kapanış:** kapanışı 0, boş ya da negatif olan mum artık radar, bildirim ve backtest'te seriden atılır (eskiden sahte `rsi_os`/`low52`/`sma200_dn`/`macd_dn` üretiyor, SMA200'ü 200 mum bozuyordu).
+- **Isınma 210 → 252 mum:** ilk 40 gündeki 52 hafta zirve/dip olayları gerçekte ~10 aylıktı.
+- **XU100 hatasında kilit:** XU100 çekimi hata verince hisse çekimleri arka planda sürüyordu; hemen yeniden denemek Yahoo'ya iki kat istek yolluyordu. Artık hisse çekimleri bitmeden koşu hata verir.
+- **Geç biten koşu:** zaman aşımından sonra biten hesap kaydedilir ve pencerelere bildirilir (eskiden atılıyordu).
+- **Olay döngüsü:** hesap hisseler arasında kontrol bırakır (eskiden ~1,3 sn kesintisiz bloklardı).
+- **Önbellek:** koşu sonunda 10 yıllık geçmiş satırları silinir; `http_cache` tavanı (300 satır / 50 MB) dolup diğer kayıtları düşürmez.
+- **Arayüz:** başka pencerede yeni sonuç gelince eski hata notu kalmaz; ilk yükleme hatası "hiç hesaplanmadı" gibi görünmez; bedelsiz uyarı metni doğru sınırı söyler ("fiyatı %25'ten az düşüren, ≈%33'e kadar"); dört sunucu hata iletisinin İngilizcesi eklendi.
+- **Testler:** bölünme testi sıkılaştı (bölünmeli seri, bölünmesiz eşdeğerinden taban medyanında < 0,01 sapar); koşu kilidi testi `npm test` zincirinde (500 kontrol + 15 kilit kontrolü).
+
 ## 0.21.0 — 5 Ekim 2026 (sinyal geçmiş performansı)
 
 ### Yeni

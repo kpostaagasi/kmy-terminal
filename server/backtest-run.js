@@ -1,5 +1,5 @@
 // Sinyal geçmiş performansı: veri çekimi, kalıcılık, tek koşu. Hesap backtest.js'tedir (saf, çevrimdışı test edilir).
-import { db } from './db.js';
+import { db, cacheDeleteLike } from './db.js';
 import * as universe from './universe.js';
 import { getHistory } from './market.js';
 import { computeBacktest } from './backtest.js';
@@ -8,6 +8,8 @@ db.exec('CREATE TABLE IF NOT EXISTS backtest_result (id INTEGER PRIMARY KEY CHEC
 
 const RANGE = '10y';
 let inflight = null;    // bekleyen çağrıların paylaştığı söz
+let notify = () => {};  // koşu sonucu zaman aşımından sonra gelirse pencerelere haber vermek için (index.js bağlar)
+export const onUpdate = (fn) => { notify = fn; };
 let innerBusy = false;  // zaman aşımından sonra bile iç koşu bitene kadar true: iptal edilemeyen koşu varken yeni koşu çakışmasın
 
 async function pool(items, n, fn) {
@@ -30,7 +32,8 @@ export async function compute({ history = getHistory, symbols = null } = {}) {
   if (!bench?.length) throw new Error(b.reason?.message || 'XU100 geçmişi alınamadı');
   if (series.length < symbols.length / 2) throw new Error(`Hisse verisi yetersiz (${series.length}/${symbols.length})`);
   series.sort((a, c) => a.symbol.localeCompare(c.symbol));
-  const result = computeBacktest({ series, bench });
+  const result = await computeBacktest({ series, bench });
+  cacheDeleteLike(`hist:%:${RANGE}:1d`); // 100 × ~200 KB'lık geçmiş http_cache tavanını (300 satır / 50 MB) doldurup diğer kayıtları düşürmesin
   result.params.skipped = [...new Set([...result.params.skipped, ...failed])].sort();
   result.params.universe = 'BIST100';
   result.params.range = RANGE;
@@ -58,13 +61,17 @@ export function run({ timeoutMs = 300_000, work = compute } = {}) {
   if (innerBusy) return Promise.reject(new Error('Önceki hesap hâlâ sürüyor; biraz sonra yeniden deneyin'));
   const job = work();
   innerBusy = true;
-  job.then(() => {}, () => {}).then(() => { innerBusy = false; });
+  const persist = (result) => {
+    const at = Date.now();
+    db.prepare('INSERT INTO backtest_result(id, at, result) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, result = excluded.result').run(at, JSON.stringify(result));
+    return at;
+  };
+  let late = false; // zaman aşımı olduysa sonuç geç gelir: kaydet ve diğer pencerelere haber ver (istek çoktan hata döndü)
+  let at = null;
+  job.then((result) => { at = persist(result); if (late) notify(); }, () => {}).then(() => { innerBusy = false; });
   inflight = withTimeout(job, timeoutMs)
-    .then((result) => {
-      const at = Date.now();
-      db.prepare('INSERT INTO backtest_result(id, at, result) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, result = excluded.result').run(at, JSON.stringify(result));
-      return { at, result, running: false };
-    })
+    .then((result) => ({ at, result, running: false })) // job.then (kayıt) withTimeout'tan önce kayıtlı: at dolu
+    .catch((e) => { late = true; throw e; })
     .finally(() => { inflight = null; });
   return inflight;
 }

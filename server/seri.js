@@ -40,3 +40,6 @@ export function adjustSplits(bars, { down = -0.25, up = 0.30 } = {}) {
   }
   return { bars: out, breaks };
 }
+
+/** Kapanışı sayı olmayan ya da ≤ 0 olan mumları atar (bozuk veri sahte sinyal ve sahte kırılma üretmesin). */
+export const validBars = (bars) => bars.filter((b) => Number.isFinite(b?.c) && b.c > 0);

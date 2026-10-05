@@ -1,5 +1,5 @@
 // Bölünme/birleşme düzeltmesi. Çevrimdışı, saf.
-import { adjustSplits } from '../server/seri.js';
+import { adjustSplits, validBars } from '../server/seri.js';
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail = '') {
@@ -58,5 +58,9 @@ assert('zaman damgası yoksa tarih null, kırılma yine yakalanır', adjustSplit
 assert('hacim 0 ise 0 kalır (NaN değil)', adjustSplits(B([100, 100, 30], [0, 0, 0])).bars[0].v === 0);
 assert('özel eşik: down −%10 ile −%11 sayılır', adjustSplits(B([100, 89]), { down: -0.10 }).breaks.length === 1);
 
+// validBars: kapanışı sayı olmayan ya da ≤ 0 olan mumlar atılır (sahte sinyal üretmesin)
+const vb = validBars([{ c: 100 }, { c: 0 }, { c: null }, { c: NaN }, { c: -5 }, { c: 101 }]);
+assert('validBars: 0, null, NaN ve negatif kapanışlı mumlar atılır', vb.length === 2 && vb[0].c === 100 && vb[1].c === 101);
+assert('validBars: geçerli mumlar aynı nesnelerdir, boş girdi çökmez', (() => { const a = [{ c: 1 }]; return validBars(a)[0] === a[0] && validBars([]).length === 0; })());
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);
