@@ -10,7 +10,7 @@ function assert(name, cond, detail = '') {
 const near = (a, b, tol = 1e-9) => a != null && Number.isFinite(a) && Math.abs(a - b) <= tol;
 const D = (k) => Date.UTC(2024, 0, 1 + k);
 
-assert('sabitler: ufuklar, tekilleştirme, ısınma, az örnek', HORIZONS.join() === '5,20,60' && GAP === 20 && WARMUP === 210 && MIN_N === 30);
+assert('sabitler: ufuklar, tekilleştirme, ısınma, az örnek', HORIZONS.join() === '5,20,60' && GAP === 20 && WARMUP === 252 && MIN_N === 30);
 
 // Sabit fiyat modeli: o_k = 100 + k, c_k = 100 + k + 0.5 (elle hesaplanabilir)
 const bars = Array.from({ length: 40 }, (_, k) => ({ t: D(k), o: 100 + k, h: 101 + k, l: 99 + k, c: 100 + k + 0.5, v: 1000 }));
@@ -99,21 +99,32 @@ function makeBars(seed, n) {
 }
 const idx = makeBars(99, 900);
 const series = [1, 2, 3].map((s) => ({ symbol: 'S' + s, bars: makeBars(s, 900) }));
-const res = computeBacktest({ series, bench: idx });
+const res = await computeBacktest({ series, bench: idx });
 assert('bütünleşik: üç hisse, atlanan yok, taban dolu', res.params.symbols === 3 && res.params.skipped.length === 0 && res.baseline[20].n > 1000);
-assert('bütünleşik: parametreler (ufuklar, gap, ısınma, az örnek) sonuçta', res.params.horizons.join() === '5,20,60' && res.params.gap === 20 && res.params.warmup === 210 && res.params.minN === 30);
-assert('bütünleşik: tarih aralığı ısınmadan sonra başlar ve seri sonunda biter', res.params.from === new Date(D(210)).toISOString().slice(0, 10) && res.params.to === new Date(D(899)).toISOString().slice(0, 10));
+assert('bütünleşik: parametreler (ufuklar, gap, ısınma, az örnek) sonuçta', res.params.horizons.join() === '5,20,60' && res.params.gap === 20 && res.params.warmup === 252 && res.params.minN === 30);
+assert('bütünleşik: tarih aralığı ısınmadan sonra başlar ve seri sonunda biter', res.params.from === new Date(D(252)).toISOString().slice(0, 10) && res.params.to === new Date(D(899)).toISOString().slice(0, 10));
 assert('bütünleşik: en az bir sinyal türünde olay var', Object.values(res.signals).some((s) => s[20].n > 0));
-assert('bütünleşik: 300 mumdan kısa seri atlanır', computeBacktest({ series: [{ symbol: 'KISA', bars: makeBars(1, 250) }, ...series], bench: idx }).params.skipped.join() === 'KISA');
-assert('bütünleşik: deterministik (aynı girdi aynı sonuç)', JSON.stringify(computeBacktest({ series, bench: idx })) === JSON.stringify(res));
-assert('bütünleşik: boş seri listesi çökmez', computeBacktest({ series: [], bench: idx }).params.symbols === 0);
+assert('bütünleşik: 300 mumdan kısa seri atlanır', (await computeBacktest({ series: [{ symbol: 'KISA', bars: makeBars(1, 250) }, ...series], bench: idx })).params.skipped.join() === 'KISA');
+assert('bütünleşik: deterministik (aynı girdi aynı sonuç)', JSON.stringify(await computeBacktest({ series, bench: idx })) === JSON.stringify(res));
+assert('bütünleşik: boş seri listesi çökmez', (await computeBacktest({ series: [], bench: idx })).params.symbols === 0);
 
 // Bölünme düzeltmesi: bir serinin ortasına 1:3 bölünme eklenince sahte −%67 getiri üretmemeli
 const withSplit = makeBars(5, 900).map((b, i) => (i >= 500 ? { ...b, o: b.o / 3, h: b.h / 3, l: b.l / 3, c: b.c / 3, v: b.v * 3 } : { ...b }));
-const rs = computeBacktest({ series: [{ symbol: 'BOL', bars: withSplit }], bench: idx });
+const rs = await computeBacktest({ series: [{ symbol: 'BOL', bars: withSplit }], bench: idx });
 assert('bölünme içeren seri: kırılma sayısı 1', rs.params.splitBreaks === 1, String(rs.params.splitBreaks));
+const clean = await computeBacktest({ series: [{ symbol: 'BOL', bars: makeBars(5, 900) }], bench: idx });
+const drift = Math.abs(rs.baseline[20].median - clean.baseline[20].median);
+assert('bölünme içeren seri, bölünmesiz eşdeğerine yakın sonuç verir (taban medyanı farkı < 0,01)', drift < 0.01, String(drift));
 const worst = Math.min(...Object.values(rs.signals).flatMap((s) => [5, 20, 60].map((h) => s[h].n ? s[h].median : 0)), rs.baseline[60].median);
-assert('bölünme içeren seri: medyanlarda sahte −%60 çöküş yok', worst > -0.3, String(worst));
+assert('bölünme içeren seri: medyanlarda sahte çöküş yok', worst > -0.3, String(worst));
+
+// Olay döngüsü: hisseler arasında kontrol bırakılır (yaklaşık 1,3 sn kesintisiz bloklama olmasın)
+{
+  let calls = 0, atTick = null;
+  setImmediate(() => { atTick = calls; });
+  await computeBacktest({ series, bench: idx, signals: () => { calls++; return []; } });
+  assert('computeBacktest hisseler arasında olay döngüsüne döner', atTick !== null && atTick < calls, `${atTick}/${calls}`);
+}
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

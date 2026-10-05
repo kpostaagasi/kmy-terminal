@@ -176,6 +176,7 @@ route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(
 route('GET', '/api/market/movers', async () => market.movers());
 route('GET', '/api/data-health', async () => dataHealth.last());
 route('POST', '/api/data-health/run', async () => { try { return await dataHealth.run(); } finally { broadcast({ t: 'data-health.updated' }); } }); // hata durumunda da: diğer pencereler "çalışıyor"da takılı kalmasın
+backtest.onUpdate(() => broadcast({ t: 'backtest.updated' })); // zaman aşımından sonra biten koşu
 route('GET', '/api/backtest', async () => backtest.last());
 route('POST', '/api/backtest/run', async () => { try { return await backtest.run(); } finally { broadcast({ t: 'backtest.updated' }); } }); // hata durumunda da: diğer pencereler "hesaplanıyor"da takılı kalmasın
 route('GET', '/api/calendar', async ({ q }) => calendarSource.calendar({
