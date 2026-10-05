@@ -1,6 +1,6 @@
 {
   "name": "kmy-terminal",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "kmy terminal — yapay zekâ destekli BIST terminali",
   "main": "server/index.js",
   "bin": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs && node test/hedef.test.mjs && node test/sinyal.test.mjs && node test/takvim.test.mjs",
+    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs && node test/hedef.test.mjs && node test/sinyal.test.mjs && node test/takvim.test.mjs && node test/radar.test.mjs && node test/seri.test.mjs && node test/backtest.test.mjs",
     "denetim": "node scripts/veri-denetimi.mjs",
     "open": "bin/kmy-terminal",
     "mcp": "node server/mcp-stdio.js",
