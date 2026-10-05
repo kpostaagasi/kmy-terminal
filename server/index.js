@@ -22,6 +22,7 @@ import * as scheduler from './scheduler.js';
 import * as signalWatch from './signal-watch.js';
 import * as calendarSource from './takvim-kaynak.js';
 import * as dataHealth from './denetim.js';
+import * as backtest from './backtest-run.js';
 import * as memory from './memory.js';
 import * as documents from './documents.js';
 import * as research from './research.js';
@@ -175,6 +176,8 @@ route('GET', '/api/market/overview', async () => ({ status: market.marketStatus(
 route('GET', '/api/market/movers', async () => market.movers());
 route('GET', '/api/data-health', async () => dataHealth.last());
 route('POST', '/api/data-health/run', async () => { try { return await dataHealth.run(); } finally { broadcast({ t: 'data-health.updated' }); } }); // hata durumunda da: diğer pencereler "çalışıyor"da takılı kalmasın
+route('GET', '/api/backtest', async () => backtest.last());
+route('POST', '/api/backtest/run', async () => { try { return await backtest.run(); } finally { broadcast({ t: 'backtest.updated' }); } }); // hata durumunda da: diğer pencereler "hesaplanıyor"da takılı kalmasın
 route('GET', '/api/calendar', async ({ q }) => calendarSource.calendar({
   scope: q.get('scope') || 'portfolio', from: q.get('from') || null, to: q.get('to') || null,
   kinds: q.get('kinds') ? q.get('kinds').split(',').filter(Boolean) : null,
