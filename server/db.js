@@ -214,6 +214,12 @@ export function cacheStats() {
   return { rows: cacheRows, bytes: cacheBytes };
 }
 
+/** LIKE örüntüsüne uyan önbellek anahtarlarını siler (ör. 10 yıllık geçmiş satırları). */
+export function cacheDeleteLike(pattern) {
+  db.prepare('DELETE FROM http_cache WHERE key LIKE ?').run(pattern);
+  cacheRows = -1; cacheBytes = -1; // bir sonraki cacheStats ölçümü tazeler
+}
+
 export function cacheClear() {
   db.exec('DELETE FROM http_cache');
   cacheRows = 0; cacheBytes = 0;
