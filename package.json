@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs && node test/hedef.test.mjs && node test/sinyal.test.mjs && node test/takvim.test.mjs && node test/radar.test.mjs && node test/seri.test.mjs && node test/backtest.test.mjs && BORSA_DATA_DIR=$(mktemp -d) node test/backtest-run.check.mjs && node test/dengeleme.test.mjs",
+    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs && node test/hedef.test.mjs && node test/sinyal.test.mjs && node test/takvim.test.mjs && node test/radar.test.mjs && node test/seri.test.mjs && node test/backtest.test.mjs && BORSA_DATA_DIR=$(mktemp -d) node test/backtest-run.check.mjs && node test/dengeleme.test.mjs && BORSA_DATA_DIR=$(mktemp -d) node test/dengeleme-kaynak.check.mjs",
     "denetim": "node scripts/veri-denetimi.mjs",
     "open": "bin/kmy-terminal",
     "mcp": "node server/mcp-stdio.js",
