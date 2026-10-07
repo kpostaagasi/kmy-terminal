@@ -7,8 +7,13 @@ import assert from 'node:assert/strict';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'borsa-guvenlik-'));
 process.env.BORSA_DATA_DIR = dir;
-await import('../server/scheduler.js'); // schedules tablosunu kuran modül (db'den önce yüklenmeli)
-const { db, restoreBackup } = await import('../server/db.js');
+const { db, cachePut, restoreBackup } = await import('../server/db.js');
+cachePut('isy:all', { at: Date.now(), stocks: {}, actions: [] });
+await import('../server/scheduler.js');
+await import('../server/signal-watch.js');
+await import('../server/denetim.js');
+await import('../server/backtest-run.js');
+await import('../server/dengeleme-kaynak.js');
 const term = await import('../server/terminal.js');
 const { authorizeTool, mintScopedToken, verifyScopedToken } = await import('../server/agent-tools.js');
 

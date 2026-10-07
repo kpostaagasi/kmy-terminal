@@ -32,7 +32,7 @@ function post(endpoint, body) {
   return p;
 }
 
-/** Fon kodu mu? TEFAS kodları 3 karakterdir (harf/rakam); BIST payları 4–6 harflidir. */
+/** Fon kodu mu? TEFAS kodları 3 karakterdir. Evrendeki BIST payı isFund içinde elenir. */
 export const isFundCode = (s) => /^[A-Z0-9]{3}$/.test(String(s || '')) && /[A-Z]/.test(String(s));
 
 // Tüm fonların kodu ve adı (günlük önbellek) — arama ve ad çözümü için

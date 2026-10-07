@@ -124,10 +124,12 @@ export function isBist(sym) {
   return !SPECIAL[s] && !s.endsWith('.US') && !/[=^\-.]/.test(s) && !isFund(s);
 }
 
-/** TEFAS fonu mu? (3 karakterli kod; özel semboller ve endeksler hariç) */
+/** TEFAS fonu mu? 3 karakter; evrendeki BIST payı (3 harf olsa bile), özel sembol ve endeks değil. */
 export function isFund(sym) {
   const s = normalize(sym);
-  return isFundCode(s) && !SPECIAL[s] && !INDICES.includes(s);
+  if (!isFundCode(s) || SPECIAL[s] || INDICES.includes(s)) return false;
+  if (universe.listed(s)) return false;
+  return true;
 }
 
 async function getJson(url, { timeoutMs = 12000, headers = {} } = {}) {

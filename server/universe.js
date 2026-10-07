@@ -168,6 +168,7 @@ export async function refresh(force = false) {
 function ensure() { if (!mem || Date.now() - fetchedAt > TTL) refresh().catch(() => {}); }
 
 export function stock(code) { ensure(); return mem?.stocks?.[code] || null; }
+export function listed(code) { return mem?.stocks?.[String(code || '').trim().toUpperCase()] || null; }
 export function allStocks() { ensure(); return mem ? Object.values(mem.stocks) : []; }
 // total: evrendeki + kaldırılmış toplam · delisted/added: son 90 gün · delistedList: kaldırılan kodlar
 export function status() {

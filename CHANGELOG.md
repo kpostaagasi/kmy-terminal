@@ -1,5 +1,13 @@
 # Sürüm Notları
 
+## 0.22.1 — 7 Ekim 2026 (yedek, plan kipi, fon ayrımı)
+
+### Düzeltilen
+- **Yedek uydu tabloları.** `rebalance_targets`, `signal_state`, `signal_meta`, `signal_log`, `backtest_result` ve `data_health` artık yedek dosyasına girer ve geri yüklenir. Önceden bu satırlar yedekte yoktu.
+- **Sohbet plan kipi.** Mesaj kutusundaki izin seçicisi ve `/plan` giden kipi `plan` yapar. Eskiden sohbet hep `default` gönderiyordu.
+- **3 harfli BIST kodu.** Evren listesindeki 3 harfli pay fon sayılmaz. Evren dışı 3 harf TEFAS kodu olarak kalır. Ayrım listeyi tazelemez.
+- **Testler:** 563 → 580 kontrol (`yedek-uydu` 8, `fon-ayrim` 5, `sohbet-plan` 4).
+
 ## 0.22.0 — 5 Ekim 2026 (hedef ağırlığa göre dengeleme)
 
 ### Yeni
