@@ -1,8 +1,8 @@
 // Dengeleme: hedeflerin kalıcılığı ve plan için portföy/fiyat toplama. Hesap kuralları dengeleme.js'tedir (saf).
-import { db, tx } from './db.js';
+import { db, tx, getSettings } from './db.js';
 import * as pf from './portfolio.js';
 import { getQuotes } from './market.js';
-import { plan, validateTargets } from './dengeleme.js';
+import { plan, validateTargets, parseRate } from './dengeleme.js';
 
 db.exec("CREATE TABLE IF NOT EXISTS rebalance_targets (kind TEXT NOT NULL CHECK (kind IN ('class','symbol')), key TEXT NOT NULL, pct REAL NOT NULL, cls TEXT, PRIMARY KEY (kind, key))");
 
@@ -58,10 +58,13 @@ export async function compute({ extra = 0 } = {}) {
       if (qs[x]?.price > 0 && rate > 0) fresh[x] = { price: qs[x].price * rate };
     }
   }
-  const result = plan({ holdings: s.holdings, totalValue: s.totals.value, cash: s.totals.cash, cashTracking, fresh, ...targets, extra });
+  const rate = parseRate(getSettings().rebalanceRate);
+  if (Number.isNaN(rate)) throw new Error('Komisyon oranı 0–5 arasında olmalı');
+  const result = plan({ holdings: s.holdings, totalValue: s.totals.value, cash: s.totals.cash, cashTracking, fresh, ...targets, extra, rate });
   return {
     ...result, warnings: [...extraWarnings, ...result.warnings], targets, asOf: s.asOf, cashTracking,
     holdings: s.holdings.map((h) => ({ symbol: h.symbol, name: h.name, asset_type: h.asset_type, assetLabel: h.assetLabel, value: h.value, weight: h.weight, priceSource: h.priceSource, priceTime: h.priceTime })),
     classLabels: pf.ASSET_TYPES,
+    rate,
   };
 }

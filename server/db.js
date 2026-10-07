@@ -166,6 +166,8 @@ export const DEFAULT_SETTINGS = {
   language: 'auto', // 'auto' (sistem dili) | 'tr' | 'en'
   // Sinyal bildirimi: seans sonrası taramada yeni çıkan sinyaller (server/sinyal.js, signal-watch.js)
   signalNotify: true,
+  auditSchedule: true,
+  rebalanceRate: null,
   signalTypes: ['golden', 'death', 'high52', 'low52', 'sma200_up', 'sma200_dn'],
 };
 

@@ -165,6 +165,12 @@ assert('eskiMi: tam 24 saat eski değil', K.eskiMi(N - H24, N) === false);
 assert('eskiMi: 24 saat + 1 ms eski', K.eskiMi(N - H24 - 1, N) === true);
 assert('eskiMi: yeni sonuç değil', K.eskiMi(N - 1000, N) === false);
 assert('eskiMi: at null → false', K.eskiMi(null, N) === false && K.eskiMi(undefined, N) === false);
+const kapali = { label: 'Seans kapalı', half: false };
+assert('vade: cuma sonucu cumartesi eski değil', K.vadeGecti({ status: { label: 'Hafta sonu' }, hm: '18:40', today: '2026-10-10', doneDay: '2026-10-09' }) === false);
+assert('vade: pazartesi sabahı eski değil', K.vadeGecti({ status: { label: 'Seans açık' }, hm: '10:00', today: '2026-10-12', doneDay: '2026-10-09' }) === false);
+assert('vade: kapı açıldı, bugün bitmedi → eski', K.vadeGecti({ status: kapali, hm: '18:30', today: '2026-10-12', doneDay: '2026-10-09' }) === true);
+assert('vade: bugün bitti → eski değil', K.vadeGecti({ status: kapali, hm: '19:00', today: '2026-10-12', doneDay: '2026-10-12' }) === false);
+assert('vade: koşu sürerken flaş yok', K.vadeGecti({ status: kapali, hm: '18:31', today: '2026-10-12', doneDay: '2026-10-09', running: true }) === false);
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

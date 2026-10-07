@@ -55,13 +55,14 @@ function resultCard() {
     return `<tr><td class="mono"><b>${esc(r.key === 'cash' ? t('Nakit') : r.kind === 'class' ? label(r.key) : r.key)}</b> <span class="dim">${esc(r.kind === 'class' ? '' : label(r.class))}</span></td>
       <td class="r num">${p1(r.currentPct)}</td><td class="r num">${p1(r.targetPct)}</td><td class="r num ${cls(-r.deviation)}">${sgn(r.deviation)}</td>
       <td class="${c}"><b>${esc(a)}</b></td><td class="r num">${r.qty != null ? num(r.qty, r.qty % 1 ? 4 : 0) : '—'}</td><td class="r num">${r.tl ? money(r.tl) : '—'}</td>
-      <td class="r num dim">${r.taxEst ? money(r.taxEst) : '—'}</td><td class="dim">${r.reason ? esc(tx(r.reason)) : ''}</td></tr>`;
+      <td class="r num dim">${r.taxEst ? money(r.taxEst) : '—'}</td>
+      <td class="r num dim">${r.feeEst != null ? money(r.feeEst) : '—'}</td><td class="dim">${r.reason ? esc(tx(r.reason)) : ''}</td></tr>`;
   }).join('');
   const sumLine = `${t('Net nakit değişimi')}: <b class="${cls(s.netCash)}">${s.netCash > 0 ? '+' : ''}${money(s.netCash)}</b> · ${t('Yuvarlama artığı')}: ${money(s.rounding)} · ${t('Mod')}: ${s.mode === 'ekNakit' ? t('yalnız alım (ek nakit)') : t('al/sat (değer sabit)')}`;
   return `<div class="card"><h3>${t('Öneri')} <span class="dim" style="font-weight:400">${esc(sumLine.replace(/<[^>]+>/g, ''))}</span></h3>
     ${res.warnings.map((w) => `<div class="kt-note down">${esc(tx(w))}</div>`).join('')}
-    <div class="table-wrap"><table class="t"><thead><tr><th>${t('Varlık')}</th><th class="r">${t('Gerçek')}</th><th class="r">${t('Hedef')}</th><th class="r">${t('Sapma (puan)')}</th><th>${t('İşlem')}</th><th class="r">${t('Adet')}</th><th class="r">${t('Tutar')}</th><th class="r">${t('Tahmini vergi')}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="kt-note">${t('Bu bir hesaptır, yatırım tavsiyesi değildir; emir gönderilmez. Fiyatlar BIST için ~15 dk gecikmeli olabilir. Vergi tahmini kısmi satışta oransaldır; komisyon hesaba katılmaz.')}</p></div>`;
+    <div class="table-wrap"><table class="t"><thead><tr><th>${t('Varlık')}</th><th class="r">${t('Gerçek')}</th><th class="r">${t('Hedef')}</th><th class="r">${t('Sapma (puan)')}</th><th>${t('İşlem')}</th><th class="r">${t('Adet')}</th><th class="r">${t('Tutar')}</th><th class="r">${t('Tahmini vergi')}</th><th class="r">${t('Tahmini komisyon')}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="kt-note">${t('Bu bir hesaptır, yatırım tavsiyesi değildir; emir gönderilmez. Fiyatlar BIST için ~15 dk gecikmeli olabilir. Vergi tahmini kısmi satışta oransaldır. Komisyon yalnız hisse ve ETF’de, girdiğin yüzdeyle, yuvarlanmış tutar üzerinden hesaplanır; adedi değiştirmez.')}</p></div>`;
 }
 
 function paint() {
@@ -69,7 +70,8 @@ function paint() {
   if (!res) { host.innerHTML = err ? `<div class="card"><div class="kt-note down">${esc(err)}</div></div>` : '<div class="skeleton" style="height:200px"></div>'; return; }
   host.innerHTML = `${err ? `<div class="kt-note down">${esc(err)}</div>` : ''}
     <div class="card"><div class="row"><label class="dim" for="rbExtra">${t('Ek nakit (TL)')}</label><input id="rbExtra" class="rb-in" style="width:130px" inputmode="decimal" value="${esc(extra)}" placeholder="0">
-      <span class="dim">${t('Boş: portföy değeri sabit, al/sat. Girilirse yalnız alım önerilir.')}</span></div></div>
+      <label class="dim" for="rbRate">${t('Komisyon %')}</label><input id="rbRate" class="rb-in" style="width:80px" inputmode="decimal" value="${esc(res.rate ?? '')}" placeholder="0,1">
+      <span class="dim">${t('Boş: portföy değeri sabit, al/sat. Girilirse yalnız alım önerilir. Komisyon boşsa yok.')}</span></div></div>
     ${editor()}${resultCard()}`;
   bind();
 }
@@ -98,6 +100,14 @@ async function save() {
 function bind() {
   const ex = $('#rbExtra', host);
   ex.onchange = () => { extra = ex.value.trim(); localSet('rbExtra', extra); readDraft(); load(); };
+  const rateIn = $('#rbRate', host);
+  if (rateIn) rateIn.onchange = async () => {
+    const n = parseTr(rateIn.value);
+    if (rateIn.value.trim() !== '' && (n == null || Number.isNaN(n) || n < 0 || n > 5)) { err = t('Komisyon oranı 0–5 arasında olmalı'); paint(); return; }
+    try { await api('/settings', { method: 'PUT', body: { rebalanceRate: rateIn.value.trim() === '' ? null : n } }); err = ''; }
+    catch (e) { err = tx(e.message); }
+    readDraft(); load();
+  };
   $('#rbSave', host).onclick = save;
   $('#rbReset', host).onclick = () => { draft = null; fresh(); err = ''; paint(); };
   $('#rbAdd', host).onclick = () => {

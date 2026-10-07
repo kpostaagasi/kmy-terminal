@@ -6,7 +6,7 @@ import * as kap from './kap.js';
 import * as store from './store.js';
 import * as pf from './portfolio.js';
 import { normalize, isBist } from './market.js';
-import { parseTcmb, corporateEvents, bilancoEvents, plausibleAnnouncements, isConsolidated, marketSeasonEvents, buildCalendar, defaultWindow, istanbulToday, KINDS } from './takvim.js';
+import { parseTcmb, parseTufe, corporateEvents, bilancoEvents, plausibleAnnouncements, isConsolidated, marketSeasonEvents, buildCalendar, defaultWindow, istanbulToday, KINDS, legalDeadline, candidatePeriods } from './takvim.js';
 
 const TCMB_URL = 'https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Duyurular/Takvim';
 const DAY = 86400_000;
@@ -34,6 +34,33 @@ export async function tcmbEvents() {
       .finally(() => { tcmbInflight = null; });
   }
   return tcmbInflight;
+}
+
+const TUFE_URL = 'https://takvim.tuik.gov.tr/Kurumsal/GetYillikHaberBulteniListesi?yil=';
+let tufeInflight = null;
+
+async function fetchTufeYear(year) {
+  const res = await fetch(`${TUFE_URL}${year}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`TÜFE HTTP ${res.status}`);
+  try { return parseTufe(await res.json()); }
+  catch (e) { if (/satır yok/.test(e.message)) return []; throw e; }
+}
+
+/** TÜFE: günde bir. Okunamazsa satır yok, eski tarih kalmaz. */
+export async function tufeEvents(today) {
+  const hit = cacheGet('takvim:tufe', DAY);
+  if (hit) return { events: hit, error: null };
+  if (!tufeInflight) {
+    const y = Number(today.slice(0, 4));
+    tufeInflight = Promise.all([y, y + 1].map(fetchTufeYear)).then((lists) => {
+      const seen = new Set();
+      const events = lists.flat().filter((e) => seen.has(e.date) ? false : seen.add(e.date));
+      if (!events.length) throw new Error('TÜFE takviminde satır yok');
+      cachePut('takvim:tufe', events);
+      return { events, error: null };
+    }).catch((e) => ({ events: [], error: e.message })).finally(() => { tufeInflight = null; });
+  }
+  return tufeInflight;
 }
 
 /**
@@ -88,13 +115,17 @@ export async function calendar({ scope = 'portfolio', from = null, to = null, ki
 
   // TCMB diğer kaynaklarla paralel çekilir; yalnız istenen türlerin kaynağına gidilir (KAP hız sınırı)
   const tcP = want.includes('tcmb') ? tcmbEvents() : null;
+  const tufeP = want.includes('tufe') ? tufeEvents(today) : null;
 
   if (want.includes('temettu') || want.includes('sermaye')) {
     await universe.refresh().catch(() => {});
     events.push(...corporateEvents(await universe.corporateActions({ symbols, from, to })));
   }
 
-  if (want.includes('bilanco')) { // KAP yalnız bilanço istenirse çağrılır
+  if (want.includes('bilanco')) {
+    if (candidatePeriods(today).some(({ period, year }) => !legalDeadline({ period, year, consolidated: true }))) {
+      warnings.push({ source: 'tatil', message: 'Bayram tablosu bu yılı kapsmıyor; kaydırılamayan bilanço tarihi gösterilmedi' });
+    }
     if (symbols) {
       await pool(symbols, 2, async (symbol) => {
         try {
@@ -110,6 +141,11 @@ export async function calendar({ scope = 'portfolio', from = null, to = null, ki
     events.push(...tc.events);
     if (tc.stale) stale.push('tcmb');
     if (tc.error) warnings.push({ source: 'tcmb', message: tc.error });
+  }
+  if (tufeP) {
+    const tf = await tufeP;
+    events.push(...tf.events);
+    if (tf.error) warnings.push({ source: 'tufe', message: tf.error });
   }
 
   return { today, from, to, scope, events: buildCalendar({ from, to, events, kinds }), warnings, stale, emptyScope: !!symbols && symbols.length === 0, mine: [...new Set([...mine.watchlist, ...mine.portfolio])] };

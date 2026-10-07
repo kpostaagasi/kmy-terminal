@@ -1,13 +1,15 @@
 // Veri sağlığı: uygulamanın gösterdiği veriyi bağımsız ikinci kaynakla karşılaştırır (kurallar: denetim-cekirdek.js).
 // Hem `npm run denetim` (scripts/veri-denetimi.mjs) hem de arayüzdeki "Veri sağlığı" rozeti bunu kullanır.
-import { db } from './db.js';
+import { db, getSettings } from './db.js';
 import { getQuotes, marketStatus } from './market.js';
 import * as universe from './universe.js';
 import { tcmbRates, financials } from './feeds.js';
 import * as pf from './portfolio.js';
 import * as K from './denetim-cekirdek.js';
+import { dueNow } from './sinyal.js';
 
 db.exec('CREATE TABLE IF NOT EXISTS data_health (id INTEGER PRIMARY KEY CHECK (id = 1), at INTEGER NOT NULL, results TEXT NOT NULL)');
+try { db.exec('ALTER TABLE data_health ADD COLUMN done_day TEXT'); } catch { /* sütun var */ }
 
 const dk = 60_000;
 const SEMBOLLER = ['USDTRY', 'EURTRY', 'GRAM', 'ONS', 'CEYREK', 'YARIM', 'TAM'];
@@ -92,22 +94,26 @@ const withTimeout = (p, ms) => new Promise((res, rej) => {
   p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
 });
 
-const view = (results, at, running) => ({ at, summary: K.ozet(results), state: K.rozetDurumu(results), stale: K.eskiMi(at), results, running });
+function istanbulNow() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hm: `${p.hour}:${p.minute}` };
+}
+const gateOpen = (status, hm) => !!status && status.label === 'Seans kapalı' && hm >= (status.half ? '12:50' : '18:30');
+const readRow = () => { try { return db.prepare('SELECT at, results, done_day FROM data_health WHERE id = 1').get(); } catch { return null; } };
+
+const view = (results, at, running, doneDay) => {
+  const { date, hm } = istanbulNow();
+  return { at, summary: K.ozet(results), state: K.rozetDurumu(results), stale: K.vadeGecti({ status: marketStatus(), hm, today: date, doneDay, running }), results, running };
+};
 
 /** Kayıtlı son sonuç (hiç çalışmadıysa ya da kayıt bozuksa state: 'yok'). */
 export function last() {
   const running = !!inflight || innerBusy;
-  try {
-    const row = db.prepare('SELECT at, results FROM data_health WHERE id = 1').get();
-    if (row) return view(JSON.parse(row.results), Number(row.at), running);
-  } catch { /* bozuk kayıt: yok say */ }
-  return view([], null, running);
+  const row = readRow();
+  if (row) try { return view(JSON.parse(row.results), Number(row.at), running, row.done_day); } catch { /* bozuk */ }
+  return view([], null, running, null);
 }
 
-/**
- * Denetimi çalıştırıp kaydeder. Koşu sürerken gelen ikinci çağrı aynı koşunun sonucunu bekler.
- * Zaman aşımı bekleyenleri bırakır ama iç koşu iptal edilemez: o bitene kadar yeni koşu başlatılmaz (KAP hız sınırı).
- */
 export function run({ timeoutMs = 120_000 } = {}) {
   if (inflight) return inflight;
   if (innerBusy) return Promise.reject(new Error('Önceki denetim hâlâ sürüyor; biraz sonra yeniden deneyin'));
@@ -117,9 +123,27 @@ export function run({ timeoutMs = 120_000 } = {}) {
   inflight = withTimeout(work, timeoutMs)
     .then((results) => {
       const at = Date.now();
-      db.prepare('INSERT INTO data_health(id, at, results) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, results = excluded.results').run(at, JSON.stringify(results));
-      return view(results, at, false);
+      const { date, hm } = istanbulNow();
+      const doneDay = gateOpen(marketStatus(), hm) ? date : null;
+      db.prepare(`INSERT INTO data_health(id, at, results, done_day) VALUES(1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET at = excluded.at, results = excluded.results, done_day = COALESCE(excluded.done_day, data_health.done_day)`).run(at, JSON.stringify(results), doneDay);
+      return view(results, at, false, doneDay || readRow()?.done_day || null);
     })
     .finally(() => { inflight = null; });
   return inflight;
+}
+
+let attempt = 0;
+/** Kapanıştan sonra günde bir. Anahtar kapalıysa koşmaz. Sapma varsa haber verir. */
+export async function tick(onAlert) {
+  if (getSettings().auditSchedule === false || inflight || innerBusy) return;
+  const { date, hm } = istanbulNow();
+  const done = readRow()?.done_day || null;
+  if (!dueNow({ status: marketStatus(), hm, today: date, lastDone: done, lastAttempt: attempt || null, now: Date.now() })) return;
+  attempt = Date.now();
+  try {
+    const v = await run();
+    if (v.state === 'uyari') onAlert?.(v.summary.sapma);
+    return v;
+  } catch { /* zaman aşımı: 10 dk sonra dueNow yeniden dener */ }
 }

@@ -1,5 +1,12 @@
 # Sürüm Notları
 
+## 0.23.0 — 7 Ekim 2026 (takvim, zamanlanmış denetim, komisyon)
+
+### Yeni
+- **Takvim.** Tam gün resmî tatil yasal son teslimi ileri, beklenen açıklamayı geri kaydırır. Arife, 28 Ekim öğleden sonrası ve idari tatil kaymaz. Bayram tablosu 2025–2027; kapsanmayan yılın hesaplanan tarihi gösterilmez. TÜFE satırı resmî yayın takviminden, kesin, her kapsamda. Okunamazsa satır yok. **Dışa aktar** bugün ve sonrasını tek seferlik dosya olarak verir; tahmini satır belirsizdir.
+- **Zamanlanmış denetim.** Sinyal taramasıyla aynı kapı (işlem günü, seans kapalı, 18:30 / yarım gün 12:50). Sapma varsa veri uyarısı. Şimdi denetle durur. `(eski)` vadesi gelmiş pencere boşsa görünür, 24 saat değil. Ayarlar › Veri'den kapanır.
+- **Dengeleme komisyonu.** Panelde yüzde. Yalnız hisse ve ETF. Adet değişmez. Net nakit ve nakit uyarısı komisyonu sayar. Boşsa yok. 5'ten büyük reddedilir.
+
 ## 0.22.1 — 7 Ekim 2026 (yedek, plan kipi, fon ayrımı)
 
 ### Düzeltilen

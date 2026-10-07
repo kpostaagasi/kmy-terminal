@@ -145,3 +145,11 @@ export function rozetDurumu(results) {
 /** Son denetim bu süreden eskiyse rozet "eski" işaretlenir. */
 export const ESKI_MS = 24 * 3600_000;
 export const eskiMi = (at, now = Date.now()) => at != null && now - at > ESKI_MS;
+/** (eski) = vadesi gelmiş kapı açıldı ve bugünün koşusu bitmedi. Hafta sonu ve seans açıkken değil. */
+export function vadeGecti({ status, hm, today, doneDay, running = false } = {}) {
+  if (running || !doneDay) return false;
+  if (!status || status.label !== 'Seans kapalı') return false;
+  const gate = status.half ? '12:50' : '18:30';
+  if (!hm || hm < gate) return false;
+  return doneDay !== today;
+}
