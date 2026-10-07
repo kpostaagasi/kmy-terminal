@@ -263,7 +263,7 @@ export function tx(fn) {
 
 // Yedekleme: tablo kümesi sabit, sütun adları şemadan doğrulanır.
 // Sütun adları doğrudan SQL'e gömülürse istemci `{"x); DROP TABLE ...;--":1}` ile tabloyu silebilir.
-export const BACKUP_TABLES = ['settings', 'watchlist', 'symbols', 'platforms', 'strategies', 'transactions', 'snapshots', 'schedules'];
+export const BACKUP_TABLES = ['settings', 'watchlist', 'symbols', 'platforms', 'strategies', 'transactions', 'snapshots', 'schedules', 'rebalance_targets', 'signal_state', 'signal_meta', 'signal_log', 'backtest_result', 'data_health'];
 
 export function restoreBackup(tables) {
   if (!tables || typeof tables !== 'object' || Array.isArray(tables)) throw new Error('Geçersiz yedek dosyası');

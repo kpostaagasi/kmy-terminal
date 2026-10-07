@@ -1,6 +1,7 @@
 // AGENT CHAT: Claude / Codex oturumları, akışlı yanıt, katlanan araç grupları, KOMİTE (alt ajan) kartları,
 // izin ve soru kartları, dosya ekleri, eğik çizgi komutları, maliyet / tur / bağlam göstergesi
 import { state, on, emit, api, wsCall, $, $$, h, esc, md, num, ago, dateTR, toast, modal, confirmBox, localGet, localSet, sqlDate, timeTR, today, selectSymbol } from './core.js';
+import { chatPermMode, selectChatPerm } from './chat-perm.js';
 import { t, tx, lang } from './i18n.js';
 
 // Çizgi simgeler (currentColor): ataç, gönder, durdur
@@ -31,6 +32,7 @@ root.innerHTML = `
         <label class="cm-chip sess-chip" title="${t('Oturum')}"><select id="sessSel" aria-label="${t('Oturum')}"></select></label>
         <label class="cm-chip model" title="${t('Model')}"><select id="optModel" aria-label="${t('Model')}"></select></label>
         <label class="cm-chip" title="${t('Düşünme seviyesi (/think)')}"><select id="optEffort" aria-label="${t('Düşünme seviyesi')}"></select></label>
+        <label class="cm-chip" title="${t('İzin modu')}"><select id="optPerm" aria-label="${t('İzin modu')}"></select></label>
         <span class="spacer"></span>
         <span class="cm-stat" id="stCostBtn" role="button" tabindex="0" style="cursor:pointer" title="${t('Nereye harcadım')}">${t('Maliyet')} <b id="stCost">$0,00</b></span>
         <span class="cm-stat" id="stBudget" hidden title="${t('Günlük asistan maliyeti')}"></span>
@@ -60,7 +62,6 @@ let sessions = [];
 let running = false;
 let runStart = 0;
 let ctxSym = localGet('ctxSym', true), ctxScreen = localGet('ctxScreen', false);
-let permMode = 'default';            // izin modu (PLAN düğmesi ve /plan ile değişir)
 let stream = null;                   // { el, text, thinkEl, thinkText }
 let toolEls = new Map();
 let lastCtx = null, ctxWindow = null, sessCost = 0, sessTurns = 0;
@@ -1120,7 +1121,7 @@ async function send(text, { context } = {}) {
   try {
     const r = await wsCall({
       t: 'chat.send', sessionId: current, text, context: ctx, attachments: atts, title: current ? undefined : pendingTitle || undefined,
-      ...pickModel(), effort: $('#optEffort').value, permissionMode: permMode,
+      ...pickModel(), effort: $('#optEffort').value, permissionMode: chatPermMode(),
     });
     if (!current) { current = r.sessionId; localSet('session', current); pendingTitle = null; await loadSessions(); }
     if (!sessionProvider) { sessionProvider = pickModel().provider; syncProvider(); }
@@ -1156,6 +1157,7 @@ const SLASH = [
   { c: '/ekran', d: 'Ekranda açık olanı bağlam olarak ekle', en: ['/onscreen'] },
   { c: '/model', arg: 'model', d: 'Modeli değiştir' },
   { c: '/think', arg: 'low|medium|high|xhigh|max', d: 'Düşünme seviyesi', tr: ['/efor'] },
+  { c: '/plan', d: 'İzin kipini plana al (dosya değiştirmez)' },
   { c: '/compact', d: 'Bağlamı özetleyerek küçült (Claude)' },
   { c: '/context', d: 'Bağlam kullanımını göster (Claude)' },
   { c: '/cost', d: 'Nereye harcadım', tr: ['/maliyet'] },
@@ -1207,6 +1209,12 @@ async function handleSlash(text) {
       else systemCard(esc(t('Kullanım: {usage}', { usage: `${cmdName(c)} ${(state.meta?.efforts || []).join('|')}` })));
       return true;
     }
+    case '/plan':
+      selectChatPerm('plan');
+      { const sel = $('#optPerm'); if (sel) sel.value = 'plan'; }
+      markYolo();
+      toast(t('İzin modu: {mode}', { mode: tx(state.meta?.permissionModes?.plan || 'plan') }));
+      return true;
     case '/compact': case '/context':
       if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; }
       if (!paid(sessionProvider)) { toast(t('Bu komut yalnızca Claude oturumlarında çalışır'), 'err'); return true; }
@@ -1217,7 +1225,7 @@ async function handleSlash(text) {
       const ctxTxt = !lastCtx ? '—' : ctxWindow
         ? t('{used} / {total} bin token (%{pct})', { used: num(lastCtx / 1000, 1), total: num(ctxWindow / 1000, 0), pct: num((lastCtx / ctxWindow) * 100, 0) })
         : t('{used} bin token', { used: num(lastCtx / 1000, 1) });
-      systemCard(`<b>${t('Oturum durumu')}</b><br>${s ? `${esc(t('Başlık: {title}', { title: sessTitle(s) }))}<br>${t('Kimlik: {id}', { id: `<span class="mono">${esc(s.id)}</span>` })}<br>${esc(t('Sağlayıcı: {name} · model: {model}', { name: provName(s.provider), model: s.model || t('varsayılan') }))}<br>${esc(t('Oluşturuldu: {created} · son etkinlik: {updated}', { created: dateTR(sqlDate(s.created_at), true), updated: dateTR(sqlDate(s.updated_at), true) }))}<br>` : `${t('Yeni oturum (henüz mesaj yok)')}<br>`}${t('Durum: {state}', { state: t(running ? 'çalışıyor' : 'boşta') })}<br>${esc(t('Bağlam: {text}', { text: ctxTxt }))}<br>${esc(t('İzin modu: {mode}', { mode: state.meta?.permissionModes?.[permMode] ? tx(state.meta.permissionModes[permMode]) : permMode }))}`);
+      systemCard(`<b>${t('Oturum durumu')}</b><br>${s ? `${esc(t('Başlık: {title}', { title: sessTitle(s) }))}<br>${t('Kimlik: {id}', { id: `<span class="mono">${esc(s.id)}</span>` })}<br>${esc(t('Sağlayıcı: {name} · model: {model}', { name: provName(s.provider), model: s.model || t('varsayılan') }))}<br>${esc(t('Oluşturuldu: {created} · son etkinlik: {updated}', { created: dateTR(sqlDate(s.created_at), true), updated: dateTR(sqlDate(s.updated_at), true) }))}<br>` : `${t('Yeni oturum (henüz mesaj yok)')}<br>`}${t('Durum: {state}', { state: t(running ? 'çalışıyor' : 'boşta') })}<br>${esc(t('Bağlam: {text}', { text: ctxTxt }))}<br>${esc(t('İzin modu: {mode}', { mode: state.meta?.permissionModes?.[chatPermMode()] ? tx(state.meta.permissionModes[chatPermMode()]) : chatPermMode() }))}`);
       return true;
     }
     case '/rename': if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; } await renameSession(current, null, arg || null); return true;
@@ -1255,7 +1263,7 @@ let slashSel = 0, slashItems = [];
 const SLASH_GROUPS = [
   ['Analiz', ['/analiz', '/hizli', '/teknik', '/karsilastir', '/piyasa', '/portfoy', '/kap', '/tarama', '/temettu', '/rapor', '/ekran']],
   ['Oturum', ['/yeni', '/temizle', '/durdur', '/rename', '/export', '/compact', '/context']],
-  ['Asistan', ['/model', '/think']],
+  ['Asistan', ['/model', '/think', '/plan']],
   ['Bilgi', ['/cost', '/status', '/doctor', '/settings', '/help']],
 ];
 function drawSlash() {
@@ -1430,7 +1438,7 @@ const cmItems = () => {
     costStat: $('#stCostBtn'),
     turnStat: $('#stTurnsBox'),
     spacer: $('.spacer', top),
-    sels: ['#sessSel', '#optModel', '#optEffort'].map((q) => $(q)).filter((s) => s && !s.closest('.cm-chip').hidden),
+    sels: ['#sessSel', '#optModel', '#optEffort', '#optPerm'].map((q) => $(q)).filter((s) => s && !s.closest('.cm-chip').hidden),
   };
 };
 
@@ -1469,15 +1477,27 @@ function fitSelects() {
 }
 new ResizeObserver(fitSelects).observe($('.cm-top'));
 $('#optEffort').addEventListener('change', fitSelects);
+$('#optPerm').addEventListener('change', fitSelects);
 $('#sessSel').addEventListener('change', fitSelects);
 // Düşünme seviyesi: değer (low…max) sabit, görünen ad çevrilir
 const EFFORT_NAME = { low: 'Düşük', medium: 'Orta', high: 'Yüksek', xhigh: 'Çok yüksek', max: 'En yüksek' };
 const EFFORT_TIP = { low: 'Kısa işler, düşük maliyet', medium: 'Dengeli', high: 'Karmaşık analiz', xhigh: 'Zor işler', max: 'Tüm düşünme bütçesi' };
 const effortName = (x) => (EFFORT_NAME[x] ? t(EFFORT_NAME[x]) : x);
 // Yolo şeridi: izin modu bypassPermissions iken görünür, kapanınca DOM'dan da düşer
-function markYolo() { $('#cmYolo').hidden = permMode !== 'bypassPermissions'; }
+function markYolo() { $('#cmYolo').hidden = chatPermMode() !== 'bypassPermissions'; }
+function syncPerm() {
+  const sel = $('#optPerm');
+  const modes = state.meta?.permissionModes;
+  if (!sel || !modes) return;
+  const cur = chatPermMode();
+  sel.innerHTML = Object.entries(modes).map(([k, v]) => `<option value="${esc(k)}"${k === cur ? ' selected' : ''}>${esc(tx(v))}</option>`).join('');
+}
+$('#optPerm').onchange = () => { selectChatPerm($('#optPerm').value); markYolo(); fitSelects(); };
 $('#cmYolo').onclick = async () => {
   if (!(await confirmBox(t('Yolo modu kapatılsın mı? Ajan bundan sonra araç kullanmadan önce onay isteyecek.'), { ok: t('Yolo modunu kapat') }))) return;
+  selectChatPerm('default');
+  const sel = $('#optPerm'); if (sel) sel.value = 'default';
+  markYolo();
   try { await api('/settings', { method: 'PUT', body: { permissionMode: 'default', yoloUntil: 0 } }); toast(t('Yolo modu kapatıldı'), 'ok'); } catch (e) { toast(tx(e.message), 'err'); }
 };
 function fillOptions() {
@@ -1485,6 +1505,7 @@ function fillOptions() {
   if (!m) return;
   syncProvider();
   syncEffort();
+  syncPerm();
   turnOffBudget = false; // ayar değişti: "bugün için kapat" sıfırlanır
   updateBudget();
   markYolo();
