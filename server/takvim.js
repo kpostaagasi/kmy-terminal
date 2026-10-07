@@ -1,9 +1,9 @@
 // Takvim: olay üretimi ve kurallar. Saf mantık (veritabanı ve ağ yok); ağ ve önbellek takvim-kaynak.js'tedir.
 // Olay biçimi: { date: 'YYYY-MM-DD', type, kind, symbol|null, certainty: 'kesin'|'tahmini', data }
 
-export const KINDS = ['temettu', 'sermaye', 'tcmb', 'bilanco'];
+export const KINDS = ['temettu', 'sermaye', 'tcmb', 'bilanco', 'tufe'];
 // Aynı günde gösterim sırası
-export const TYPE_ORDER = ['ppk_karar', 'ppk_ozet', 'enflasyon_raporu', 'fin_istikrar', 'bilanco_aciklandi', 'bilanco_beklenen', 'bilanco_son_teslim', 'temettu', 'bedelsiz', 'bedelsiz_temettu', 'bedelli'];
+export const TYPE_ORDER = ['ppk_karar', 'ppk_ozet', 'enflasyon_raporu', 'fin_istikrar', 'tufe', 'bilanco_aciklandi', 'bilanco_beklenen', 'bilanco_son_teslim', 'temettu', 'bedelsiz', 'bedelsiz_temettu', 'bedelli'];
 
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
@@ -12,8 +12,27 @@ const toMs = (d) => Date.parse(`${d}T00:00:00Z`);
 const isoOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 export const addDays = (d, n) => isoOf(toMs(d) + n * 86400_000);
 export const weekday = (d) => new Date(toMs(d)).getUTCDay(); // 0 pazar … 6 cumartesi
-const nextBusiness = (d) => { while (weekday(d) === 0 || weekday(d) === 6) d = addDays(d, 1); return d; };
-const prevBusiness = (d) => { while (weekday(d) === 0 || weekday(d) === 6) d = addDays(d, -1); return d; };
+// Tam gün resmî tatil. Arife ve 28 Ekim yok.
+// ponytail: 2025–2027 bayram tablosu. Kapsanmayan yıl null, hafta sonu kuralına düşmez.
+const FIXED_MD = new Set(['01-01', '04-23', '05-01', '05-19', '07-15', '08-30', '10-29']);
+const BAYRAM = {
+  2025: ['2025-03-30', '2025-03-31', '2025-04-01', '2025-06-06', '2025-06-07', '2025-06-08', '2025-06-09'],
+  2026: ['2026-03-20', '2026-03-21', '2026-03-22', '2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30'],
+  2027: ['2027-03-09', '2027-03-10', '2027-03-11', '2027-05-16', '2027-05-17', '2027-05-18', '2027-05-19'],
+};
+const BAYRAM_SET = new Set(Object.values(BAYRAM).flat());
+const holidayKnown = (d) => Object.hasOwn(BAYRAM, Number(d.slice(0, 4)));
+const isFullHoliday = (d) => FIXED_MD.has(d.slice(5)) || BAYRAM_SET.has(d);
+const roll = (d, step) => {
+  for (let i = 0; i < 16; i++) {
+    if (!holidayKnown(d)) return null;
+    if (weekday(d) !== 0 && weekday(d) !== 6 && !isFullHoliday(d)) return d;
+    d = addDays(d, step);
+  }
+  return null;
+};
+const nextBusiness = (d) => roll(d, 1);
+const prevBusiness = (d) => roll(d, -1);
 const validIso = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(toMs(d)) && isoOf(toMs(d)) === d;
 
 /** İstanbul takvim günü. */
@@ -60,6 +79,36 @@ export function parseTcmb(html) {
   return out;
 }
 
+/** Resmî veri yayın takviminden TÜFE günleri. Saat yok. Satır yoksa veya gövde bozuksa hata; tarih uydurulmaz. */
+export function parseTufe(json) {
+  const lists = [json?.yayindaOlanlarList, json?.yayindaOlmayanlarList];
+  if (!lists.some(Array.isArray)) throw new Error('TÜFE takvimi okunamadı');
+  const out = [];
+  for (const r of lists.flatMap((l) => l || [])) {
+    if (r?.sorumluKisaAd !== 'TÜİK') continue;
+    if (!String(r.adi || '').toLocaleLowerCase('tr').includes('tüketici fiyat endeksi')) continue;
+    const date = String(r.gTarih || '').slice(0, 10);
+    if (!validIso(date)) continue;
+    out.push(ev(date, 'tufe', 'tufe', null, 'kesin', { period: r.donemi || null }));
+  }
+  if (!out.length) throw new Error('TÜFE takviminde satır yok');
+  out.sort((a, b) => a.date.localeCompare(b.date) || (a.data.period || '').localeCompare(b.data.period || ''));
+  return out;
+}
+
+const icsEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, (c) => `\\${c}`);
+const icsDate = (d) => d.replace(/-/g, '');
+/** Görünen olayların tek seferlik takvim dosyası. Bugünden öncesi yok. Tahmini belirsiz. Tüm gün. */
+export function toIcs(events, today) {
+  const rows = (events || []).filter((e) => e?.date >= today).sort((a, b) => a.date.localeCompare(b.date) || String(a.symbol || '').localeCompare(b.symbol || ''));
+  const body = rows.map((e) => {
+    const uid = [e.type, e.date, e.symbol || '', e.data?.period || '', e.data?.year || ''].join('-');
+    const summary = e.certainty === 'tahmini' ? `TAHMİNİ ${e.summary || e.type}` : (e.summary || e.type);
+    return ['BEGIN:VEVENT', `UID:${icsEsc(uid)}@kmy`, `DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${icsDate(addDays(e.date, 1))}`, `SUMMARY:${icsEsc(summary)}`, e.certainty === 'tahmini' ? 'STATUS:TENTATIVE' : 'STATUS:CONFIRMED', 'END:VEVENT'].join('\r\n');
+  }).join('\r\n');
+  return `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//kmy terminal//takvim//TR\r\n${body}${body ? '\r\n' : ''}END:VCALENDAR\r\n`;
+}
+
 // ── Bilanço ─────────────────────────────────────────────────────────────
 const PERIOD_END = { 1: '03-31', 2: '06-30', 3: '09-30', 4: '12-31' };
 // SPK II-14.1: [konsolide olmayan, konsolide] yasal gün sayısı (3 ve 9 aylık 30/40, 6 aylık 50/60, yıllık 60/70)
@@ -70,14 +119,14 @@ export const periodEnd = (period, year) => {
   return `${year}-${PERIOD_END[period]}`;
 };
 
-/** Yasal son teslim: dönem sonu + yasal gün; hafta sonuna denk gelirse sonraki iş günü (resmî tatiller hesaba katılmaz). */
+/** Yasal son teslim: dönem sonu + yasal gün; hafta sonu veya tam gün tatile denk gelirse sonraki iş günü. Tablo kapsamazsa null. */
 export function legalDeadline({ period, year, consolidated }) {
   const days = LEGAL_DAYS[period];
   if (!days) throw new Error(`Bilinmeyen dönem: ${period}`);
   return nextBusiness(addDays(periodEnd(period, year), days[consolidated ? 1 : 0]));
 }
 
-/** Geçen yılın açıklama gününü bir yıl ileri taşır (29 Şubat → 28 Şubat); hafta sonuna denk gelirse önceki iş günü; son teslimi geçmez. */
+/** Geçen yılın gününü bir yıl ileri taşır; hafta sonu veya tam gün tatile denk gelirse önceki iş günü; son teslimi geçmez. Tablo kapsamazsa null. */
 export function expectedDate(lastYearIso, deadlineIso) {
   const [y, m, d] = lastYearIso.split('-').map(Number);
   let ms = Date.UTC(y + 1, m - 1, d);
@@ -117,8 +166,11 @@ export const LATE_GRACE_DAYS = 90;
  * ilk açıklama saymamak için süzer; "geçen yılın tarihi" olarak yanlış kullanılmasın. Bilinmeyen dönem numarası atılır.
  */
 export function plausibleAnnouncements(records, consolidated) {
-  return records.filter((r) => r.period >= 1 && r.period <= 4
-    && r.date <= addDays(legalDeadline({ period: r.period, year: r.year, consolidated: consolidated ?? true }), LATE_GRACE_DAYS));
+  return records.filter((r) => {
+    if (r.period < 1 || r.period > 4) return false;
+    const dl = legalDeadline({ period: r.period, year: r.year, consolidated: consolidated ?? true });
+    return !dl || r.date <= addDays(dl, LATE_GRACE_DAYS);
+  });
 }
 
 /**
@@ -134,17 +186,21 @@ export function bilancoEvents({ symbol, today, announced = [], consolidated = nu
     const assumed = consolidated == null;
     const cons = consolidated ?? true;
     const deadline = legalDeadline({ period, year, consolidated: cons });
+    if (!deadline) continue;
     out.push(ev(deadline, 'bilanco_son_teslim', 'bilanco', symbol, 'tahmini', { period, year, consolidated: cons, assumed }));
     const last = announced.find((a) => a.period === period && a.year === year - 1);
-    if (last) out.push(ev(expectedDate(last.date, deadline), 'bilanco_beklenen', 'bilanco', symbol, 'tahmini', { period, year, lastYear: last.date, deadline }));
+    const exp = last && expectedDate(last.date, deadline);
+    if (exp) out.push(ev(exp, 'bilanco_beklenen', 'bilanco', symbol, 'tahmini', { period, year, lastYear: last.date, deadline }));
   }
   return out;
 }
 
 /** "Tümü" kapsamı: hisse bazlı değil, her aday dönem için tek sembolsüz yasal son teslim (konsolide süre). */
 export function marketSeasonEvents(today) {
-  return candidatePeriods(today).map(({ period, year }) =>
-    ev(legalDeadline({ period, year, consolidated: true }), 'bilanco_son_teslim', 'bilanco', null, 'tahmini', { period, year, consolidated: true, assumed: false, market: true }));
+  return candidatePeriods(today).flatMap(({ period, year }) => {
+    const date = legalDeadline({ period, year, consolidated: true });
+    return date ? [ev(date, 'bilanco_son_teslim', 'bilanco', null, 'tahmini', { period, year, consolidated: true, assumed: false, market: true })] : [];
+  });
 }
 
 // ── Temettü ve sermaye artırımı ─────────────────────────────────────────

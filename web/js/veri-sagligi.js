@@ -1,16 +1,16 @@
 // Veri sağlığı rozeti: durum çubuğunda son çapraz kaynak denetiminin sonucu; tıklayınca ayrıntı ve "Şimdi denetle".
-// Denetim yalnız elle çalışır (sunucu: server/denetim.js · GET /api/data-health, POST /api/data-health/run).
+// Denetim elle veya kapanıştan sonra çalışır (sunucu: server/denetim.js).
 import { on, api, $, esc, num, toast, modal, timeTR, dateTR } from './core.js';
+import { notify } from './chat.js';
 import { t, tx } from './i18n.js';
 
 const badge = $('#dhBadge');
-const ESKI_MS = 24 * 3600_000; // sunucudaki eskiMi (server/denetim-cekirdek.js) ile aynı kural
 let data = null;      // son GET/POST yanıtı
 let running = false;  // bu pencerede koşu sürüyor
 let panel = null;     // açık pencere (modal nesnesi)
 let lastError = '';
 
-const isStale = () => data?.at != null && Date.now() - data.at > ESKI_MS;
+const isStale = () => !!data?.stale;
 const busy = () => running || !!data?.running;
 const fmt = (v) => (v == null ? '—' : String(Number(Number(v).toPrecision(6))));
 const STATE_CLS = { temiz: 'dh-ok', uyari: 'dh-warn', dogrulanamadi: 'dh-unk', yok: 'dh-none' };
@@ -99,5 +99,9 @@ badge.onclick = () => {
   bindPanel();
 };
 on('ws:data-health.updated', load); // başka pencerede koşu bitti
-setInterval(paintBadge, 10 * 60_000); // açık bırakılan uygulamada rozet kendiliğinden "eski"ye döner
+setInterval(load, 10 * 60_000); // açık uygulamada vade sunucudan gelir
+on('ws:data-health.alert', (m) => {
+  notify(t('VERİ ⚠ {n} sapma', { n: m?.sapma || 0 }), [{ label: t('Aç'), run: () => badge.click() }], t('Veri uyarısı'));
+  load();
+});
 load();

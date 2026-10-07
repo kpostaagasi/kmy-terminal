@@ -1,7 +1,7 @@
 // Takvim: ayrıştırma ve kurallar. Çevrimdışı; KAP ve TCMB'ye gitmez.
 import fs from 'node:fs';
 import {
-  trDate, parseTcmb, legalDeadline, expectedDate, candidatePeriods, bilancoEvents, marketSeasonEvents,
+  trDate, parseTcmb, parseTufe, toIcs, legalDeadline, expectedDate, candidatePeriods, bilancoEvents, marketSeasonEvents,
   corporateEvents, buildCalendar, defaultWindow, groupKey, istanbulToday, addDays, plausibleAnnouncements, LATE_GRACE_DAYS, isConsolidated,
 } from '../server/takvim.js';
 
@@ -56,6 +56,10 @@ assert('geçen yıl cuma → bu yıl cumartesi → önceki iş günü', expected
 assert('hafta içi aynen taşınır', expectedDate('2025-08-05', '2026-08-31') === '2026-08-05');
 assert('29 Şubat → 28 Şubat', expectedDate('2024-02-29', '2025-03-11') === '2025-02-28');
 assert('son teslimi geçmez', expectedDate('2025-11-10', '2026-11-09') === '2026-11-09');
+assert('29 Ekim tam gün: beklenen tarih 28 Ekim, yarım gün kaymaz', expectedDate('2025-10-29', '2026-11-09') === '2026-10-28');
+assert('2026 yıllık konsolide son teslim 11 Mart 2027 bayram günü → 12 Mart', legalDeadline({ period: 4, year: 2026, consolidated: true }) === '2027-03-12');
+assert('8 Mart 2027 arife kaymaz', expectedDate('2026-03-08', '2027-03-20') === '2027-03-08');
+assert('bayram tablosu olmayan yıl son teslim üretmez', legalDeadline({ period: 4, year: 2029, consolidated: true }) === null);
 
 // ── candidatePeriods ──────────────────────────────────────────────────────
 const cp = candidatePeriods('2026-10-02');
@@ -160,6 +164,22 @@ assert('önceki günler: son günler', groupKey('2026-09-30', '2026-10-02') === 
 assert('gece yarısı sınırı: UTC 21:30 İstanbul\'da ertesi gün', istanbulToday(Date.parse('2026-10-02T21:30:00Z')) === '2026-10-03');
 assert('UTC 20:59 hâlâ aynı gün', istanbulToday(Date.parse('2026-10-02T20:59:00Z')) === '2026-10-02');
 assert('addDays ay/yıl taşması', addDays('2026-12-31', 1) === '2027-01-01' && addDays('2026-03-01', -1) === '2026-02-28');
+const TUFE_JSON = { yayindaOlanlarList: [
+  { sorumluKisaAd: 'TÜİK', adi: 'Tüketici Fiyat Endeksi (TÜFE)', gTarih: '2026-11-03T10:00:00', donemi: 'Ekim 2026' },
+  { sorumluKisaAd: 'TÜİK', adi: 'İşgücü İstatistikleri', gTarih: '2026-11-10T10:00:00' },
+  { sorumluKisaAd: 'TCMB', adi: 'Tüketici Fiyat Endeksi (TÜFE)', gTarih: '2026-11-03T10:00:00' },
+], yayindaOlmayanlarList: [
+  { sorumluKisaAd: 'TÜİK', adi: 'Tüketici Fiyat Endeksi (TÜFE)', gTarih: '2026-12-03T10:00:00', donemi: 'Kasım 2026' },
+] };
+const tufe = parseTufe(TUFE_JSON);
+assert('TÜFE yalnız TÜİK satırı, gün, kesin', tufe.length === 2 && tufe[0].date === '2026-11-03' && tufe[0].kind === 'tufe' && tufe[0].certainty === 'kesin' && tufe[0].symbol === null && tufe[1].date === '2026-12-03');
+assert('TÜFE listesi yoksa hata, uydurma tarih yok', throws(() => parseTufe({}), /TÜFE/));
+const ics = toIcs([
+  { date: '2026-10-01', type: 'temettu', kind: 'temettu', symbol: 'THYAO', certainty: 'kesin', summary: 'Nakit temettü' },
+  { date: '2026-11-03', type: 'tufe', kind: 'tufe', symbol: null, certainty: 'kesin', summary: 'TÜFE' },
+  { date: '2026-11-09', type: 'bilanco_son_teslim', kind: 'bilanco', symbol: 'AKBNK', certainty: 'tahmini', summary: 'Bilanço yasal son teslim' },
+], '2026-10-07');
+assert('ics geçmiş günü atar, tahmini belirsiz, saat yok', ics.includes('DTSTART;VALUE=DATE:20261103') && ics.includes('STATUS:TENTATIVE') && ics.includes('TAHMİNİ') && !ics.includes('20261001') && !ics.includes('T100000'));
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

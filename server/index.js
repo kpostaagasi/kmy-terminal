@@ -675,6 +675,7 @@ listenWithRetry(server, PORT, () => {
   // Kurum raporu klasör izleme (varsayılan açık; Ayarlar › Veri'den kapatılabilir)
   // Sinyal bildirimi: seans kapandıktan sonra günde bir kez (zamanı gelmediyse dakikalık çağrı hiçbir şey yapmaz)
   setInterval(() => signalWatch.tick((items) => broadcast({ t: 'signals.fired', items })).catch((e) => console.error('[sinyal]', e.message)), 60_000);
+  setInterval(() => dataHealth.tick((n) => broadcast({ t: 'data-health.alert', sapma: n })).then((v) => { if (v) broadcast({ t: 'data-health.updated' }); }).catch((e) => console.error('[denetim]', e.message)), 60_000);
   setInterval(() => inbox.scan({ notify: inboxNotify }).catch((e) => console.error('[klasör izleme]', e.message)), 60_000);
   // Kurum raporu akışı: açılışta ve 30 dakikada bir; yeni rapor gelince açık arayüzler kendiliğinden yenilenir
   let lastResearch = 0;

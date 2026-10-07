@@ -1,5 +1,5 @@
 // Dengeleme: hedef doğrulama, etkin hedef, sapma, al/sat, ek nakit, adet yuvarlama, vergi, atlama. Çevrimdışı, saf.
-import { plan, validateTargets } from '../server/dengeleme.js';
+import { plan, validateTargets, parseRate } from '../server/dengeleme.js';
 import { parseTr } from '../web/js/trnum.js';
 
 let pass = 0, fail = 0;
@@ -130,6 +130,12 @@ assert('geçerli semboller kabul edilir (AAPL.US, BRK-B, GC=F)', validateTargets
 // Türkçe sayı girişi
 assert('parseTr: 50.000 → 50000, 50.000,5 → 50000,5, 12,5 → 12,5, 1234.5 → 1234,5', parseTr('50.000') === 50000 && parseTr('50.000,5') === 50000.5 && parseTr('12,5') === 12.5 && parseTr('1234.5') === 1234.5 && parseTr(' 7 ') === 7);
 assert('parseTr: geçersiz → NaN, boş → null', Number.isNaN(parseTr('abc')) && Number.isNaN(parseTr('1,2,3')) && Number.isNaN(parseTr('5 bin')) && parseTr('') === null && parseTr(null) === null);
+assert('oran boşsa komisyon yok', parseRate('') === null && parseRate(null) === null);
+assert('oran yüzde: 0,1 kabul, 6 ve negatif red', parseRate(0.1) === 0.1 && Number.isNaN(parseRate(6)) && Number.isNaN(parseRate(-1)));
+const pc = plan({ ...base, rate: 0.1 });
+assert('hisse satışında komisyon, adet değişmez', row(pc, 'THYAO').qty === 300 && near(row(pc, 'THYAO').feeEst, 30));
+assert('altında komisyon sütunu boş, sıfır değil', row(pc, 'GRAM').feeEst == null && row(pc, 'GRAM').qty === 15);
+assert('net nakit komisyonu düşer', near(pc.summary.netCash, -30));
 
 console.log(`\n${pass} geçti, ${fail} başarısız`);
 process.exit(fail ? 1 : 0);

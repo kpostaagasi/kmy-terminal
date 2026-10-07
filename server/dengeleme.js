@@ -12,7 +12,6 @@ const f4 = (x) => Math.floor(x * 1e4 + EPS) / 1e4; // adet aşağı yuvarlanır:
 const SYMBOL_RE = /^[A-Z0-9][A-Z0-9.^=-]{0,19}$/;
 const isObj = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
 
-/** Hedef girişini doğrular. Döner: { ok, errors: string[] } */
 export function validateTargets({ classTargets = {}, symbolTargets = {}, cashTracking = false } = {}) {
   const errors = [];
   if (!isObj(classTargets)) return { ok: false, errors: ['classTargets bir nesne olmalı'] };
@@ -37,6 +36,13 @@ export function validateTargets({ classTargets = {}, symbolTargets = {}, cashTra
   for (const [c, v] of Object.entries(perClass)) if (v > 100 + EPS) errors.push(`${c}: sembol payları toplamı %100'ü aşamaz (şu an %${r2(v)})`);
   return { ok: errors.length === 0, errors };
 }
+/** Komisyon oranı yüzde. Boş = yok. 0–5 dışı NaN. */
+export function parseRate(raw) {
+  if (raw == null || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 5) return NaN;
+  return n;
+}
 
 /**
  * Dengeleme planı.
@@ -46,7 +52,9 @@ export function validateTargets({ classTargets = {}, symbolTargets = {}, cashTra
  *  extra: ek nakit (TL, ≥ 0). 0 → al/sat; > 0 → yalnız alım
  * Döner: { rows, summary, warnings }
  */
-export function plan({ holdings = [], totalValue, cash = null, cashTracking = false, fresh = {}, classTargets = {}, symbolTargets = {}, extra = 0 } = {}) {
+export function plan({ holdings = [], totalValue, cash = null, cashTracking = false, fresh = {}, classTargets = {}, symbolTargets = {}, extra = 0, rate = null } = {}) {
+  const feePct = parseRate(rate);
+  if (Number.isNaN(feePct)) throw new Error('Komisyon oranı 0–5 arasında olmalı');
   const warnings = [];
   const v = validateTargets({ classTargets, symbolTargets, cashTracking });
   if (!v.ok) throw new Error(v.errors.join('; '));
@@ -107,7 +115,7 @@ export function plan({ holdings = [], totalValue, cash = null, cashTracking = fa
   let buys = 0, sellsNet = 0, planned = 0, effective = 0;
   for (const l of lines) {
     const w = want.get(l.key) || 0;
-    const out = { key: l.key, kind: 'symbol', class: l.class, currentPct: l.currentPct, targetPct: l.targetPct, deviation: l.deviation, price: l.price, qty: null, tl: 0, taxEst: 0, action: 'yok', reason: null };
+    const out = { key: l.key, kind: 'symbol', class: l.class, currentPct: l.currentPct, targetPct: l.targetPct, deviation: l.deviation, price: l.price, qty: null, tl: 0, taxEst: 0, feeEst: null, action: 'yok', reason: null };
     if (Math.abs(w) < 0.005) { out.reason = mode === 'sabit' ? 'İşlem gerekmez' : (w === 0 && l.deviation > 0 ? 'Satış önerilmez (ek nakit modu)' : 'İşlem gerekmez'); rows.push(out); continue; }
     const int = INTEGER_TYPES.has(l.class);
     let qty = Math.abs(w) / l.price;
@@ -118,11 +126,13 @@ export function plan({ holdings = [], totalValue, cash = null, cashTracking = fa
     const tl = r2(qty * l.price);
     effective += tl;
     out.qty = qty; out.tl = tl;
-    if (w > 0) { out.action = 'al'; buys += tl; }
+    const fee = feePct > 0 && (l.class === 'stock' || l.class === 'etf') ? r2(tl * feePct / 100) : null;
+    out.feeEst = fee;
+    if (w > 0) { out.action = 'al'; buys += tl + (fee || 0); }
     else {
       out.action = 'sat';
       out.taxEst = l.h.sellTaxable && l.h.qty > 0 && l.h.sellTax > 0 ? r2((l.h.sellTax * qty) / l.h.qty) : 0;
-      sellsNet += tl - out.taxEst;
+      sellsNet += tl - out.taxEst - (fee || 0);
     }
     rows.push(out);
   }

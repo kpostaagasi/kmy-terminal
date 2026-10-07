@@ -7,6 +7,7 @@ import { openTxModal } from './portfolio-view.js';
 import { openKapDetail, signalPill } from './kap.js';
 import { t, tx, lang, locale } from './i18n.js';
 import { initBacktest } from './backtest-view.js';
+import { toIcs } from './cal-ics.js';
 
 const root = $('#view-market');
 const enc = encodeURIComponent;
@@ -32,9 +33,15 @@ let lower = localGet('lower', 'rsi');
 let moversTab = 'gainers';
 let calScope = localGet('calScope', 'watchlist');
 // TAKVİM sayfası: kapsam '' ise hiç seçilmedi (portföy, boşsa liste); tür seçimi en az bir tür içerir
-const CAL_KINDS = ['temettu', 'sermaye', 'tcmb', 'bilanco'];
+const CAL_KINDS = ['temettu', 'sermaye', 'tcmb', 'bilanco', 'tufe'];
 let calPageScope = localGet('calPageScope', '');
-let calKinds = (() => { const k = localGet('calKinds', CAL_KINDS); const ok = Array.isArray(k) ? k.filter((x) => CAL_KINDS.includes(x)) : []; return ok.length ? ok : CAL_KINDS; })();
+let calKinds = (() => {
+  const k = localGet('calKinds', CAL_KINDS);
+  let ok = Array.isArray(k) ? k.filter((x) => CAL_KINDS.includes(x)) : [];
+  if (!ok.length) ok = [...CAL_KINDS];
+  if (!localGet('calTufeSeen')) { if (!ok.includes('tufe')) ok.push('tufe'); localSet('calKinds', ok); localSet('calTufeSeen', 1); }
+  return ok;
+})();
 let lastHist = null;
 let symToken = 0;
 let page = 'home';
@@ -96,7 +103,7 @@ root.innerHTML = `
         <button class="kt-qbtn" data-go="screen"><b>${t('HİSSE TARAYICI')}</b><span id="ktQScreen">${t('{n}+ hisseyi filtrele', { n: 500 })}</span></button>
         <button class="kt-qbtn" data-go="sectors"><b>${t('SEKTÖR HARİTASI')}</b><span>${t('piyasa genel bakış')}</span></button>
         <button class="kt-qbtn" data-go="market"><b>${t('PİYASA ÖZETİ')}</b><span>${t('endeksler, hareketliler, takvim')}</span></button>
-        <button class="kt-qbtn" data-go="calendar"><b>${t('TAKVİM')}</b><span>${t('temettü, TCMB, bilanço günleri')}</span></button>
+        <button class="kt-qbtn" data-go="calendar"><b>${t('TAKVİM')}</b><span>${t('temettü, TCMB, TÜFE, bilanço')}</span></button>
       </div>
     </div>
     <div class="kt-statcards" id="ktStats"></div>
@@ -222,11 +229,12 @@ root.innerHTML = `
   </section>
 
   <section class="kt-page" data-page="calendar" hidden>
-    <div class="kt-pagehead"><span>${t('TAKVİM')}</span><span class="dim">${t('yaklaşan temettü, TCMB ve bilanço günleri')}</span></div>
+    <div class="kt-pagehead"><span>${t('TAKVİM')}</span><span class="dim">${t('yaklaşan temettü, TCMB, TÜFE ve bilanço')}</span></div>
     <div class="kt-panel"><div class="kt-pb">
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
         <span class="seg" id="cpScope"><button data-c="watchlist">${t('Listem')}</button><button data-c="portfolio">${t('Portföyüm')}</button><button data-c="all">${t('Tümü')}</button></span>
-        <span class="seg" id="cpKinds"><button data-k="temettu">${t('Temettü')}</button><button data-k="sermaye">${t('Sermaye artırımı')}</button><button data-k="tcmb">TCMB</button><button data-k="bilanco">${t('Bilanço')}</button></span>
+        <span class="seg" id="cpKinds"><button data-k="temettu">${t('Temettü')}</button><button data-k="sermaye">${t('Sermaye artırımı')}</button><button data-k="tcmb">TCMB</button><button data-k="tufe">TÜFE</button><button data-k="bilanco">${t('Bilanço')}</button></span>
+        <button class="ghost xs" id="cpIcs">${t('Dışa aktar')}</button>
       </div>
       <div class="kt-note" id="cpWarn" hidden></div>
       <div id="cpBody"></div>
@@ -1456,7 +1464,7 @@ root.addEventListener('click', (e) => {
 $('#calSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; calScope = b.dataset.c; localSet('calScope', calScope); segActive(); loadCalendar(); };
 
 // ── TAKVİM sayfası: temettü + TCMB + bilanço, gün gün (GET /api/calendar) ───────────
-const CAL_KIND_LBL = { temettu: t('Temettü'), sermaye: t('Sermaye artırımı'), tcmb: 'TCMB', bilanco: t('Bilanço') };
+const CAL_KIND_LBL = { temettu: t('Temettü'), sermaye: t('Sermaye artırımı'), tcmb: 'TCMB', tufe: 'TÜFE', bilanco: t('Bilanço') };
 const CAL_GROUPS = [['son_gunler', t('Son günler')], ['bugun', t('Bugün')], ['yarin', t('Yarın')], ['hafta', t('Bu hafta')], ['tarih', t('Daha sonra')]];
 const CAL_PERIOD = { 1: t('3 aylık'), 2: t('6 aylık'), 3: t('9 aylık'), 4: t('[dönem]yıllık') };
 const isoPlus = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -1478,6 +1486,7 @@ function calText(e) {
     case 'bilanco_aciklandi': return t('Bilanço açıkladı · {p}', { p: per });
     case 'bilanco_beklenen': return t('Bilanço bekleniyor · {p}', { p: per });
     case 'bilanco_son_teslim': return d.market ? t('Bilanço sezonu yasal son teslim · {p}', { p: per }) : t('Bilanço yasal son teslim · {p}', { p: per });
+    case 'tufe': return d.period ? t('TÜFE açıklaması · {p}', { p: d.period }) : t('TÜFE açıklaması');
     default: return e.type;
   }
 }
@@ -1485,7 +1494,7 @@ function calText(e) {
 function calTip(e) {
   const d = e.data || {};
   if (e.type === 'bilanco_beklenen') return t('Geçen yıl {a} tarihinde açıkladı; yasal son teslim {b}. Tahmindir.', { a: dateTR(d.lastYear), b: dateTR(d.deadline) });
-  if (e.type === 'bilanco_son_teslim') return `${t('Dönem sonu + yasal süre (SPK II-14.1); hafta sonuna denk gelirse sonraki iş günü, resmî tatiller hesaba katılmaz.')}${d.assumed ? ` ${t('Konsolide süre varsayıldı.')}` : ''}`;
+  if (e.type === 'bilanco_son_teslim') return `${t('Dönem sonu + yasal süre (SPK II-14.1); hafta sonu veya tam gün resmî tatile denk gelirse sonraki iş günü.')}${d.assumed ? ` ${t('Konsolide süre varsayıldı.')}` : ''}`;
   return t('Resmî ya da ilan edilmiş tarih.');
 }
 let calPageSeq = 0; // eski yanıt yeni seçimi ezmesin
@@ -1499,6 +1508,7 @@ async function loadCalPage() {
     if (!calPageScope && r.emptyScope) { scope = 'watchlist'; r = await fetchCal(scope); } // hiç seçilmediyse: portföy boşsa liste
   } catch (e) { if (seq === calPageSeq) body.innerHTML = `<div class="dim">${esc(tx(e.message))}</div>`; return; }
   if (seq !== calPageSeq) return;
+  lastCal = r;
   $$('#cpScope button').forEach((b) => b.classList.toggle('active', b.dataset.c === scope));
   $$('#cpKinds button').forEach((b) => b.classList.toggle('active', calKinds.includes(b.dataset.k)));
   const notes = [...r.stale.map((s) => t('{s} verisi eski (son başarılı kayıt)', { s: s.toUpperCase() })), ...r.warnings.map((w) => `${w.source.toUpperCase()}: ${tx(w.message)}`)];
@@ -1536,6 +1546,17 @@ $('#cpKinds').onclick = (e) => {
   loadCalPage();
 };
 $('#cpBody').addEventListener('click', (e) => { const r = e.target.closest('[data-s]'); if (r) openSymbol(r.dataset.s); });
+let lastCal = null;
+$('#cpIcs').onclick = () => {
+  if (!lastCal) return;
+  const body = toIcs(lastCal.events.map((e) => ({ ...e, summary: calText(e) })), lastCal.today);
+  if (!body.includes('BEGIN:VEVENT')) { toast(t('Dışa aktarılacak ileri gün yok'), 'err'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' }));
+  a.download = 'kmy-takvim.ics';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
 $('#calAll').onclick = () => showPage('calendar');
 
 // Temettü takvimi: ilan edilmiş, bugünden sonraki olaylar
