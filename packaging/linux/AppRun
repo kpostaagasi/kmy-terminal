@@ -1,4 +1,9 @@
 #!/bin/sh
+# AppImage içi salt okunur: veri ve çalışma alanı kullanıcı dizininde tutulur.
 HERE="$(dirname "$(readlink -f "$0")")"
-export KMY_INSTALLED=1
+BASE="${XDG_DATA_HOME:-$HOME/.local/share}/kmy-terminal"
+export BORSA_DATA_DIR="${BORSA_DATA_DIR:-$BASE/data}"
+export BORSA_WORKSPACE_DIR="${BORSA_WORKSPACE_DIR:-$BASE/workspace}"
+mkdir -p "$BORSA_DATA_DIR"
+[ -d "$BORSA_WORKSPACE_DIR" ] || cp -R "$HERE/app/workspace" "$BORSA_WORKSPACE_DIR"
 exec "$HERE/usr/bin/node" "$HERE/app/bin/start.mjs" "$@"

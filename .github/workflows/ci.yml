@@ -1,0 +1,101 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      # node-pty yerel derlemesi platforma göre değişir; testler onu kullanmaz.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+        shell: bash
+      - name: Sunucu duman testi
+        shell: bash
+        run: |
+          export BORSA_DATA_DIR="$RUNNER_TEMP/kmy-data" PORT=7499
+          node server/index.js > "$RUNNER_TEMP/srv.log" 2>&1 &
+          for i in $(seq 1 60); do curl -fs -o /dev/null http://127.0.0.1:7499/ && break; sleep 0.5; done
+          curl -fs -o /dev/null http://127.0.0.1:7499/ || { cat "$RUNNER_TEMP/srv.log"; exit 1; }
+      - run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: dmg }
+          - { os: ubuntu-latest, target: appimage }
+          - { os: windows-latest, target: exe }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - name: macOS DMG (imzasız, ad-hoc)
+        if: matrix.target == 'dmg'
+        run: npm ci --no-audit --no-fund && ./scripts/build-dmg.sh
+      - name: Linux AppImage (imzasız)
+        if: matrix.target == 'appimage'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 && ./scripts/build-appimage.sh
+      - name: Windows kurulum .exe (imzasız, NSIS)
+        if: matrix.target == 'exe'
+        shell: pwsh
+        run: |
+          $v = node -p "require('./package.json').version"
+          New-Item -ItemType Directory -Force dist/win/app | Out-Null
+          foreach ($d in 'bin','server','web','workspace','scripts','package.json','package-lock.json','LICENSE','README.md') { if (Test-Path $d) { Copy-Item -Recurse $d dist/win/app/ } }
+          Push-Location dist/win/app; npm ci --omit=dev --ignore-scripts --no-audit --no-fund; Pop-Location
+          Copy-Item (Get-Command node).Source dist/win/node.exe
+          Copy-Item packaging/windows/kmy-terminal.cmd dist/win/
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kmy-terminal-${{ matrix.target }}
+          path: |
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*-setup.exe
+          if-no-files-found: error
+
+  # Etiket (v*) gelince dosyaları TASLAK release'e ekler; yayımlamaz.
+  draft-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Taslak release'e yükle
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$tag" --draft --title "kmy terminal ${tag#v}" --notes "Taslak" -R "$GITHUB_REPOSITORY"
+          gh release upload "$tag" out/* --clobber -R "$GITHUB_REPOSITORY"

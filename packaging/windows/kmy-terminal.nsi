@@ -11,8 +11,8 @@ Section
   SetOutPath "$INSTDIR"
   File /r "..\..\${SRC}\*.*"
   CreateDirectory "$SMPROGRAMS\kmy terminal"
-  CreateShortCut "$SMPROGRAMS\kmy terminal\kmy terminal.lnk" "$INSTDIR\node.exe" '"$INSTDIR\app\bin\start.mjs"'
-  CreateShortCut "$DESKTOP\kmy terminal.lnk" "$INSTDIR\node.exe" '"$INSTDIR\app\bin\start.mjs"'
+  CreateShortCut "$SMPROGRAMS\kmy terminal\kmy terminal.lnk" "$INSTDIR\kmy-terminal.cmd"
+  CreateShortCut "$DESKTOP\kmy terminal.lnk" "$INSTDIR\kmy-terminal.cmd"
   WriteUninstaller "$INSTDIR\uninstall.exe"
   CreateShortCut "$SMPROGRAMS\kmy terminal\Kaldır.lnk" "$INSTDIR\uninstall.exe"
 SectionEnd
