@@ -8,9 +8,16 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const APP_DIR = process.platform === 'darwin'
-  ? path.join(os.homedir(), 'Library', 'Application Support', 'kmy terminal')
-  : null;
+// Paket olarak kurulduysa (npx / npm i -g: ROOT node_modules içinde) Linux ve Windows'ta da kullanıcı veri dizini kullanılır;
+// aksi hâlde (git klonu) eski davranış: depodaki data/ ve workspace/.
+export const INSTALLED = /[\\/]node_modules[\\/]/.test(ROOT);
+export function appDirFor(platform = process.platform, env = process.env, home = os.homedir(), installed = INSTALLED) {
+  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'kmy terminal');
+  if (!installed) return null;
+  if (platform === 'win32') return path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'kmy terminal');
+  return path.join(env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'kmy-terminal');
+}
+export const APP_DIR = appDirFor();
 
 const say = (m) => console.log(`  ${m}`);
 const isFile = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
@@ -48,7 +55,7 @@ function moveDb(src, dst) {
 
 // Eski (depo) konumdaki borsa.db'yi uygulama dizinine taşır; hedefte zaten varsa hiçbir şey yapılmaz.
 function migrateDb(srcDir, dstDir) {
-  if (isFile(path.join(dstDir, 'borsa.db'))) return false;
+  if (isFile(path.join(dstDir, 'borsa.db')) || !isFile(path.join(srcDir, 'borsa.db'))) return false;
   if (!moveDb(path.join(srcDir, 'borsa.db'), path.join(dstDir, 'borsa.db'))) return false;
   // Erişim anahtarı da birlikte taşınır (yoksa hedefte yenisi üretilir)
   const tok = path.join(srcDir, 'gateway.json');
@@ -70,6 +77,11 @@ function resolveDir(env, name) {
   }
   if (name === 'data') {
     if (migrateDb(repo, app)) return { dir: app, why: 'uygulama dizini (veri taşındı)' };
+    // Paket kurulumu (npx/npm i -g): node_modules içi geçicidir, veri her zaman kullanıcı dizininde tutulur.
+    if (INSTALLED) {
+      try { fs.mkdirSync(app, { recursive: true }); return { dir: app, why: 'uygulama dizini' }; }
+      catch (e) { say(`! Veri dizini oluşturulamadı (${e.message}); depodaki data/ kullanılıyor`); }
+    }
   } else if (isDir(repo)) {
     // Çalışma alanı: uygulama dizini yokken depodaki workspace/ taşınır
     try {

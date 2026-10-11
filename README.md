@@ -1,13 +1,15 @@
 # kmy terminal
 
-Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
+Açık kaynak (AGPL-3.0), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
 
 ## Hızlı başlangıç
 
 ```bash
 npm install
-npm start          # http://127.0.0.1:7420
+npm start          # http://127.0.0.1:7420 (tarayıcıyı da açar; --no-open ile açmaz)
 ```
+
+macOS, Linux ve Windows'ta tek komut (Node 22.13+): `npx github:kpostaagasi/kmy-terminal`. Paket olarak çalışınca veri dizini macOS'ta `~/Library/Application Support/kmy terminal`, Linux'ta `~/.local/share/kmy-terminal`, Windows'ta `%APPDATA%\kmy terminal` olur. Gömülü terminal (`node-pty`) isteğe bağlıdır: derlenemezse uygulamanın geri kalanı çalışır. Yalnız sunucu: `npm run server`.
 
 Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tarayıcıyı açar). macOS uygulaması için aşağıdaki "macOS uygulaması" bölümüne bakın.
 
@@ -152,3 +154,13 @@ claude mcp add borsa -- node "$(pwd)/server/mcp-stdio.js"
 - Sunucu yalnızca `127.0.0.1` üzerinde dinler ve başka kökenlerden gelen istekleri reddeder. Raporlar ayrı bir porttan (7421) sunulur; rapor içindeki betikler uygulama API'sine erişemez.
 
 Değişiklikler için `CHANGELOG.md` dosyasına bakın. Bu yazılımın ürettiği analizler yatırım tavsiyesi değildir.
+
+
+## macOS: imzasız uygulamayı açma
+Uygulama Apple Developer imzası/notarizasyonu olmadan dağıtılır; macOS ilk açılışta "doğrulanamayan geliştirici" uyarısı verir.
+- **Yol 1:** Finder'da `kmy terminal.app` üzerine **sağ tık › Aç**, ardından açılan pencerede tekrar **Aç**.
+- **Yol 2 (Terminal):** `xattr -dr com.apple.quarantine "/Applications/kmy terminal.app"`
+Yalnız resmî GitHub Releases sayfasından indirdiğiniz dosyalar için yapın.
+
+## Katkı
+Bkz. [CONTRIBUTING.md](CONTRIBUTING.md).

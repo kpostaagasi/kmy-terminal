@@ -3,6 +3,7 @@
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -19,11 +20,12 @@ import { ompBin, ompModels, ompModelsReady, ompModelMeta, runOmp, ensureOmpMcp }
 const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
 // Uygulama Finder'dan açıldığında PATH kısa olabilir: yaygın kurulum yerleri de taranır (resmî kurulum, Homebrew, npm, nvm, volta, bun)
 function claudeCandidates() {
-  const h = process.env.HOME || '';
+  const h = os.homedir();
   const dirs = [...(process.env.PATH || '').split(path.delimiter), path.join(h, '.local', 'bin'), path.join(h, '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin',
     path.join(h, '.npm-global', 'bin'), path.join(h, '.volta', 'bin'), path.join(h, '.bun', 'bin'), path.join(h, 'Library', 'pnpm')];
   try { for (const v of fs.readdirSync(path.join(h, '.nvm', 'versions', 'node')).sort().reverse()) dirs.push(path.join(h, '.nvm', 'versions', 'node', v, 'bin')); } catch { /* nvm yok */ }
-  return [...new Set(dirs.filter(Boolean))].map((d) => path.join(d, 'claude'));
+  const names = process.platform === 'win32' ? ['claude.cmd', 'claude.exe', 'claude'] : ['claude'];
+  return [...new Set(dirs.filter(Boolean))].flatMap((d) => names.map((n) => path.join(d, n)));
 }
 export function claudeExecutable() {
   if (process.env.KMY_CLAUDE_PATH) return process.env.KMY_CLAUDE_PATH;
@@ -46,7 +48,7 @@ function normClaude(m) {
 }
 const readFile = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
 export function defaultModels() {
-  const h = process.env.HOME || '';
+  const h = os.homedir();
   let claude = null;
   try { claude = JSON.parse(readFile(path.join(h, '.claude', 'settings.json')) || '{}').model || null; } catch { /* bozuk */ }
   claude ||= db.prepare("SELECT model FROM chat_sessions WHERE provider = 'claude' AND model IS NOT NULL AND model != '' ORDER BY updated_at DESC LIMIT 1").get()?.model || null;

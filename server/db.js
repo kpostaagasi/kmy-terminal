@@ -135,6 +135,7 @@ for (const sql of [
 }
 
 export const DEFAULT_SETTINGS = {
+  dataSources: {},
   provider: 'claude',
   model: '',
   codexModel: '',

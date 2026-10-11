@@ -4,23 +4,25 @@
   "description": "kmy terminal — yapay zekâ destekli BIST terminali",
   "main": "server/index.js",
   "bin": {
+    "kmy-terminal": "bin/start.mjs",
     "kmy": "bin/kmy"
   },
   "scripts": {
-    "start": "node server/index.js",
-    "test": "node test/portfoy.test.mjs && node test/guvenlik.test.mjs && node test/arama.test.mjs && node test/simulasyon.mjs && node test/denetim.test.mjs && node test/hedef.test.mjs && node test/sinyal.test.mjs && node test/takvim.test.mjs && node test/radar.test.mjs && node test/seri.test.mjs && node test/backtest.test.mjs && BORSA_DATA_DIR=$(mktemp -d) node test/backtest-run.check.mjs && node test/dengeleme.test.mjs && BORSA_DATA_DIR=$(mktemp -d) node test/dengeleme-kaynak.check.mjs && node test/yedek-uydu.test.mjs && node test/fon-ayrim.test.mjs && node test/sohbet-plan.test.mjs",
+    "start": "node bin/start.mjs",
+    "test": "node scripts/run-tests.mjs",
     "denetim": "node scripts/veri-denetimi.mjs",
     "open": "bin/kmy-terminal",
     "mcp": "node server/mcp-stdio.js",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "postinstall": "node scripts/postinstall.mjs",
     "gateway": "node bin/kmy gateway",
     "setup": "sh scripts/install.sh",
     "mac": "./scripts/build-mac.sh --install",
-    "dmg": "./scripts/build-dmg.sh"
+    "dmg": "./scripts/build-dmg.sh",
+    "server": "node server/index.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.280",
@@ -32,7 +34,6 @@
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.15",
     "marked": "^18.0.14",
-    "node-pty": "^1.1.0",
     "ws": "^8.21.3",
     "zod": "^4.6.5"
   },
@@ -41,5 +42,8 @@
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   }
 }
