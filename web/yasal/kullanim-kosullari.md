@@ -10,4 +10,4 @@
 6. **Yapay zekâ.** Yapay zekâ özellikleri kullanıcının kendi hesabı/aboneliği ile çalışır; ilgili sağlayıcının koşulları ayrıca geçerlidir. Yapay zekâ hatalı veya uydurma bilgi üretebilir.
 7. **Sorumluluğun sınırlandırılması.** Yasaların izin verdiği ölçüde geliştirici, uygulamanın kullanımından doğan doğrudan veya dolaylı zararlardan sorumlu tutulamaz.
 8. **Değişiklik.** Koşullar güncellenebilir; önemli değişikliklerde uygulama yeniden onay ister.
-9. **İletişim.** Geri bildirim ve sorular için: _[iletişim adresi eklenecek]_.
+9. **İletişim.** Geri bildirim ve sorular için: **[KAMİL DOLDURACAK: iletişim e-posta adresi]** veya GitHub Issues.
