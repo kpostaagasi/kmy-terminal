@@ -10,9 +10,11 @@ import './kap.js';
 import './veri-sagligi.js';
 import { openSettings } from './settings.js';
 import './sihirbaz.js';
+import { onayIste } from './onay.js';
 import { t, tx, lang, locale, translateDom, syncLangPref } from './i18n.js';
 
 translateDom();
+onayIste();
 
 // ── Tema ve yazı boyutları ────────────────────────
 // İmza rengi: ayardaki renkten tema uyumlu tonlar (grafik ve xterm de okuyabilsin diye düz renk olarak)

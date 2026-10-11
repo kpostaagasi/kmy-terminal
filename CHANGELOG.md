@@ -7,6 +7,9 @@
 - **Zamanlanmış denetim.** Sinyal taramasıyla aynı kapı (işlem günü, seans kapalı, 18:30 / yarım gün 12:50). Sapma varsa veri uyarısı. Şimdi denetle durur. `(eski)` vadesi gelmiş pencere boşsa görünür, 24 saat değil. Ayarlar › Veri'den kapanır.
 - **Dengeleme komisyonu.** Panelde yüzde. Yalnız hisse ve ETF. Adet değişmez. Net nakit ve nakit uyarısı komisyonu sayar. Boşsa yok. 5'ten büyük reddedilir.
 
+### Güvenlik
+- **Bağımlılık güncellemesi (`npm audit fix`).** `@modelcontextprotocol/sdk` (yüksek) ve `dompurify` (düşük) açıkları kırılmayan sürümlere yükseltildi. `npm audit`: 0 açık.
+
 ## 0.22.1 — 7 Ekim 2026 (yedek, plan kipi, fon ayrımı)
 
 ### Düzeltilen

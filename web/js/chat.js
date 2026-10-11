@@ -500,8 +500,13 @@ function assistantBox(e) {
   }
   return el;
 }
+// Hedef fiyat içeren AI yanıtına sabit uyarı (metinde zaten yoksa).
+export const NOT_ADVICE_RE = /hedef fiyat|fiyat hedefi|target price|price target/i;
+export function needsDisclaimer(text) { return NOT_ADVICE_RE.test(text || '') && !/yatırım tavsiyesi değildir|not investment advice/i.test(text || ''); }
 function finalizeAssistant(el, text) {
   $('.md', el).innerHTML = md(text);
+  $('.not-advice', el)?.remove();
+  if (needsDisclaimer(text)) $('.md', el).after(h(`<div class="not-advice muted">⚠️ ${t('Bu bir yatırım tavsiyesi değildir.')}</div>`));
   el.dataset.raw = text;
   requestAnimationFrame(() => {
     if ($('.md', el).scrollHeight > 900) { el.classList.add('folded'); $('[data-fold]', el).hidden = false; }
