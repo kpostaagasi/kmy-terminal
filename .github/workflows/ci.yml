@@ -73,10 +73,11 @@ jobs:
         if: matrix.target == 'exe'
         shell: pwsh
         run: |
+          if (-not (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) { choco install nsis -y --no-progress | Out-Null }
           $v = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Force dist/win/app | Out-Null
           foreach ($d in 'bin','server','web','workspace','scripts','package.json','package-lock.json','LICENSE','README.md') { if (Test-Path $d) { Copy-Item -Recurse $d dist/win/app/ } }
-          Push-Location dist/win/app; npm ci --omit=dev --ignore-scripts --no-audit --no-fund; Pop-Location
+          Push-Location dist/win/app; npm ci --omit=dev --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { npm ci --omit=dev --ignore-scripts --no-audit --no-fund }; Pop-Location
           Copy-Item (Get-Command node).Source dist/win/node.exe
           Copy-Item packaging/windows/kmy-terminal.cmd dist/win/
           & "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
