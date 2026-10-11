@@ -82,3 +82,4 @@ Arka plan bilgisi `knowledge/` klasöründe (değerleme, makro çerçeve, risk, 
 - Sohbete eklenen dosyalar: `uploads/` (mesajda yolu verilir).
 - Şirket belgeleri (KAP ekleri): `belgeler/<SEMBOL>/`. Araştırma notları: `hafiza/`.
 - Yardımcı betikler: `scripts/dcf_excel.py` (formüllü DCF Excel modeli).
+- **Dil.** "AL/SAT" yerine "hedefe göre artır/azalt" ifadesini kullan. Hedef fiyat içeren her yanıtın sonuna "Bu bir yatırım tavsiyesi değildir." yaz.
