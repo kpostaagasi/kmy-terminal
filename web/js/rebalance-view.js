@@ -1,4 +1,4 @@
-// Portföy › Dengeleme sekmesi: hedef ağırlık girişi, sapma tablosu ve al/sat önerisi. Hesap sunucudadır (/api/rebalance).
+// Portföy › Dengeleme sekmesi: hedef ağırlık girişi, sapma tablosu ve artır/azalt hesabı. Hesap sunucudadır (/api/rebalance).
 import { on, api, $, $$, esc, num, money, cls, toast, localGet, localSet } from './core.js';
 import { t, tx } from './i18n.js';
 import { parseTr } from './trnum.js';
@@ -58,7 +58,7 @@ function resultCard() {
       <td class="r num dim">${r.taxEst ? money(r.taxEst) : '—'}</td>
       <td class="r num dim">${r.feeEst != null ? money(r.feeEst) : '—'}</td><td class="dim">${r.reason ? esc(tx(r.reason)) : ''}</td></tr>`;
   }).join('');
-  const sumLine = `${t('Net nakit değişimi')}: <b class="${cls(s.netCash)}">${s.netCash > 0 ? '+' : ''}${money(s.netCash)}</b> · ${t('Yuvarlama artığı')}: ${money(s.rounding)} · ${t('Mod')}: ${s.mode === 'ekNakit' ? t('yalnız alım (ek nakit)') : t('al/sat (değer sabit)')}`;
+  const sumLine = `${t('Net nakit değişimi')}: <b class="${cls(s.netCash)}">${s.netCash > 0 ? '+' : ''}${money(s.netCash)}</b> · ${t('Yuvarlama artığı')}: ${money(s.rounding)} · ${t('Mod')}: ${s.mode === 'ekNakit' ? t('yalnız artır (ek nakit)') : t('artır/azalt (değer sabit)')}`;
   return `<div class="card"><h3>${t('Öneri')} <span class="dim" style="font-weight:400">${esc(sumLine.replace(/<[^>]+>/g, ''))}</span></h3>
     ${res.warnings.map((w) => `<div class="kt-note down">${esc(tx(w))}</div>`).join('')}
     <div class="table-wrap"><table class="t"><thead><tr><th>${t('Varlık')}</th><th class="r">${t('Gerçek')}</th><th class="r">${t('Hedef')}</th><th class="r">${t('Sapma (puan)')}</th><th>${t('İşlem')}</th><th class="r">${t('Adet')}</th><th class="r">${t('Tutar')}</th><th class="r">${t('Tahmini vergi')}</th><th class="r">${t('Tahmini komisyon')}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -71,7 +71,7 @@ function paint() {
   host.innerHTML = `${err ? `<div class="kt-note down">${esc(err)}</div>` : ''}
     <div class="card"><div class="row"><label class="dim" for="rbExtra">${t('Ek nakit (TL)')}</label><input id="rbExtra" class="rb-in" style="width:130px" inputmode="decimal" value="${esc(extra)}" placeholder="0">
       <label class="dim" for="rbRate">${t('Komisyon %')}</label><input id="rbRate" class="rb-in" style="width:80px" inputmode="decimal" value="${esc(res.rate ?? '')}" placeholder="0,1">
-      <span class="dim">${t('Boş: portföy değeri sabit, al/sat. Girilirse yalnız alım önerilir. Komisyon boşsa yok.')}</span></div></div>
+      <span class="dim">${t('Boş: portföy değeri sabit, artır/azalt. Girilirse yalnız artırma hesaplanır. Komisyon boşsa yok.')}</span></div></div>
     ${editor()}${resultCard()}`;
   bind();
 }
