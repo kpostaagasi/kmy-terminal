@@ -9,6 +9,7 @@ import './chat.js';
 import './kap.js';
 import './veri-sagligi.js';
 import { openSettings } from './settings.js';
+import './sihirbaz.js';
 import { onayIste } from './onay.js';
 import { t, tx, lang, locale, translateDom, syncLangPref } from './i18n.js';
 
