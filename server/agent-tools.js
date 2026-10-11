@@ -182,11 +182,11 @@ export function toolSpecs(notify = () => {}) {
     },
     {
       name: 'get_broker_reports', readOnly: true,
-      description: 'Aracı kurum araştırma raporları (Gedik, Garanti BBVA, AK, İş, Yapı Kredi, Ziraat, Vakıf, Tacirler, PhillipCapital, Integral, A1 Capital ve Halk Yatırım\'ın haftalık tavsiye/hedef fiyat listesi; kurumların açık yayınları ve kullanıcının klasör izlemeyle arşive aldığı raporlar Raporlar arşivindedir). Filtreler: symbol (BIST kodu), broker (gedik|garanti|ak|isyatirim|yapikredi|ziraat|vakif|tacirler|phillip|integral|a1|halk), days (varsayılan 90; 0 = tümü), category (Şirket|Sektör|Strateji|Bilanço|Makro|Model portföy|Teknik|Diğer), query. Her kayıtta id, kurum, başlık, tarih, semboller ve özet (çoğu raporda tavsiye ve hedef fiyat özette) bulunur. Tam metin için read_broker_report.',
+      description: 'Aracı kurum araştırma raporları (Gedik, Garanti BBVA, AK, İş, Yapı Kredi, Ziraat, Vakıf, Tacirler, PhillipCapital, Integral, A1 Capital ve Halk Yatırım\'ın haftalık tavsiye/hedef fiyat listesi; kurumların açık yayınları ve kullanıcının klasör izlemeyle arşive aldığı raporlar Raporlar arşivindedir). Filtreler: symbol (BIST kodu), broker (gedik|garanti|ak|isyatirim|yapikredi|ziraat|vakif|tacirler|phillip|integral|a1|halk), days (varsayılan 90; 0 = tümü), category (Şirket|Sektör|Strateji|Bilanço|Makro|Model portföy|Teknik|Diğer), query. Her kayıtta id, kurum, başlık, tarih, semboller, kaynak bağlantısı (link) ve varsa çıkarılmış hedef fiyat/görüş bulunur; rapor içeriği/özeti verilmez, kullanıcıya yalnız başlık ve bağlantı göster. Tam metin için read_broker_report.',
       schema: { symbol: z.string().optional(), broker: z.string().optional(), days: z.number().int().optional(), category: z.string().optional(), query: z.string().optional(), limit: z.number().int().optional() },
       handler: async ({ symbol, broker, days = 90, category, query, limit = 40 }) => {
         const r = await research.list({ symbol, broker, days, category, q: query, limit: Math.min(limit, 100) });
-        return { total: r.total, updated: new Date(r.at).toISOString(), unavailable: r.unavailable.map((u) => `${u.name}: ${u.reason}`), items: r.items.map(({ id, broker: b, title, date, category: c, symbols, summary, access, analyst }) => ({ id, broker: b, title, date: date.slice(0, 10), category: c, symbols, summary, analyst, access })) };
+        return { total: r.total, updated: new Date(r.at).toISOString(), unavailable: r.unavailable.map((u) => `${u.name}: ${u.reason}`), items: r.items.map(({ id, broker: b, title, date, category: c, symbols, access, analyst, url, page, target, rating }) => ({ id, broker: b, title, date: date.slice(0, 10), category: c, symbols, analyst, access, link: url || page, target, rating })) };
       },
     },
     {
@@ -280,7 +280,9 @@ export function verifyScopedToken(tok) {
   try { const p = JSON.parse(Buffer.from(m[1], 'base64url').toString()); return p.e > Date.now() ? { sessionId: p.s, mode: p.m } : null; } catch { return null; }
 }
 
+export const NOT_ADVICE = 'Bu bir yatırım tavsiyesi değildir.';
 export function toolResult(data) {
+  if (data && typeof data === 'object' && !Array.isArray(data) && /"(target|hedef|median)\w*"/i.test(JSON.stringify(data))) data = { ...data, uyari: NOT_ADVICE };
   return { content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data, null, 1) }] };
 }
 

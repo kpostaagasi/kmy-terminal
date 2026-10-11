@@ -203,12 +203,12 @@ function targetStrip(g) {
   return `<div class="card strip" style="margin-top:12px" title="${esc(targetStripTip(g))}">${head}${body} · <span class="dim">${t('açık kurum raporlarından; yatırım tavsiyesi değildir')}</span></div>`;
 }
 // Kurum hedefi: `target` yoksa kapsam dışı (fon, altın, yabancı), null ise veri yok, nesne ise özet.
-const targetTip = (g) => t('Medyan hedef {m} · AL {al} / TUT {tut} / SAT {sat} · en yeni rapor {d}\n\nKurumların açık yayınlarından; yatırım tavsiyesi değildir.', { m: g.median == null ? '—' : price(g.median), al: g.al, tut: g.tut, sat: g.sat, d: dateTR(g.newest) });
+const targetTip = (g) => t('Medyan hedef {m} · Artır {al} / Tut {tut} / Azalt {sat} · en yeni rapor {d}\n\nKurumların açık yayınlarından; yatırım tavsiyesi değildir.', { m: g.median == null ? '—' : price(g.median), al: g.al, tut: g.tut, sat: g.sat, d: dateTR(g.newest) });
 function targetCell(x) {
   const g = x.target;
   if (g === undefined) return '<td class="r dim">—</td>';
   if (g === null) return `<td class="r dim" title="${esc(t('Son 180 günde bu hisse için kurum hedefi bulunamadı.'))}">—</td>`;
-  const top = [[t('[öneri]AL'), g.al], [t('[öneri]TUT'), g.tut], [t('[öneri]SAT'), g.sat]].find(([, n], _, a) => n > 0 && n === Math.max(...a.map(([, m]) => m)));
+  const top = [[t('[öneri]Artır'), g.al], [t('[öneri]Tut'), g.tut], [t('[öneri]Azalt'), g.sat]].find(([, n], _, a) => n > 0 && n === Math.max(...a.map(([, m]) => m)));
   const sub = `${t('{n} kurum', { n: g.brokers })}${top ? ` · ${top[1]} ${top[0]}` : ''}`;
   return `<td class="r num" title="${esc(targetTip(g))}">${g.upsidePct == null ? '<span class="dim">—</span>' : `<span class="${cls(g.upsidePct)}">${pct(g.upsidePct, 1)}</span>`}<div class="dim" style="font-size:10.5px;font-family:var(--sans)">${esc(sub)}</div></td>`;
 }
