@@ -2,6 +2,22 @@
 const n = (v, one, many) => `${v.n} ${v.n === 1 ? one : many}`;
 
 export default {
+  'Beta geri bildirimi': 'Beta feedback',
+  'Hata, öneri veya eksik… Portföy, kimlik veya anahtar bilgisi yazmayın.': 'Bug, idea or gap… Do not include portfolio, identity or key details.',
+  'Ne oldu? Ne bekliyordunuz?': 'What happened? What did you expect?',
+  "GitHub'da gönder": 'Send on GitHub',
+  'Önce bir şey yazın': 'Write something first',
+  'Hoş geldiniz — kmy terminal beta': 'Welcome — kmy terminal beta',
+  'kmy terminal; BIST, döviz/altın ve TEFAS fonlarını tek ekranda izleyen, verisini yalnız bilgisayarınızda tutan bir terminaldir.': 'kmy terminal tracks BIST, FX/gold and TEFAS funds on one screen and keeps your data only on your computer.',
+  'Önce izleme listenize birkaç sembol ekleyin, sonra Portföy sekmesinden pozisyonlarınızı girin.': 'Add a few symbols to your watchlist, then enter your positions in the Portfolio tab.',
+  "Analiz asistanı kendi aboneliğinizle çalışır (Claude, ChatGPT/Codex veya omp). Daha sonra Ayarlar › Asistan'dan değiştirebilirsiniz.": 'The analysis assistant runs on your own subscription (Claude, ChatGPT/Codex or omp). You can change it later in Settings › Assistant.',
+  'Kurulu bir asistan bulunamadı; asistansız da kullanılabilir.': 'No assistant found; the app works without one.',
+  "Fiyatlar gecikmeli olabilir; Yahoo kaynaklı veriler deneysel/gecikmelidir. Kaynakları Ayarlar › Veri'den seçebilirsiniz.": 'Prices may be delayed; Yahoo data is experimental/delayed. Choose sources in Settings › Data.',
+  'Bu bir yatırım tavsiyesi değildir.': 'This is not investment advice.',
+  'Sağ üstteki 💬 düğmesiyle istediğiniz an geri bildirim gönderebilirsiniz.': 'Use the 💬 button at the top right to send feedback any time.',
+  'Atla': 'Skip',
+  'İleri': 'Next',
+  'Başla': 'Start',
   // ── Raporlar ──
   'Raporlar sekmesinden bir rapor seçin.': 'Choose a report from the Reports tab.',
   'Tüm kurumlar': 'All brokers',
