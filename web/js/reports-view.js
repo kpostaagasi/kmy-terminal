@@ -169,7 +169,7 @@ const feedItemHtml = (x) => `<div class="report-item feed-item ${x.id === feedSe
       <div class="t"><span class="dot" style="background:${BROKER_DOT[x.brokerKey] || 'var(--text-3)'}"></span>${x.symbols.length ? `<b class="mono accent">${esc(x.symbols.slice(0, 3).join(', '))}</b> ` : ''}<span class="dim">${esc(x.broker)}</span>${x.isNew ? ` <span class="pill acc">${t('Yeni')}</span>` : ''}${x.saved ? ` <span class="pill" title="${t('Arşivde')}">✓</span>` : ''}</div>
       <div class="t2">${esc(x.title)}</div>
       <div class="m"><span>${dateTR(x.date)} · ${esc(tx(x.category))}${x.size ? ` · ${esc(x.size)}` : ''}${x.access === 'web' ? ` · ${esc(tx(x.access))}` : ''}</span>
-        <span class="f-acts"><button class="ghost xs" data-fa="${esc(x.id)}">${t('Analiz et')}</button>${x.access === 'web' ? '' : `<a class="ghost xs" href="/api/research/file?id=${encodeURIComponent(x.id)}" download>${t('İndir')}</a>`}</span></div></div>`;
+        <span class="f-acts"><button class="ghost xs" data-fa="${esc(x.id)}">${t('Analiz et')}</button>${(x.url || x.page) ? `<a class="ghost xs" href="${esc(x.url || x.page)}" target="_blank" rel="noopener">${t('Kaynakta aç')}</a>` : ''}</span></div></div>`;
 function bindFeed() {
   $$('.feed-item', root).forEach((el) => el.onclick = (e) => { if (e.target.closest('.f-acts')) return; showFeed(el.dataset.id); });
   $$('[data-fa]', root).forEach((b) => b.onclick = () => askFeed(feed.items.find((i) => i.id === b.dataset.fa)));
