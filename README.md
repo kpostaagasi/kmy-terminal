@@ -6,8 +6,10 @@ Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Ta
 
 ```bash
 npm install
-npm start          # http://127.0.0.1:7420
+npm start          # http://127.0.0.1:7420 (tarayıcıyı da açar; --no-open ile açmaz)
 ```
+
+macOS, Linux ve Windows'ta tek komut (Node 22.13+): `npx github:kpostaagasi/kmy-terminal`. Paket olarak çalışınca veri dizini macOS'ta `~/Library/Application Support/kmy terminal`, Linux'ta `~/.local/share/kmy-terminal`, Windows'ta `%APPDATA%\kmy terminal` olur. Gömülü terminal (`node-pty`) isteğe bağlıdır: derlenemezse uygulamanın geri kalanı çalışır. Yalnız sunucu: `npm run server`.
 
 Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tarayıcıyı açar). macOS uygulaması için aşağıdaki "macOS uygulaması" bölümüne bakın.
 
