@@ -1,4 +1,5 @@
 // kmy terminal sunucusu: statik arayüz + REST API + WebSocket (canlı fiyat, ajan, terminal)
+import { listSources } from './veri-kaynagi.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -160,6 +161,7 @@ route('GET', '/api/committee', async () => {
   });
 });
 route('GET', '/api/settings', async () => getSettings());
+route('GET', '/api/data-sources', async () => listSources(getSettings()));
 route('PUT', '/api/settings', async ({ body }) => { const s = putSettings(body); broadcast({ t: 'settings', settings: s }); restartTimers(); return s; });
 
 // Piyasa

@@ -293,10 +293,10 @@ export function openSettings(section = 'genel') {
       const sec = (n) => t('{n} saniye', { n });
       const min = (n) => t('{n} dakika', { n });
       const SRC = [
-        [t('BIST hisse ve endeksleri'), 'Yahoo Finance', `<b class="accent">${t('~15 dk gecikmeli')}</b>`],
+        [t('BIST hisse ve endeksleri'), `Yahoo Finance <span class="pill">${t('deneysel/gecikmeli')}</span>`, `<b class="accent">${t('~15 dk gecikmeli')}</b>`],
         [t('Döviz, gram/çeyrek/ata altın, gümüş'), 'Truncgil', t('~1 dk')],
         [t('Ons altın (spot)'), 'gold-api.com', t('Anlık')],
-        [t('ABD hisseleri, emtia, kripto'), 'Yahoo Finance', ''],
+        [t('ABD hisseleri, emtia, kripto'), `Yahoo Finance <span class="pill">${t('deneysel/gecikmeli')}</span>`, ''],
         [t('Temel oranlar, sektör, temettü/sermaye artırımı, BIST 100/30 üyeliği'), 'İş Yatırım', t('Günde bir')],
         [t('Bildirimler'), 'KAP', ''],
         [t('Haberler'), t('Google Haberler ve 7 ekonomi RSS kaynağı'), ''],
@@ -320,7 +320,13 @@ export function openSettings(section = 'genel') {
         + card(row(t('Zamanlanmış denetim'), t('Seans kapandıktan sonra (18:30, yarım günde 12:50) veriyi ikinci kaynakla karşılaştırır. Sapma varsa haber verir. Şimdi denetle her zaman çalışır.'), toggle('sAuditSch', s.auditSchedule !== false)), t('Veri sağlığı'))
         + card(row(t('Yerel önbellek'), t('Geçmiş fiyat, temettü ve KAP önbelleği'), `<span class="stg-path mono" id="sCacheSize">${t('Hesaplanıyor…')}</span><button class="btn sec" id="sCache">${t('Önbelleği temizle')}</button>`), t('Önbellek'))
         + card(`<div class="stg-scroll"><table class="stg-tbl"><thead><tr><th>${t('Veri')}</th><th>${t('Kaynak')}</th><th class="r">${t('Gecikme')}</th></tr></thead><tbody>${SRC.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td class="r">${c || '<span class="dim">—</span>'}</td></tr>`).join('')}</tbody></table></div>
-          <p class="stg-note">${t('Gecikme ve kaynak her fiyatın yanında da gösterilir.')}</p>`, t('Veri kaynakları'));
+          <p class="stg-note">${t('Gecikme ve kaynak her fiyatın yanında da gösterilir.')}</p>`, t('Veri kaynakları'))
+        + card(`<div id="sSrcList">${t('Yükleniyor…')}</div><p class="stg-note">${t('Kapalı kaynaktan fiyat alınmaz; o semboller boş görünür.')}</p>`, t('Kaynak seçimi'));
+      api('/data-sources').then((list) => {
+        const box = $('#sSrcList'); if (!box) return;
+        box.innerHTML = list.map((x) => row(`${esc(x.label)} <span class="pill">${esc(t(x.status))}</span>`, esc(x.covers.join(', ')), toggle('sSrc_' + x.id, x.enabled))).join('');
+        for (const x of list) $('#sSrc_' + x.id).onchange = () => save({ dataSources: Object.fromEntries(list.map((y) => [y.id, $('#sSrc_' + y.id).checked])) });
+      }).catch(() => {});
       const dimInbox = () => $('#sInboxRow').classList.toggle('off', !$('#sInbox').checked);
       dimInbox();
       $('#sQuote').onchange = (e) => save({ quoteRefreshSec: Number(e.target.value) });

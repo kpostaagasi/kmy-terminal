@@ -5,7 +5,9 @@
 //  - BIST 100 üyeliği, sektörler, temel oranlar: İş Yatırım (universe.js)
 // Kullanıcıya görünen semboller BIST kısa kodudur (THYAO); Yahoo karşılığına burada çevrilir.
 import https from 'node:https';
-import { cacheGet, cachePut, db } from './db.js';
+import { cacheGet, cachePut, db, getSettings } from './db.js';
+import { isEnabled, LABEL as SRC_LABEL } from './veri-kaynagi.js';
+const srcOn = (id) => { try { return isEnabled(id, getSettings()); } catch { return true; } };
 import * as universe from './universe.js';
 import { isFundCode, fundQuote, fundBars, searchFunds } from './funds.js';
 import { trScore, compareSearchHits } from './fold.js';
@@ -233,7 +235,8 @@ function metaToQuote(sym, meta, closes, timestamps) {
     currency: meta.currency || currencyOf(sym),
     time: meta.regularMarketTime ? meta.regularMarketTime * 1000 : null,
     exchange: isBist(sym) || INDICES.includes(sym) ? 'Borsa İstanbul' : meta.fullExchangeName || meta.exchangeName || null,
-    source: 'Yahoo Finance',
+    source: SRC_LABEL.yahoo,
+    experimental: true,
     delayed: isBist(sym) || INDICES.includes(sym),
     spark: (closes || []).filter((c) => c != null),
     sparkTimes: timestamps || [],
@@ -282,14 +285,14 @@ export async function getQuotes(symbols) {
   // 1) Truncgil: döviz, gram altın, altın türleri
   const tgSyms = need.filter((s) => SPECIAL[s]?.tg);
   const failedTg = [];
-  if (tgSyms.length || need.includes('ONS')) {
+  if ((tgSyms.length || need.includes('ONS')) && srcOn('truncgil')) {
     try {
       const d = await truncgil();
       const updated = Date.parse((d.Update_Date || '').replace(' ', 'T') + '+03:00') || now;
       for (const s of tgSyms) { const q = tgQuote(s, SPECIAL[s], d, updated); if (q) put(s, q); else failedTg.push(s); }
       // Ons: spot fiyat gold-api, günlük değişim Truncgil
       if (need.includes('ONS')) {
-        try {
+        if (srcOn('goldapi')) try {
           const spot = await goldSpot();
           const pct = Number(d.ONS?.Change) || 0;
           const prev = spot.price / (1 + pct / 100);
@@ -303,7 +306,7 @@ export async function getQuotes(symbols) {
 
   // 2) TEFAS: yatırım / emeklilik fonları (günlük birim fiyat)
   const fundNeed = need.filter((s) => !result[s] && isFund(s));
-  if (fundNeed.length) await Promise.all(fundNeed.map(async (s) => { try { put(s, await fundQuote(s)); } catch { /* TEFAS geçici hata: bir sonraki yenilemede */ } }));
+  if (fundNeed.length && srcOn('tefas')) await Promise.all(fundNeed.map(async (s) => { try { put(s, await fundQuote(s)); } catch { /* TEFAS geçici hata: bir sonraki yenilemede */ } }));
 
   // 3) Yahoo: BIST, endeksler, yurt dışı + yedekler
   const yahooNeed = need.filter((s) => !result[s] && !isFund(s));
@@ -313,7 +316,7 @@ export async function getQuotes(symbols) {
     if (y) ySyms.add(y);
     else if (SPECIAL[s]?.type === 'gold' || s === 'GUMUS') { ySyms.add(s === 'GUMUS' ? 'SI=F' : 'GC=F'); ySyms.add('USDTRY=X'); }
   }
-  if (ySyms.size) {
+  if (ySyms.size && srcOn('yahoo')) {
     const raw = await sparkBatch([...ySyms]);
     for (const s of yahooNeed) {
       const y = toYahoo(s);
@@ -324,7 +327,7 @@ export async function getQuotes(symbols) {
         const k = 1 / TROY_OUNCE_GRAMS;
         const price = g.regularMarketPrice * u.regularMarketPrice * k;
         const prev = (g.chartPreviousClose ?? g.previousClose) * (u.chartPreviousClose ?? u.previousClose) * k;
-        put(s, { symbol: s, name: SPECIAL[s].name, price, prevClose: prev, change: price - prev, changePct: ((price - prev) / prev) * 100, currency: 'TRY', time: now, source: 'Yahoo (vadeli, yaklaşık)', delayed: true, spark: [], sparkTimes: [] });
+        put(s, { symbol: s, name: SPECIAL[s].name, price, prevClose: prev, change: price - prev, changePct: ((price - prev) / prev) * 100, currency: 'TRY', time: now, source: 'Yahoo (vadeli, yaklaşık; deneysel/gecikmeli)', delayed: true, spark: [], sparkTimes: [] });
       }
     }
   }
