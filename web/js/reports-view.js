@@ -300,16 +300,13 @@ function showFeed(id) {
   if (!x) return;
   feedSel = id;
   $$('.feed-item', root).forEach((el) => el.classList.toggle('sel', el.dataset.id === id));
-  const src = `/api/research/file?id=${encodeURIComponent(id)}`;
-  const web = x.access === 'web';
+  // Kurum raporları yalnız başlık + kaynağa bağlantı olarak gösterilir; içerik/özet kopyalanmaz.
+  const link = x.url || x.page || null;
   $('#rView').innerHTML = `<div class="panel-head" style="gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title)} <span class="dim">· ${esc(x.broker)} · ${dateTR(x.date)}</span></span><div class="head-actions">
-      <button class="ghost" id="fAsk">${t('Analiz et')}</button>${web ? '' : `<a class="ghost" href="${esc(src)}" download>${t('İndir')}</a><button class="ghost" id="fSave" title="${t('Arşive kaydet')}">${t('Kaydet')}</button>`}<a class="ghost" href="${esc(web ? x.page : src)}" target="_blank" rel="noopener">${web ? t('Kaynakta aç') : t('Yeni sekmede aç')}</a><button class="ghost" data-close-pdf>${t('Kapat')}</button></div></div>
-    ${x.summary ? `<div class="feed-sum">${x.symbols.length ? `<b class="mono">${esc(x.symbols.join(', '))}</b> · ` : ''}${esc(x.summary)}</div>` : ''}
-    ${web ? `<div class="empty" style="margin:auto">${t('Bu kurum raporlarını web yazısı olarak yayımlıyor. "Kaynakta aç" ile okuyabilir ya da asistana analiz ettirebilirsiniz.')}</div>` : `<iframe src="${src}" title="${esc(x.title)}"></iframe>`}`;
+      <button class="ghost" id="fAsk">${t('Analiz et')}</button>${link ? `<a class="ghost" href="${esc(link)}" target="_blank" rel="noopener">${t('Kaynakta aç')}</a>` : ''}<button class="ghost" data-close-pdf>${t('Kapat')}</button></div></div>
+    <div class="empty" style="margin:auto">${x.symbols.length ? `<b class="mono">${esc(x.symbols.join(', '))}</b><br>` : ''}${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(x.title)}</a><br>` : ''}${t('Rapor içeriği kurumun kendi sayfasında yayımlanır. Okumak için "Kaynakta aç"ı kullanın.')}</div>`;
   openPdfTab();
   $('#fAsk').onclick = () => askFeed(x);
-  const sv = $('#fSave');
-  if (sv) sv.onclick = async () => { sv.disabled = true; try { const r = await api('/research/save', { method: 'POST', body: { id } }); toast(t('Arşive kaydedildi: {name}', { name: r.name }), 'ok'); x.saved = r.name; } catch (e) { toast(tx(e.message), 'err'); } sv.disabled = false; };
 }
 function askFeed(x) {
   if (!x) return;
