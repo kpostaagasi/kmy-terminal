@@ -1,6 +1,6 @@
 # kmy terminal
 
-Kişisel kullanım için yazılmış, BIST odaklı yerel bir borsa terminali. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
+Açık kaynak (lisans seçimi beklemede), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
 
 ## Hızlı başlangıç
 
@@ -152,3 +152,13 @@ claude mcp add borsa -- node "$(pwd)/server/mcp-stdio.js"
 - Sunucu yalnızca `127.0.0.1` üzerinde dinler ve başka kökenlerden gelen istekleri reddeder. Raporlar ayrı bir porttan (7421) sunulur; rapor içindeki betikler uygulama API'sine erişemez.
 
 Değişiklikler için `CHANGELOG.md` dosyasına bakın. Bu yazılımın ürettiği analizler yatırım tavsiyesi değildir.
+
+
+## macOS: imzasız uygulamayı açma
+Uygulama Apple Developer imzası/notarizasyonu olmadan dağıtılır; macOS ilk açılışta "doğrulanamayan geliştirici" uyarısı verir.
+- **Yol 1:** Finder'da `kmy terminal.app` üzerine **sağ tık › Aç**, ardından açılan pencerede tekrar **Aç**.
+- **Yol 2 (Terminal):** `xattr -dr com.apple.quarantine "/Applications/kmy terminal.app"`
+Yalnız resmî GitHub Releases sayfasından indirdiğiniz dosyalar için yapın.
+
+## Katkı
+Bkz. [CONTRIBUTING.md](CONTRIBUTING.md).
