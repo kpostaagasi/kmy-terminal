@@ -23,6 +23,9 @@ jobs:
         with: { node-version: '22', cache: npm }
       # node-pty yerel derlemesi platforma göre değişir; testler onu kullanmaz.
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      # node-pty prebuild'ındaki spawn-helper'a çalıştırma izni (macOS/Linux); Windows'ta etkisiz.
+      - run: npm run postinstall || true
+        shell: bash
       - run: npm test
         shell: bash
       - name: Sunucu duman testi
@@ -39,8 +42,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: gitleaks/gitleaks-action@v2
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: gitleaks (tüm geçmiş)
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks git . --redact --no-banner
 
   build:
     name: build (${{ matrix.target }})

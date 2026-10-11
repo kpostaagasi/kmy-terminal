@@ -20,5 +20,5 @@ assert.equal(isFund('TTE'), true, 'evren dışı 3 harf fon kalır');
 assert.equal(isFund('BTC'), false, 'özel sembol fon değil');
 assert.equal(isFund('THYAO'), false, '4+ harf BIST fon değil');
 
-fs.rmSync(dir, { recursive: true, force: true });
+try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows: SQLite dosyası hâlâ açık (EBUSY); geçici dizin kalır */ }
 console.log('ok fon ayrım');
