@@ -6,6 +6,6 @@
 - **Hesap yok.** Uygulama kullanıcı hesabı, telemetri veya reklam takibi içermez.
 - **Dış istekler.** Piyasa verisi için uygulama doğrudan veri kaynaklarına (KAP, TCMB, TEFAS, Yahoo Finance, haber RSS'leri vb.) istek atar; bu kaynaklar IP adresinizi kendi politikalarına göre görebilir.
 - **Yapay zekâ.** Sohbet özelliğini kullanırsanız mesajlarınız ve gerekli bağlam, **sizin seçtiğiniz** yapay zekâ sağlayıcısına (ör. Anthropic, OpenAI) kendi hesabınız üzerinden gönderilir. Bu sağlayıcıların gizlilik politikaları geçerlidir.
-- **Geri bildirim.** Beta geri bildirimi gönderirseniz yalnız yazdığınız metin ve isteğe bağlı iletişim bilginiz alınır.
+- **Kayıt ve geri bildirim.** Uygulamada ve tanıtım sayfasında kayıt formu yoktur; e-posta veya iletişim bilgisi toplanmaz. Geri bildirim isteğe bağlı olarak GitHub Issues üzerinden, GitHub'ın kendi koşullarıyla verilir.
 - **Silme.** Verilerinizi uygulama veri klasörünü silerek tamamen kaldırabilirsiniz.
 - **İletişim / KVKK başvurusu:** _[veri sorumlusu ve iletişim adresi eklenecek]_.
