@@ -2,6 +2,14 @@
 const n = (v, one, many) => `${v.n} ${v.n === 1 ? one : many}`;
 
 export default {
+  'Beta kullanım onayı': 'Beta usage consent',
+  'Bu uygulama ücretsiz bir beta sürümdür ve yalnız kişisel kullanım içindir.': 'This app is a free beta for personal use only.',
+  'Fiyatlar, sinyaller, hedef fiyatlar ve yapay zekâ çıktıları yalnız bilgilendirme amaçlıdır; veriler gecikmeli veya hatalı olabilir.': 'Prices, signals, target prices and AI outputs are for information only; data may be delayed or wrong.',
+  'Kullanım Koşulları': 'Terms of Use',
+  'Gizlilik Politikası': 'Privacy Policy',
+  'SPK Uyarısı': 'CMB (SPK) Notice',
+  'Okudum, anladım ve kabul ediyorum.': 'I have read, understood and accept.',
+  'Devam et': 'Continue',
   // ── Raporlar ──
   'Raporlar sekmesinden bir rapor seçin.': 'Choose a report from the Reports tab.',
   'Tüm kurumlar': 'All brokers',
