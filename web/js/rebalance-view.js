@@ -5,7 +5,7 @@ import { parseTr } from './trnum.js';
 
 let active = () => false;
 let res = null, extra = localGet('rbExtra', ''), draft = null, err = '', busy = false, host = null;
-const ACT = { al: [t('AL'), 'up'], sat: [t('SAT'), 'down'], yok: ['—', ''], atlandi: [t('ATLANDI'), ''] };
+const ACT = { al: [t('Hedefe göre artır'), 'up'], sat: [t('Hedefe göre azalt'), 'down'], yok: ['—', ''], atlandi: [t('ATLANDI'), ''] };
 const p1 = (x) => (x == null ? '—' : `${num(x, 1)}%`);
 const sgn = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${num(x, 1)}`);
 const pctVal = parseTr;

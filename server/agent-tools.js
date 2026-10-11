@@ -280,7 +280,9 @@ export function verifyScopedToken(tok) {
   try { const p = JSON.parse(Buffer.from(m[1], 'base64url').toString()); return p.e > Date.now() ? { sessionId: p.s, mode: p.m } : null; } catch { return null; }
 }
 
+export const NOT_ADVICE = 'Bu bir yatırım tavsiyesi değildir.';
 export function toolResult(data) {
+  if (data && typeof data === 'object' && !Array.isArray(data) && /"(target|hedef|median)\w*"/i.test(JSON.stringify(data))) data = { ...data, uyari: NOT_ADVICE };
   return { content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data, null, 1) }] };
 }
 
