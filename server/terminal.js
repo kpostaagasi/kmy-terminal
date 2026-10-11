@@ -16,11 +16,20 @@ try {
 const terms = new Map(); // id -> { p, owner, buffer }
 const MAX_BUFFER = 200_000;
 
+// Varsayılan kabuk: Windows'ta PowerShell (yoksa COMSPEC), macOS'ta zsh, Linux'ta $SHELL → bash → sh.
+export function defaultShell(platform = os.platform(), env = process.env, exists = fs.existsSync) {
+  if (platform === 'win32') return env.KMY_SHELL || 'powershell.exe';
+  if (env.KMY_SHELL) return env.KMY_SHELL;
+  if (env.SHELL && exists(env.SHELL)) return env.SHELL;
+  for (const s of platform === 'darwin' ? ['/bin/zsh', '/bin/bash'] : ['/bin/bash', '/usr/bin/bash', '/bin/sh']) if (exists(s)) return s;
+  return '/bin/sh';
+}
+
 export function available() { return !!pty; }
 
 export function open({ owner, cols = 100, rows = 30, command = null, cwd = null, onData, onExit }) {
   if (!pty) throw new Error('node-pty kullanılamıyor; `npm rebuild node-pty` çalıştırın');
-  const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
+  const shell = defaultShell();
   const want = cwd === '~' ? os.homedir() : cwd;
   const dir = want && fs.existsSync(want) ? want : WORKSPACE_DIR;
   const args = command ? ['-l', '-c', command] : ['-l'];
