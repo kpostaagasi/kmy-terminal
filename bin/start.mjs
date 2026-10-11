@@ -18,7 +18,7 @@ const noOpen = process.argv.includes('--no-open') || process.env.KMY_NO_OPEN ===
 
 export function openerFor(platform = process.platform) {
   if (platform === 'darwin') return ['open', []];
-  if (platform === 'win32') return ['cmd', ['/c', 'start', '""']];
+  if (platform === 'win32') return ['rundll32', ['url.dll,FileProtocolHandler']]; // cmd /c start "" tırnak kaçışında bozulur
   return ['xdg-open', []];
 }
 

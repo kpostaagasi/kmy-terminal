@@ -19,5 +19,5 @@ check(defaultShell('win32', {}) === 'powershell.exe', 'Windows kabuk: PowerShell
 check(defaultShell('linux', { SHELL: '/yok/zsh' }, (p) => p === '/bin/bash') === '/bin/bash', 'Linux: olmayan $SHELL yerine bash');
 check(defaultShell('linux', {}, () => false) === '/bin/sh', 'Linux: son çare sh');
 check(defaultShell('darwin', { SHELL: '/bin/zsh' }, () => true) === '/bin/zsh', 'macOS: $SHELL');
-check(openerFor('win32')[0] === 'cmd' && openerFor('darwin')[0] === 'open' && openerFor('linux')[0] === 'xdg-open', 'tarayıcı açıcı platforma göre');
+check(openerFor('win32')[0] === 'rundll32' && openerFor('darwin')[0] === 'open' && openerFor('linux')[0] === 'xdg-open', 'tarayıcı açıcı platforma göre');
 console.log(`${ok} geçti, ${bad} başarısız`); process.exit(bad ? 1 : 0);
