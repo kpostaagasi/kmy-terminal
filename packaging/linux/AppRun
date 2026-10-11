@@ -1,0 +1,4 @@
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "$0")")"
+export KMY_INSTALLED=1
+exec "$HERE/usr/bin/node" "$HERE/app/bin/start.mjs" "$@"

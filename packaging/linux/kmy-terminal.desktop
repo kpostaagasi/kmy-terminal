@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=kmy terminal
+Comment=BIST odaklı yerel borsa terminali (beta)
+Exec=AppRun
+Icon=kmy-terminal
+Categories=Office;Finance;
+Terminal=true
