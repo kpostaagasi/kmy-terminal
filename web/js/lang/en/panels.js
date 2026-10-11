@@ -2,6 +2,7 @@
 const n = (v, one, many) => `${v.n} ${v.n === 1 ? one : many}`;
 
 export default {
+  'Rapor içeriği kurumun kendi sayfasında yayımlanır. Okumak için "Kaynakta aç"ı kullanın.': 'The report content is published on the broker\'s own site. Use "Open at source" to read it.',
   // ── Raporlar ──
   'Raporlar sekmesinden bir rapor seçin.': 'Choose a report from the Reports tab.',
   'Tüm kurumlar': 'All brokers',
