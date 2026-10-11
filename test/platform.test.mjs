@@ -5,7 +5,7 @@ import path from 'node:path';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kmy-plat-'));
 process.env.BORSA_DATA_DIR = path.join(tmp, 'data');
 process.env.BORSA_WORKSPACE_DIR = path.join(tmp, 'ws');
-const { appDirFor } = await import('../server/paths.js');
+const { appDirFor, findModuleFile } = await import('../server/paths.js');
 const { defaultShell } = await import('../server/terminal.js');
 const { openerFor } = await import('../bin/start.mjs');
 let ok = 0, bad = 0;
@@ -20,4 +20,14 @@ check(defaultShell('linux', { SHELL: '/yok/zsh' }, (p) => p === '/bin/bash') ===
 check(defaultShell('linux', {}, () => false) === '/bin/sh', 'Linux: son çare sh');
 check(defaultShell('darwin', { SHELL: '/bin/zsh' }, () => true) === '/bin/zsh', 'macOS: $SHELL');
 check(openerFor('win32')[0] === 'rundll32' && openerFor('darwin')[0] === 'open' && openerFor('linux')[0] === 'xdg-open', 'tarayıcı açıcı platforma göre');
+// npx / npm i -g: bağımlılıklar üst node_modules'a taşınır (hoist); vendor dosyaları orada da bulunmalı.
+{
+  const top = path.join(tmp, 'g', 'node_modules'); const app = path.join(top, 'kmy-terminal');
+  fs.mkdirSync(path.join(top, 'chart.js', 'dist'), { recursive: true }); fs.mkdirSync(app, { recursive: true });
+  fs.writeFileSync(path.join(top, 'chart.js', 'dist', 'chart.umd.js'), '//');
+  check(findModuleFile('chart.js/dist/chart.umd.js', app) === path.join(top, 'chart.js', 'dist', 'chart.umd.js'), 'vendor: hoist edilmiş node_modules bulunur');
+  fs.mkdirSync(path.join(app, 'node_modules', 'chart.js', 'dist'), { recursive: true }); fs.writeFileSync(path.join(app, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), '//');
+  check(findModuleFile('chart.js/dist/chart.umd.js', app) === path.join(app, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), 'vendor: önce kendi node_modules');
+  check(findModuleFile('yok/x.js', app) === null, 'vendor: yoksa null');
+}
 console.log(`${ok} geçti, ${bad} başarısız`); process.exit(bad ? 1 : 0);

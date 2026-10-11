@@ -43,6 +43,11 @@ async function waitHealth(ms = 20000) {
 // npx / npm i -g bin'i sembolik bağlantıyla çağırır: gerçek yolları karşılaştır.
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
 if (process.argv[1] && real(fileURLToPath(import.meta.url)) === real(process.argv[1])) {
+  // Zaten açıksa (ikinci kez başlatma) yeni sunucu kurma: mevcut arayüzü aç.
+  try {
+    const r = await fetch(`${URL_UI}/api/health`, { signal: AbortSignal.timeout(1500) });
+    if (r.status < 500) { console.log(`  kmy terminal zaten çalışıyor → ${URL_UI}`); if (!noOpen) openBrowser(URL_UI); process.exit(0); }
+  } catch { /* çalışmıyor: başlat */ }
   const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, PORT: String(PORT) } });
   const stop = () => { try { srv.kill(); } catch { /* yok */ } };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);

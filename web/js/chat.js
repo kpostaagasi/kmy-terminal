@@ -374,8 +374,8 @@ async function setupCheck() {
   const h = await setupChecked;
   const w = $('.welcome', log);
   if (!h || !w || h.claudeCli || $('.w-setup', w)) return;
-  w.insertAdjacentHTML('beforeend', `<div class="w-setup"><b>${t('Claude Code bulunamadı.')}</b> ${t("Yapay zekâ asistanı için bu Mac'e Claude Code kurun ve Claude hesabınızla giriş yapın:")}
-    <ol><li>${t("{link} adresinden kurun (veya Terminal'de {cmd} çalıştırın).", { link: '<a href="https://claude.com/download" target="_blank" rel="noopener">claude.com/download</a>', cmd: '<span class="mono">curl -fsSL https://claude.ai/install.sh | bash</span>' })}</li>
+  w.insertAdjacentHTML('beforeend', `<div class="w-setup"><b>${t('Claude Code bulunamadı.')}</b> ${t('Yapay zekâ asistanı için bu bilgisayara Claude Code kurun ve Claude hesabınızla giriş yapın:')}
+    <ol><li>${t("{link} adresinden kurun (veya Terminal'de {cmd} çalıştırın).", { link: '<a href="https://claude.com/download" target="_blank" rel="noopener">claude.com/download</a>', cmd: `<span class="mono">${/Windows/i.test(navigator.userAgent) ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash'}</span>` })}</li>
     <li>${t("Terminal'de {cmd} yazıp giriş yapın.", { cmd: '<span class="mono">claude</span>' })}</li><li>${t("kmy terminal'i kapatıp yeniden açın.")}</li></ol>
     <span class="dim">${t('Piyasa verisi, KAP, kurum raporları, portföy ve izleme listesi asistan olmadan da çalışır.')}</span></div>`);
 }

@@ -89,8 +89,8 @@ export default {
   '{s} hissesini hızlı analiz et: fiyat, teknik görünüm, temel oranlar ve son KAP; 5 maddelik özet.':
     'Run a quick analysis of {s}: price, technical picture, key ratios and latest KAP; summarize in 5 bullet points.',
   'Claude Code bulunamadı.': 'Claude Code not found.',
-  "Yapay zekâ asistanı için bu Mac'e Claude Code kurun ve Claude hesabınızla giriş yapın:":
-    'To use the AI assistant, install Claude Code on this Mac and sign in with your Claude account:',
+  'Yapay zekâ asistanı için bu bilgisayara Claude Code kurun ve Claude hesabınızla giriş yapın:':
+    'To use the AI assistant, install Claude Code on this computer and sign in with your Claude account:',
   "{link} adresinden kurun (veya Terminal'de {cmd} çalıştırın).": 'Install it from {link} (or run {cmd} in Terminal).',
   "Terminal'de {cmd} yazıp giriş yapın.": 'Type {cmd} in Terminal and sign in.',
   "kmy terminal'i kapatıp yeniden açın.": 'Quit and reopen kmy terminal.',

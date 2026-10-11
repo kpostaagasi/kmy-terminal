@@ -101,3 +101,12 @@ export const WEB_DIR = path.join(ROOT, 'web');
 
 // Hangi kuralın seçildiği tek satırda (yalnız sunucu açılışında; CLI kendi durum satırını yazar)
 if (/(^|[\\/])server[\\/]index\.js$/.test(process.argv[1] || '')) console.log(`  Veri dizini: ${DATA_DIR} (${data.why})`);
+
+// node_modules içindeki bir dosyayı bulur: önce ROOT/node_modules, sonra üst dizinler (npx / npm i -g bağımlılıkları hoist eder).
+export function findModuleFile(rel, start = ROOT, exists = fs.existsSync) {
+  for (let d = path.resolve(start); ; d = path.dirname(d)) {
+    const f = path.join(d, 'node_modules', rel);
+    if (exists(f)) return f;
+    if (path.dirname(d) === d) return null;
+  }
+}
