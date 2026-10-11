@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { WebSocketServer } from 'ws';
-import { ROOT, WEB_DIR, DATA_DIR, WORKSPACE_DIR, REPORTS_DIR } from './paths.js';
+import { findModuleFile, ROOT, WEB_DIR, DATA_DIR, WORKSPACE_DIR, REPORTS_DIR } from './paths.js';
 import { db, getSettings, putSettings, restoreBackup, BACKUP_TABLES, cacheStats, cacheClear } from './db.js';
 import * as market from './market.js';
 import * as kap from './kap.js';
@@ -477,7 +477,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname.startsWith('/vendor/')) {
       const rel = VENDOR[pathname.slice(8)];
-      return rel ? serveFile(res, path.join(ROOT, 'node_modules', rel), {}, req) : send(res, 404, 'Bulunamadı');
+      const f = rel && findModuleFile(rel);
+      return f ? serveFile(res, f, {}, req) : send(res, 404, 'Bulunamadı');
     }
     const file = path.resolve(WEB_DIR, '.' + (pathname === '/' ? '/index.html' : pathname));
     if (!file.startsWith(WEB_DIR)) return send(res, 403, 'Yasak');
@@ -499,6 +500,8 @@ const wss = new WebSocketServer({
     cb(true);
   },
 });
+// Port hatası http sunucusunda ele alınır (listenWithRetry); WebSocketServer'ın yeniden yaydığı kopya süreci çökertmesin.
+wss.on('error', () => {});
 const wsLog = []; // son 50 mesaj (Ayarlar > Mesaj Logu)
 
 function logWs(dir, msg) {
@@ -659,11 +662,12 @@ const reportServer = http.createServer((req, res) => {
 });
 // Yeniden başlatmada eski süreç portu bırakana kadar bekle
 function listenWithRetry(srv, port, cb, tries = 40) {
+  if (cb) srv.once('listening', cb); // geri çağrı bir kez eklenir (her denemede eklemek dinleyici sızıntısı uyarısı verir)
   srv.once('error', (e) => {
-    if (e.code === 'EADDRINUSE' && tries > 0) setTimeout(() => listenWithRetry(srv, port, cb, tries - 1), 500);
-    else { console.error(`Port ${port} kullanılamıyor:`, e.message); process.exit(1); }
+    if (e.code === 'EADDRINUSE' && tries > 0) setTimeout(() => listenWithRetry(srv, port, null, tries - 1), 500);
+    else { console.error(`Port ${port} kullanılamıyor (kmy terminal zaten açık olabilir):`, e.message); process.exit(1); }
   });
-  srv.listen(port, HOST, cb);
+  srv.listen(port, HOST);
 }
 gw.tokenInfo(); // ilk çalıştırmada data/gateway.json oluşur
 if (gw.isDaemon()) gw.trimLog();
