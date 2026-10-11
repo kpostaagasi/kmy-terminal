@@ -1,6 +1,6 @@
 # kmy terminal
 
-Açık kaynak (lisans seçimi beklemede), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
+Açık kaynak (AGPL-3.0), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
 
 ## Hızlı başlangıç
 
