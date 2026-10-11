@@ -142,5 +142,5 @@ eq('THYAO puanı tam kod 3', trScore('THYAO', 'Türk Hava Yolları', 'THYAO'), 3
 
 db.close();
 console.log(`\n${fail === 0 ? 'TAMAMI GEÇTİ' : 'BAŞARISIZ'}: ${pass} geçti, ${fail} kaldı`);
-fs.rmSync(dir, { recursive: true, force: true });
+try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows: SQLite dosyası hâlâ açık (EBUSY); geçici dizin kalır */ }
 process.exit(fail === 0 ? 0 : 1);

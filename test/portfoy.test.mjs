@@ -150,5 +150,5 @@ try { const L2 = pf.computeLedger(); oldOk = L2.totals.tax >= 700 && pf.taxRepor
 assert('Eski şema satırı (tax/other_fee sütunu yok) okunuyor', oldOk && oldRow.tax === 0 && oldRow.other_fee === 0, `tax=${oldRow.tax} other_fee=${oldRow.other_fee} ${oldErr}`);
 
 console.log(`\n${pass}/${pass + fail} kontrol geçti`);
-fs.rmSync(dir, { recursive: true, force: true });
+try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows: SQLite dosyası hâlâ açık (EBUSY); geçici dizin kalır */ }
 process.exit(fail ? 1 : 0);

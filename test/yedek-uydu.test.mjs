@@ -37,5 +37,5 @@ assert.equal(db.prepare("SELECT key FROM rebalance_targets").get().key, 'THYAO')
 assert.equal(db.prepare("SELECT v FROM signal_meta").get().v, '2026-10-07');
 
 db.close();
-fs.rmSync(dir, { recursive: true, force: true });
+try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows: SQLite dosyası hâlâ açık (EBUSY); geçici dizin kalır */ }
 console.log('ok yedek uydu');
