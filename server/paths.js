@@ -55,7 +55,7 @@ function moveDb(src, dst) {
 
 // Eski (depo) konumdaki borsa.db'yi uygulama dizinine taşır; hedefte zaten varsa hiçbir şey yapılmaz.
 function migrateDb(srcDir, dstDir) {
-  if (isFile(path.join(dstDir, 'borsa.db'))) return false;
+  if (isFile(path.join(dstDir, 'borsa.db')) || !isFile(path.join(srcDir, 'borsa.db'))) return false;
   if (!moveDb(path.join(srcDir, 'borsa.db'), path.join(dstDir, 'borsa.db'))) return false;
   // Erişim anahtarı da birlikte taşınır (yoksa hedefte yenisi üretilir)
   const tok = path.join(srcDir, 'gateway.json');
@@ -77,6 +77,11 @@ function resolveDir(env, name) {
   }
   if (name === 'data') {
     if (migrateDb(repo, app)) return { dir: app, why: 'uygulama dizini (veri taşındı)' };
+    // Paket kurulumu (npx/npm i -g): node_modules içi geçicidir, veri her zaman kullanıcı dizininde tutulur.
+    if (INSTALLED) {
+      try { fs.mkdirSync(app, { recursive: true }); return { dir: app, why: 'uygulama dizini' }; }
+      catch (e) { say(`! Veri dizini oluşturulamadı (${e.message}); depodaki data/ kullanılıyor`); }
+    }
   } else if (isDir(repo)) {
     // Çalışma alanı: uygulama dizini yokken depodaki workspace/ taşınır
     try {

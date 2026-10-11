@@ -2,6 +2,7 @@
 // Tek komutla başlat (macOS / Linux / Windows): `npx github:kpostaagasi/kmy-terminal` veya `npm start`.
 // Sunucuyu ön planda çalıştırır, hazır olunca tarayıcıda açar. Ctrl+C ile kapanır.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,7 +40,9 @@ async function waitHealth(ms = 20000) {
   return false;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// npx / npm i -g bin'i sembolik bağlantıyla çağırır: gerçek yolları karşılaştır.
+const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && real(fileURLToPath(import.meta.url)) === real(process.argv[1])) {
   const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, PORT: String(PORT) } });
   const stop = () => { try { srv.kill(); } catch { /* yok */ } };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
