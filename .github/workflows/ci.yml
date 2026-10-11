@@ -63,7 +63,7 @@ jobs:
         run: npm ci --no-audit --no-fund && ./scripts/build-dmg.sh
       - name: Linux AppImage (imzasız)
         if: matrix.target == 'appimage'
-        run: sudo apt-get update && sudo apt-get install -y libfuse2 && ./scripts/build-appimage.sh
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 file && ./scripts/build-appimage.sh
       - name: Windows kurulum .exe (imzasız, NSIS)
         if: matrix.target == 'exe'
         shell: pwsh
