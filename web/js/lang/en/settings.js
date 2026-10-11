@@ -2,6 +2,12 @@
 const n = (v, one, many) => `${v.n} ${v.n === 1 ? one : many}`;
 
 export default {
+  'deneysel/gecikmeli': 'experimental/delayed',
+  'resmî değil': 'unofficial',
+  'anlık': 'real-time',
+  'kamu': 'public',
+  'Kaynak seçimi': 'Source selection',
+  'Kapalı kaynaktan fiyat alınmaz; o semboller boş görünür.': 'Disabled sources are not queried; those symbols show empty.',
   // ── Veri sağlığı rozeti ──
   'VERİ': 'DATA',
   'denetlenmedi': 'not audited',

@@ -220,6 +220,9 @@ function drawFeed() {
 // konuşulan 20 sembolün fırsat listesini döner.
 let consSort = 'date', consDir = -1, consData = null;
 const RATE_PILL = { AL: 'up', ALDIR: 'up', TUT: '', SAT: 'down' };
+// Kurum görüşü etiketi: AL/SAT yerine hedefe göre artır/azalt dili.
+const RATE_LABEL = { AL: 'Artır', ALDIR: 'Artır', TUT: 'Tut', SAT: 'Azalt' };
+const rateLabel = (r) => t(RATE_LABEL[r] || r);
 const ageDays = (d) => Math.max(0, Math.round((Date.now() - new Date(`${d}T12:00:00`).getTime()) / 86400_000));
 const freshTag = (d) => { const n = ageDays(d); return `<span class="pill ${n <= 30 ? 'acc' : n <= 90 ? '' : 'down'}" title="${t('Güncellik: {n} gün önce', { n })}">${n}g</span>`; };
 const th = (k, label, cls = '') => `<th class="sortable ${cls}" data-cs="${k}">${esc(label)}${consSort === k ? (consDir < 0 ? ' ▾' : ' ▴') : ''}</th>`;
@@ -246,12 +249,12 @@ function drawConsensus() {
   el.innerHTML = `<div class="cons-sum">
       <div><span class="l">${t('Medyan hedef')}</span><span class="v">${s.median != null ? `${price(s.median)} ₺` : '—'}</span></div>
       <div><span class="l">${t('Mevcut fiyat')}</span><span class="v">${d.price != null ? `${price(d.price)} ₺` : '—'}</span></div>
-      <div><span class="l">${t('AL / TUT / SAT')}</span><span class="v">${s.al || 0} / ${(s.brokers || 0) - (s.al || 0) - (s.sat || 0)} / ${s.sat || 0}</span></div>
+      <div><span class="l">${t('Artır / Tut / Azalt')}</span><span class="v">${s.al || 0} / ${(s.brokers || 0) - (s.al || 0) - (s.sat || 0)} / ${s.sat || 0}</span></div>
       <div><span class="l">${t('Kurum')}</span><span class="v">${s.brokers || 0}</span></div>
       <div><span class="l">${t('Tarih aralığı')}</span><span class="v" style="font-size:11px;white-space:normal">${esc(dateTR(s.oldest))} – ${esc(dateTR(s.newest))}</span></div>
     </div>
     <div class="table-wrap"><table class="t cons-t"><thead><tr>${th('broker', t('Kurum'))}${th('date', t('Tarih'))}${th('target', t('Hedef'), 'r')}${th('rating', t('Tavsiye'))}${th('upside', t('Potansiyel'), 'r')}<th>${t('Güncellik')}</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="click" data-b="${esc(r.brokerKey || '')}" data-s="${esc(d.symbol)}"><td>${esc(r.broker)}</td><td class="mono">${esc(dateTR(r.report_date))}</td><td class="r">${r.target != null ? price(r.target) : '—'}</td><td>${r.rating ? `<span class="pill ${RATE_PILL[r.rating] || ''}">${esc(r.rating)}</span>` : '—'}</td><td class="r ${r.upside > 0 ? 'up' : r.upside < 0 ? 'down' : ''}">${r.upside != null ? pct(r.upside) : '—'}</td><td>${freshTag(r.report_date)}</td></tr>`).join('')}
+    ${rows.map((r) => `<tr class="click" data-b="${esc(r.brokerKey || '')}" data-s="${esc(d.symbol)}"><td>${esc(r.broker)}</td><td class="mono">${esc(dateTR(r.report_date))}</td><td class="r">${r.target != null ? price(r.target) : '—'}</td><td>${r.rating ? `<span class="pill ${RATE_PILL[r.rating] || ''}">${esc(rateLabel(r.rating))}</span>` : '—'}</td><td class="r ${r.upside > 0 ? 'up' : r.upside < 0 ? 'down' : ''}">${r.upside != null ? pct(r.upside) : '—'}</td><td>${freshTag(r.report_date)}</td></tr>`).join('')}
     </tbody></table></div>
     <div class="dim" style="font-size:11px;padding:8px">${t('Kurum satırına tıkla: o kurumun raporlarına filtrelenmiş akış açılır.')}</div>`;
   bindCons();
@@ -297,16 +300,13 @@ function showFeed(id) {
   if (!x) return;
   feedSel = id;
   $$('.feed-item', root).forEach((el) => el.classList.toggle('sel', el.dataset.id === id));
-  const src = `/api/research/file?id=${encodeURIComponent(id)}`;
-  const web = x.access === 'web';
+  // Kurum raporları yalnız başlık + kaynağa bağlantı olarak gösterilir; içerik/özet kopyalanmaz.
+  const link = x.url || x.page || null;
   $('#rView').innerHTML = `<div class="panel-head" style="gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title)} <span class="dim">· ${esc(x.broker)} · ${dateTR(x.date)}</span></span><div class="head-actions">
-      <button class="ghost" id="fAsk">${t('Analiz et')}</button>${web ? '' : `<a class="ghost" href="${esc(src)}" download>${t('İndir')}</a><button class="ghost" id="fSave" title="${t('Arşive kaydet')}">${t('Kaydet')}</button>`}<a class="ghost" href="${esc(web ? x.page : src)}" target="_blank" rel="noopener">${web ? t('Kaynakta aç') : t('Yeni sekmede aç')}</a><button class="ghost" data-close-pdf>${t('Kapat')}</button></div></div>
-    ${x.summary ? `<div class="feed-sum">${x.symbols.length ? `<b class="mono">${esc(x.symbols.join(', '))}</b> · ` : ''}${esc(x.summary)}</div>` : ''}
-    ${web ? `<div class="empty" style="margin:auto">${t('Bu kurum raporlarını web yazısı olarak yayımlıyor. "Kaynakta aç" ile okuyabilir ya da asistana analiz ettirebilirsiniz.')}</div>` : `<iframe src="${src}" title="${esc(x.title)}"></iframe>`}`;
+      <button class="ghost" id="fAsk">${t('Analiz et')}</button>${link ? `<a class="ghost" href="${esc(link)}" target="_blank" rel="noopener">${t('Kaynakta aç')}</a>` : ''}<button class="ghost" data-close-pdf>${t('Kapat')}</button></div></div>
+    <div class="empty" style="margin:auto">${x.symbols.length ? `<b class="mono">${esc(x.symbols.join(', '))}</b><br>` : ''}${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(x.title)}</a><br>` : ''}${t('Rapor içeriği kurumun kendi sayfasında yayımlanır. Okumak için "Kaynakta aç"ı kullanın.')}</div>`;
   openPdfTab();
   $('#fAsk').onclick = () => askFeed(x);
-  const sv = $('#fSave');
-  if (sv) sv.onclick = async () => { sv.disabled = true; try { const r = await api('/research/save', { method: 'POST', body: { id } }); toast(t('Arşive kaydedildi: {name}', { name: r.name }), 'ok'); x.saved = r.name; } catch (e) { toast(tx(e.message), 'err'); } sv.disabled = false; };
 }
 function askFeed(x) {
   if (!x) return;
