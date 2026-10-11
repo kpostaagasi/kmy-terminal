@@ -141,5 +141,5 @@ check('temizleme kayıtları siler', () => {
 
 console.log(`\n${pass}/${pass + fail} kontrol geçti`);
 db.close();
-fs.rmSync(dir, { recursive: true, force: true });
+try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows: SQLite dosyası hâlâ açık (EBUSY); geçici dizin kalır */ }
 process.exit(fail ? 1 : 0);
