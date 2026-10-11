@@ -28,7 +28,8 @@ KMY_BUNDLE=1 KMY_APP_OUT="$OUT" "$ROOT/scripts/build-mac.sh" >/dev/null
 
 say "Sunucu, arayüz ve çalışma alanı şablonu kopyalanıyor…"
 mkdir -p "$RES/app"
-rsync -a --exclude '.DS_Store' "$ROOT/server" "$ROOT/web" "$ROOT/bin" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/CHANGELOG.md" "$ROOT/README.md" "$RES/app/"
+rsync -a --exclude '.DS_Store' "$ROOT/server" "$ROOT/web" "$ROOT/bin" "$ROOT/LICENSE" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/CHANGELOG.md" "$ROOT/README.md" "$RES/app/"
+mkdir -p "$RES/app/scripts" && cp "$ROOT/scripts/postinstall.mjs" "$RES/app/scripts/"
 # Şablon: yalnız ürün içeriği (talimatlar, beceriler, alt ajanlar, bilgi notları, betikler, boş kullanıcı profili)
 rsync -a --exclude '.DS_Store' --exclude 'reports' --exclude 'hafiza' --exclude 'belgeler' --exclude 'uploads' --exclude '.omp' \
   --exclude 'tahminler.md' --exclude 'AGENTS.md' --exclude 'settings.local.json' --exclude '__pycache__' "$ROOT/workspace/" "$RES/app/workspace-template/"
