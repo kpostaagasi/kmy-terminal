@@ -1,5 +1,9 @@
 # Sürüm Notları
 
+## 0.1.0-beta — 12 Ekim 2026 (ilk genel beta)
+
+Genel beta numaralandırması 0.1.0'dan başlar; içerik 0.23.0 (iç sürüm) + beta hazırlıkları (onay, sihirbaz, artır/azalt dili, rapor bağlantıları, veri kaynağı katmanı, çapraz platform). Ayrıntı: GitHub Releases.
+
 ## 0.23.0 — 7 Ekim 2026 (takvim, zamanlanmış denetim, komisyon)
 
 ### Yeni
