@@ -47,7 +47,7 @@ private let bridgeBody = """
     const sel = String(getSelection() || '').trim();
     const link = el && el.closest && el.closest('a[href]');
     const href = link ? String(link.href || '') : '';
-    if (sel || href) post({ type: 'contextmenu', x: e.clientX, y: e.clientY, hasSelection: !!sel, href });
+    if (sel || href) post({ type: 'contextmenu', x: e.clientX, y: e.clientY, text: sel, href });
   });
   // Bildirim izni gerçek sistem değerini Swift'ten alır; önceden hep 'granted' dönüyordu
   let perm = 'default';
@@ -324,9 +324,10 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   /// Sağ tık: seçim varsa Kopyala, bağlantı varsa Bağlantıyı Kopyala / Tarayıcıda Aç. Yeniden yükle ve incele yok.
   private func showContextMenu(_ m: [String: Any]) {
     let menu = NSMenu()
-    if m["hasSelection"] as? Bool == true {
-      let copy = NSMenuItem(title: L("Kopyala", "Copy"), action: #selector(WKWebView.copy(_:)), keyEquivalent: "")
-      copy.target = webView
+    if let text = m["text"] as? String, !text.isEmpty {
+      let copy = NSMenuItem(title: L("Kopyala", "Copy"), action: #selector(copyContextLink(_:)), keyEquivalent: "")
+      copy.target = self
+      copy.representedObject = text
       menu.addItem(copy)
     }
     let href = m["href"] as? String ?? ""
