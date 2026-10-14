@@ -356,3 +356,4 @@ on('reports:refresh', () => setTimeout(load, 1500));
 on('rtab:shown', (tab) => { if (tab === 'reports') load(); });
 on('report:show', async (name) => { selected = name; localSet('report', name); if (kind === 'akis') { kind = 'all'; localSet('reportKind', kind); } await load(); show(name); });
 on('ready', load);
+on('app:refresh', load);

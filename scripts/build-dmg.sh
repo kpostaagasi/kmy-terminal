@@ -2,7 +2,7 @@
 # kmy terminal: kuruluma hazır DMG üretir → dist/kmy-terminal-<sürüm>-arm64.dmg
 # Paket kendi Node'unu, sunucuyu, arayüzü ve bağımlılıkları taşır; veriler kullanıcının
 # ~/Library/Application Support/kmy terminal klasöründe tutulur. Claude Code gömülü DEĞİLDİR:
-# ajan için kullanıcının Mac'inde `claude` kurulu olmalıdır (codex / omp isteğe bağlı).
+# ajan için kullanıcının Mac'inde `claude` kurulu olmalıdır (codex isteğe bağlı).
 # Kullanım: ./scripts/build-dmg.sh      (NODE_BIN=/yol/node ile başka bir Node ikilisi seçilebilir)
 set -euo pipefail
 
@@ -88,7 +88,7 @@ GEREKSİNİMLER
   • Yapay zekâ ajanı için Claude Code kurulu olmalı: https://claude.com/download
     (veya Terminal'de: curl -fsSL https://claude.ai/install.sh | bash). Kurduktan sonra Terminal'de
     "claude" yazıp Claude hesabınızla bir kez giriş yapın.
-  • İsteğe bağlı: ChatGPT/Codex (codex) veya oh-my-pi (omp) ajanları.
+  • İsteğe bağlı: ChatGPT/Codex (codex).
   • Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.
 
 VERİLER

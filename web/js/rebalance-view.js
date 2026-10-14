@@ -11,9 +11,10 @@ const sgn = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${num(x, 1)}`);
 const pctVal = parseTr;
 
 function fresh() { // sunucudaki hedeflerden düzenlenebilir kopya (değerler metin)
+  const targets = res?.targets || {};
   draft = {
-    cls: Object.fromEntries(Object.entries(res.targets.classTargets).map(([k, v]) => [k, String(v)])),
-    sym: Object.entries(res.targets.symbolTargets).map(([s, e]) => ({ s, cls: e.cls, pct: String(e.pct) })),
+    cls: Object.fromEntries(Object.entries(targets.classTargets || {}).map(([k, v]) => [k, String(v)])),
+    sym: Object.entries(targets.symbolTargets || {}).map(([s, e]) => ({ s, cls: e.cls, pct: String(e.pct) })),
   };
 }
 const classList = () => Object.keys(res.classLabels).concat(res.cashTracking ? ['cash'] : []);
@@ -67,7 +68,7 @@ function resultCard() {
 
 function paint() {
   if (!active()) return;
-  if (!res) { host.innerHTML = err ? `<div class="card"><div class="kt-note down">${esc(err)}</div></div>` : '<div class="skeleton" style="height:200px"></div>'; return; }
+  if (!res || !draft) { host.innerHTML = err ? `<div class="card"><div class="kt-note down">${esc(err)}</div></div>` : '<div class="skeleton" style="height:200px"></div>'; return; }
   host.innerHTML = `${err ? `<div class="kt-note down">${esc(err)}</div>` : ''}
     <div class="card"><div class="row"><label class="dim" for="rbExtra">${t('Ek nakit (TL)')}</label><input id="rbExtra" class="rb-in" style="width:130px" inputmode="decimal" value="${esc(extra)}" placeholder="0">
       <label class="dim" for="rbRate">${t('Komisyon %')}</label><input id="rbRate" class="rb-in" style="width:80px" inputmode="decimal" value="${esc(res.rate ?? '')}" placeholder="0,1">

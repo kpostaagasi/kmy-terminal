@@ -325,7 +325,7 @@ const EN = {
   'En az bir gün seçin': 'Select at least one day',
   'Görev bulunamadı': 'Task not found',
 
-  // ── Ajan / sohbet (server/agent.js, server/omp-runner.js) ──
+  // ── Ajan / sohbet (server/agent.js) ──
   'Sor (her riskli araç için onay)': 'Ask (approve each risky tool)',
   'Dosya düzenlemelerini otomatik onayla': 'Auto-approve file edits',
   'Sadece plan (dosya değiştirmez)': 'Plan only (no file changes)',
@@ -351,8 +351,7 @@ const EN = {
   'Oturum sona erdi': 'Session ended',
   'Codex hatası': 'Codex error',
   'Model hatası': 'Model error',
-  'omp istemi reddetti': 'omp rejected the prompt',
-  'omp oturumu bulunamadı; önceki konuşma özetiyle yeni oturum açıldı.': 'omp session not found; started a new session with a summary of the previous conversation.',
+
   'Özetlenecek metin yok': 'Nothing to summarise',
   'Özet alınamadı': 'Could not generate a summary',
   "Claude hesabına giriş yapılmamış. Ayarlar › Bağlantı › Sağlayıcılar bölümündeki \"Claude ile giriş\" düğmesini kullanın (veya Terminal'de `claude` yazıp /login ile giriş yapın), ardından mesajı yeniden gönderin.":
@@ -365,8 +364,7 @@ const EN = {
     'Claude Code is out of date. Run `claude update` in Terminal, then try again.',
   'Codex CLI bulunamadı. Kurun (npm install -g @openai/codex), ardından `codex login` ile giriş yapın.':
     'Codex CLI not found. Install it (npm install -g @openai/codex), then sign in with `codex login`.',
-  'omp CLI bulunamadı. Kurun (brew install omp), ardından omp içinde /login ile giriş yapın.':
-    'omp CLI not found. Install it (brew install omp), then sign in with /login inside omp.',
+
 
   // ── HTTP API / sunucu (server/index.js, server/store.js, server/memory.js, server/terminal.js) ──
   'Bulunamadı': 'Not found',
@@ -432,7 +430,7 @@ export const patterns = [
   [/^API hatası; yeniden deneniyor (.*)…$/, 'API error; retrying $1…'],
   [/^Claude kullanım sınırına ulaşıldı: ([\s\S]*)$/, 'Claude usage limit reached: $1'],
   [/^Codex (\S+) koduyla çıktı\.\s*([\s\S]*)$/, (m, c, rest) => `Codex exited with code ${c}.${rest ? ` ${rest}` : ''}`],
-  [/^omp (\S+) koduyla çıktı\.\s*([\s\S]*)$/, (m, c, rest) => `omp exited with code ${c}.${rest ? ` ${rest}` : ''}`],
+
   [/^⏰ (.+)$/, (m, name) => `⏰ ${EN[name] || name}`],
   [/^Bilinmeyen mesaj: (.+)$/, 'Unknown message: $1'],
   [/^Bilinmeyen araç: (.+)$/, 'Unknown tool: $1'],

@@ -107,9 +107,9 @@ function toolSummary(i) {
   return i.command || i.symbol || (Array.isArray(i.symbols) ? i.symbols.join(', ') : i.symbols) || i.query || i.url || i.file_path || i.pattern || i.title || i.description || i.skill || i.id || i.prompt?.slice(0, 80) || '';
 }
 
-// Sağlayıcı adları: Claude (API maliyeti), Codex ve omp (abonelik / kendi hesabı)
-const provName = (p) => state.meta?.providers?.[p] || ({ codex: 'Codex', omp: 'oh-my-pi' }[p] || 'Claude');
-const provTag = (p) => (p === 'codex' ? '[Codex] ' : p === 'omp' ? '[omp] ' : '');
+// Sağlayıcı adları: Claude (API maliyeti), Codex (abonelik)
+const provName = (p) => state.meta?.providers?.[p] || (p === 'codex' ? 'Codex' : 'Claude');
+const provTag = (p) => (p === 'codex' ? '[Codex] ' : '');
 const paid = (p) => !p || p === 'claude';
 // Oturum adı: zamanlanmış görevlerin adları (⏰ …) sunucudan gelir ve çevrilir
 const sessTitle = (x) => (!x?.title ? t('Oturum') : x.title.startsWith('⏰') ? tx(x.title) : x.title);
@@ -243,7 +243,7 @@ function sessionsModal() {
       </div>`).join('')}`).join('')
       : `<div class="empty">${t(sessions.length ? 'Sonuç bulunamadı' : 'Henüz oturum yok')}</div>`;
     const claude = sessions.reduce((a, x) => a + (paid(x.provider) ? x.cost_usd || 0 : 0), 0);
-    $('#sessF', m.body).textContent = t('{n} oturum · Claude toplam maliyeti {cost} · Codex ve oh-my-pi oturumları aboneliğe dahil', { n: sessions.length, cost: `$${num(claude, 2)}` });
+    $('#sessF', m.body).textContent = t('{n} oturum · Claude toplam maliyeti {cost} · Codex oturumları aboneliğe dahil', { n: sessions.length, cost: `$${num(claude, 2)}` });
     $$('.ss-row', m.body).forEach((r) => {
       r.onclick = (e) => { if (e.target.closest('.ss-acts')) return; openSession(r.dataset.o); m.close(); };
       r.onkeydown = (e) => { if (e.key === 'Enter') { openSession(r.dataset.o); m.close(); } };
@@ -930,7 +930,8 @@ function finishRun(sid, ti) {
   const card = add(h(`<div class="msg notice"><button class="ghost xs" data-fin="${esc(sid)}">✓ ${esc(msg)} · ${esc(bits)}${head ? ` — ${esc(head)}…` : ''}</button></div>`));
   const open = () => { card.remove(); focusSession(sid); };
   $('[data-fin]', card).onclick = open;
-  notify(msg, [head, bits].filter(Boolean).join(' — '), [
+  const extra = [head, bits].filter(Boolean).join(' — ');
+  notify(extra ? `${msg} — ${extra}` : msg, [
     { label: t('Sonucu aç'), run: open },
     { label: t('Sessize al'), run: () => card.remove() },
   ], sessNameOf(sid));
@@ -1103,9 +1104,13 @@ function buildContext() {
   return parts.join('\n') || null;
 }
 
+let sending = false;
 async function send(text, { context } = {}) {
   text = (text ?? input.value).trim();
   if (!text && !attachments.length) return;
+  if (sending) return;
+  sending = true;
+  try {
   // Yerel komutlar (/durdur, /status, /help…) ajan çalışırken de kullanılabilir; istem gönderen komutlar beklemeli
   // Günlük bütçe dolduysa ve uygulama açıksa yeni tur gönderilmez
   if (!turnOffBudget && state.settings.costLimitEnforce && budgetOver()) { toast(t('Günlük bütçe doldu; yeni tur gönderilemiyor. Limiti değiştirin veya uyarı moduna alın.'), 'err', 9000); return; }
@@ -1133,6 +1138,9 @@ async function send(text, { context } = {}) {
   } catch (e) {
     running = false; hideWorking();
     renderEvent({ type: 'error', message: e.message });
+  }
+  } finally {
+    sending = false;
   }
 }
 
@@ -1219,6 +1227,7 @@ async function handleSlash(text) {
       { const sel = $('#optPerm'); if (sel) sel.value = 'plan'; }
       markYolo();
       toast(t('İzin modu: {mode}', { mode: tx(state.meta?.permissionModes?.plan || 'plan') }));
+      api('/settings', { method: 'PUT', body: { permissionMode: 'plan' } }).catch((e) => toast(tx(e.message), 'err'));
       return true;
     case '/compact': case '/context':
       if (!current) { toast(t('Önce bir oturum başlatın'), 'err'); return true; }
@@ -1238,7 +1247,7 @@ async function handleSlash(text) {
     case '/doctor': {
       const hl = await api('/health').catch(() => null);
       const conn = await api('/agent/connections').catch(() => null);
-      systemCard(hl ? `<b>${t('Sağlık kontrolü')}</b><br>${esc(t('Sunucu: ✓ v{version} · Node {node} · {min} dakikadır çalışıyor', { version: hl.version, node: hl.node, min: Math.round(hl.uptimeSec / 60) }))}<br>Claude CLI: ${found(hl.claudeCli)}<br>Codex CLI: ${found(hl.codexCli)}<br>omp CLI: ${found(hl.ompCli)}<br>Terminal: ${hl.terminal ? '✓' : '✗'} · BIST: ${esc(tx(hl.market.label))}${conn?.mcp?.length ? `<br>MCP: ${conn.mcp.map((m) => `${esc(m.name)} ${m.status === 'connected' ? '✓' : m.status === 'failed' ? '✗' : '…'}`).join(' · ')}` : `<br><span class="dim">${t('MCP bağlantıları ilk Claude yanıtından sonra listelenir (Ayarlar › Bağlantılar).')}</span>`}` : `<span class="down">${t('Sunucuya ulaşılamadı')}</span>`);
+      systemCard(hl ? `<b>${t('Sağlık kontrolü')}</b><br>${esc(t('Sunucu: ✓ v{version} · Node {node} · {min} dakikadır çalışıyor', { version: hl.version, node: hl.node, min: Math.round(hl.uptimeSec / 60) }))}<br>Claude CLI: ${found(hl.claudeCli)}<br>Codex CLI: ${found(hl.codexCli)}<br>Terminal: ${hl.terminal ? '✓' : '✗'} · BIST: ${esc(tx(hl.market.label))}${conn?.mcp?.length ? `<br>MCP: ${conn.mcp.map((m) => `${esc(m.name)} ${m.status === 'connected' ? '✓' : m.status === 'failed' ? '✗' : '…'}`).join(' · ')}` : `<br><span class="dim">${t('MCP bağlantıları ilk Claude yanıtından sonra listelenir (Ayarlar › Bağlantılar).')}</span>`}` : `<span class="down">${t('Sunucuya ulaşılamadı')}</span>`);
       return true;
     }
     case '/kap': {
@@ -1371,13 +1380,13 @@ function fillModels() {
     return `<option value="${p}|${esc(x.id)}" data-prov="${p}" data-id="${esc(x.id)}" title="${esc(x.id)}"${off(p)}${p === prov && (x.id === want || want.startsWith(x.id)) ? ' selected' : ''}>${esc(label)}</option>`;
   };
   const grp = (label, list, p) => (list.length ? `<optgroup label="${esc(label)}">${list.map((x) => opt(p, x)).join('')}</optgroup>` : '');
-  // Seçili model sağlayıcının listesinde yoksa (omp yüzlerce modeli eler) başa konur: 0.13 regresyonu
+  // Seçili model sağlayıcının listesinde yoksa başa konur: 0.13 regresyonu
   const known = (id) => provs.some((p) => base(p).some((x) => x.id === id || id.startsWith(x.id)));
   const picked = want && !known(want) ? grp(t('Seçili'), [{ id: want, label: want }], prov) : '';
   const body = provs.map((p) => {
     const list = base(p);
     if (!list.length) return '';
-    // omp modelleri sağlayıcı önekinden gelen alt gruplara ayrılır (openai-codex → OpenAI)
+    // Modeller group alanına göre alt gruplara ayrılır (Codex bunu kullanır)
     const sub = new Map();
     for (const x of list) { const k = x.group || ''; if (!sub.has(k)) sub.set(k, []); sub.get(k).push(x); }
     if (sub.size < 2) return grp(provName(p), list, p);
@@ -1391,12 +1400,12 @@ function fillModels() {
   syncEffort();
   requestAnimationFrame(fitSelects);
 }
-// Düşünme seviyesi: Claude'da sabit liste, omp modellerinde modelin kendi desteklediği seviyeler.
+// Düşünme seviyesi: Claude'da sabit liste, diğer sağlayıcılarda modelin kendi seviyeleri.
 function syncEffort() {
   const sel = $('#optEffort'), box = sel.parentElement;
   const p = pickModel().provider;
   // pickModel() varsayılan modelde boş id döner ("sağlayıcının kendi varsayılanını kullan" kuralı,
-  // Claude'da doğru). omp'de her model adıyla seçilir; boş id ile arama bulamazdı.
+  // Claude'da doğru). Seçili option kimliğiyle arama yine de bulur.
   const selId = pickModel().model || $('#optModel').selectedOptions[0]?.dataset.id || '';
   const model = (state.meta?.providerModels?.[p] || []).find((x) => x.id === baseId(selId));
   const list = p === 'claude' ? (state.meta?.efforts || []) : (model?.thinking || null);
@@ -1409,7 +1418,7 @@ function syncEffort() {
 }
 function syncProvider() { fillModels(); updateStats(); }
 // Açık oturumun sağlayıcısı sabittir; başka bir sağlayıcı seçilirse mesaj sessizce eski
-// sağlayıcıya gider. Kullanıcıyı bilgilendir, yoksa "omp seçtim" deyip Claude'a yazdırır.
+// sağlayıcıya gider. Kullanıcıyı bilgilendir.
 let warnedProvider = '';
 $('#optModel').onchange = () => {
   const p = pickModel().provider;
@@ -1497,7 +1506,7 @@ function syncPerm() {
   const cur = chatPermMode();
   sel.innerHTML = Object.entries(modes).map(([k, v]) => `<option value="${esc(k)}"${k === cur ? ' selected' : ''}>${esc(tx(v))}</option>`).join('');
 }
-$('#optPerm').onchange = () => { selectChatPerm($('#optPerm').value); markYolo(); fitSelects(); };
+$('#optPerm').onchange = () => { const v = $('#optPerm').value; selectChatPerm(v); markYolo(); fitSelects(); api('/settings', { method: 'PUT', body: { permissionMode: v } }).catch((e) => toast(tx(e.message), 'err')); };
 $('#cmYolo').onclick = async () => {
   if (!(await confirmBox(t('Yolo modu kapatılsın mı? Ajan bundan sonra araç kullanmadan önce onay isteyecek.'), { ok: t('Yolo modunu kapat') }))) return;
   selectChatPerm('default');
@@ -1509,6 +1518,7 @@ function fillOptions() {
   const m = state.meta, s = state.settings;
   if (!m) return;
   syncProvider();
+  selectChatPerm(s.permissionMode || 'default');
   syncEffort();
   syncPerm();
   turnOffBudget = false; // ayar değişti: "bugün için kapat" sıfırlanır

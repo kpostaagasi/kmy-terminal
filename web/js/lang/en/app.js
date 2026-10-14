@@ -94,6 +94,7 @@ export default {
   'BIST taraması: F/K ≤ 8': 'BIST scan: P/E ≤ 8',
   'Günün piyasa özeti': 'Market summary for today',
   'Portföy risk sekmesi': 'Portfolio risk tab',
+  'KAP taraması': 'KAP scan',
   'Tema değiştir': 'Toggle theme',
   'Sekme: Sohbet': 'Tab: Chat',
   'Sekme: Piyasa': 'Tab: Market',

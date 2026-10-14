@@ -13,6 +13,7 @@ export default {
   'Model': 'Model',
   'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)': "Model (a session's provider is fixed; start a new session to switch)",
   'Düşünme seviyesi (/think)': 'Thinking level (/think)',
+  'Düşünme seviyesi': 'Thinking level',
   'İzin kipini plana al (dosya değiştirmez)': 'Switch permission mode to plan (does not edit files)',
   '↵ gönder · / komutlar': '↵ send · / commands',
   'Gönder (Enter)': 'Send (Enter)',
@@ -55,8 +56,8 @@ export default {
   'Sil': 'Delete',
   'Sonuç bulunamadı': 'No results',
   'Henüz oturum yok': 'No sessions yet',
-  '{n} oturum · Claude toplam maliyeti {cost} · Codex ve oh-my-pi oturumları aboneliğe dahil': (v) =>
-    `${pl(v.n, 'session', 'sessions')} · Claude total cost ${v.cost} · Codex and oh-my-pi sessions are covered by your subscription`,
+  '{n} oturum · Claude toplam maliyeti {cost} · Codex oturumları aboneliğe dahil': (v) =>
+    `${pl(v.n, 'session', 'sessions')} · Claude total cost ${v.cost} · Codex sessions are covered by your subscription`,
   'Çalışan oturum silinemez; önce durdurun': "A running session can't be deleted; stop it first",
   '"{title}" silinsin mi? Bu işlem geri alınamaz.': 'Delete "{title}"? This can\'t be undone.',
   'Oturumu yeniden adlandır': 'Rename session',

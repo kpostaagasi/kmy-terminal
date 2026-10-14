@@ -214,7 +214,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       item(L("Uzaklaştır", "Zoom Out"), #selector(zoomOut), "-"),
       item(L("Gerçek Boyut", "Actual Size"), #selector(zoomReset), "0"),
       .separator(),
-      item(L("Yeniden Yükle", "Reload"), #selector(reload), "r"),
       fr(L("Tam Ekran", "Enter Full Screen"), #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
     ])
     _ = menu("Gateway", [
@@ -249,7 +248,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   @objc private func viewPortfolio() { focus(); main.js("window.borsaApp?.view('portfolio')") }
   @objc private func toggleRight() { main.js("window.borsaApp?.toggleRight()") }
   @objc private func help() { focus(); main.js("window.borsaApp?.settings('yardim')") }
-  @objc private func reload() { main.webView.reload() }
   @objc private func zoomIn() { main.webView.pageZoom = min(main.webView.pageZoom + 0.1, 2) }
   @objc private func zoomOut() { main.webView.pageZoom = max(main.webView.pageZoom - 0.1, 0.6) }
   @objc private func zoomReset() { main.webView.pageZoom = 1 }

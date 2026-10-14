@@ -11,7 +11,7 @@ export default {
   'Hoş geldiniz — kmy terminal beta': 'Welcome — kmy terminal beta',
   'kmy terminal; BIST, döviz/altın ve TEFAS fonlarını tek ekranda izleyen, verisini yalnız bilgisayarınızda tutan bir terminaldir.': 'kmy terminal tracks BIST, FX/gold and TEFAS funds on one screen and keeps your data only on your computer.',
   'Önce izleme listenize birkaç sembol ekleyin, sonra Portföy sekmesinden pozisyonlarınızı girin.': 'Add a few symbols to your watchlist, then enter your positions in the Portfolio tab.',
-  "Analiz asistanı kendi aboneliğinizle çalışır (Claude, ChatGPT/Codex veya omp). Daha sonra Ayarlar › Asistan'dan değiştirebilirsiniz.": 'The analysis assistant runs on your own subscription (Claude, ChatGPT/Codex or omp). You can change it later in Settings › Assistant.',
+  "Analiz asistanı kendi aboneliğinizle çalışır (Claude veya ChatGPT/Codex). Daha sonra Ayarlar › Asistan'dan değiştirebilirsiniz.": 'The analysis assistant runs on your own subscription (Claude or ChatGPT/Codex). You can change it later in Settings › Assistant.',
   'Kurulu bir asistan bulunamadı; asistansız da kullanılabilir.': 'No assistant found; the app works without one.',
   "Fiyatlar gecikmeli olabilir; Yahoo kaynaklı veriler deneysel/gecikmelidir. Kaynakları Ayarlar › Veri'den seçebilirsiniz.": 'Prices may be delayed; Yahoo data is experimental/delayed. Choose sources in Settings › Data.',
   'Bu bir yatırım tavsiyesi değildir.': 'This is not investment advice.',

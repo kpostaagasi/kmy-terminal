@@ -139,7 +139,6 @@ export const DEFAULT_SETTINGS = {
   provider: 'claude',
   model: '',
   codexModel: '',
-  ompModel: '',
   effort: 'medium',
   permissionMode: 'default',
   // Yolo (bypassPermissions) bitiş damgası, ms cinsinden. 0 = süre yok (kullanıcı elle kapatır).
@@ -180,6 +179,14 @@ try {
     db.prepare(`UPDATE settings SET value = '"#ff9f0a"' WHERE key = 'accent' AND value = '"#facc15"'`).run();
     db.prepare("INSERT INTO settings(key, value) VALUES('accentMigrated', 'true')").run();
   }
+} catch { /* ayarlar tablosu yoksa sorun değil */ }
+
+// oh-my-pi kalktı. İfadeler tekrar çalışınca no-op; schedules tablosu scheduler.js açılışında oluşur, yoksa sonraki açılış yakalar.
+try { db.prepare("UPDATE chat_sessions SET provider='claude', sdk_session_id=NULL, model=NULL WHERE provider='omp'").run(); } catch { /* tablo yoksa sorun değil */ }
+try { db.prepare("UPDATE schedules SET provider='claude' WHERE provider NOT IN ('claude','codex')").run(); } catch { /* tablo henüz yok */ }
+try {
+  db.prepare("DELETE FROM settings WHERE key='ompModel'").run();
+  db.prepare("UPDATE settings SET value='\"claude\"' WHERE key='provider' AND value='\"omp\"'").run();
 } catch { /* ayarlar tablosu yoksa sorun değil */ }
 
 export function getSettings() {

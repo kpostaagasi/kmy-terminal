@@ -33,7 +33,7 @@ export function openWizard() {
     title: t('Hoş geldiniz — kmy terminal beta'),
     body: step(0, `<p>${t('kmy terminal; BIST, döviz/altın ve TEFAS fonlarını tek ekranda izleyen, verisini yalnız bilgisayarınızda tutan bir terminaldir.')}</p>
         <p>${t('Önce izleme listenize birkaç sembol ekleyin, sonra Portföy sekmesinden pozisyonlarınızı girin.')}</p>`)
-      + step(1, `<p>${t('Analiz asistanı kendi aboneliğinizle çalışır (Claude, ChatGPT/Codex veya omp). Daha sonra Ayarlar › Asistan\'dan değiştirebilirsiniz.')}</p>
+      + step(1, `<p>${t('Analiz asistanı kendi aboneliğinizle çalışır (Claude veya ChatGPT/Codex). Daha sonra Ayarlar › Asistan\'dan değiştirebilirsiniz.')}</p>
         ${provs.length ? `<select id="wizProv">${provs.map(([k, v]) => `<option value="${esc(k)}">${esc(typeof v === 'string' ? v : k)}</option>`).join('')}</select>` : `<p class="muted">${t('Kurulu bir asistan bulunamadı; asistansız da kullanılabilir.')}</p>`}`)
       + step(2, `<p>${t('Fiyatlar gecikmeli olabilir; Yahoo kaynaklı veriler deneysel/gecikmelidir. Kaynakları Ayarlar › Veri\'den seçebilirsiniz.')}</p>
         <p><b>${t('Bu bir yatırım tavsiyesi değildir.')}</b></p>

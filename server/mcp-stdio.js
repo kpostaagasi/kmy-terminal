@@ -8,7 +8,7 @@ import { toolSpecs, INSTRUCTIONS, toolResult, toolError, runTool } from './agent
 import { appPort, readToken } from './gateway.js';
 
 const BASE = process.env.BORSA_URL || `http://127.0.0.1:${appPort()}`;
-// Alt süreçler (Codex/omp/Claude) kapsamlı jetonla gelir; master anahtar hiçbir çocuk sürece geçmez.
+// Alt süreçler (Codex/Claude) kapsamlı jetonla gelir; master anahtar hiçbir çocuk sürece geçmez.
 // KMY_SCOPED_TOKEN yoksa harici istemci davranışı korunur (BORSA_GATEWAY_TOKEN veya data/gateway.json).
 const SCOPED = process.env.KMY_SCOPED_TOKEN || null;
 const MODE = process.env.KMY_PERMISSION_MODE || 'default';

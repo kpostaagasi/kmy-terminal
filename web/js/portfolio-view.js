@@ -751,3 +751,4 @@ on('quotes', () => { if (root.classList.contains('active') && ['ozet', 'varlikla
 on('view:shown', (v) => { if (v === 'portfolio') load(); });
 on('settings', () => { if (root.classList.contains('active') && tab !== 'ayarlar') render(); });
 on('ready', load);
+on('app:refresh', load);
