@@ -76,7 +76,13 @@ jobs:
           # Runner imajında NSIS olmayabilir; kurulum çıktısı görünür kalsın, makensis yolu aranarak bulunur
           function Find-Makensis { @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe", (Get-Command makensis -ErrorAction SilentlyContinue).Source) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1 }
           $mk = Find-Makensis
-          if (-not $mk) { choco install nsis -y --no-progress; if ($LASTEXITCODE -ne 0) { throw "choco install nsis başarısız ($LASTEXITCODE)" }; $mk = Find-Makensis }
+          if (-not $mk) { choco install nsis -y --no-progress; $mk = Find-Makensis }
+          # choco deposu çökükse (503) taşınabilir NSIS zip'i SourceForge'dan
+          if (-not $mk) {
+            Invoke-WebRequest -UserAgent "Wget" -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip" -OutFile "$env:RUNNER_TEMP\nsis.zip"
+            Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath "$env:RUNNER_TEMP\nsis"
+            $mk = "$env:RUNNER_TEMP\nsis\nsis-3.10\makensis.exe"
+          }
           if (-not $mk) { throw "makensis.exe bulunamadı" }
           Write-Host "makensis: $mk"
           $v = node -p "require('./package.json').version"
