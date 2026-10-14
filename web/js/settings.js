@@ -2,6 +2,7 @@
 import { state, on, api, wsCall, emit, $, $$, esc, toast, modal, confirmBox, md, dateTR, connect, debounce, sqlDate, today } from './core.js';
 import { toolLabel } from './chat.js';
 import { t, tx, locale, LANGS, systemLang } from './i18n.js';
+import { showUpdate } from './guncelleme.js';
 
 // Kenar çubuğu simgeleri (24×24, çizgi)
 const IC = {
@@ -495,7 +496,19 @@ export function openSettings(section = 'genel') {
       if (stale()) return;
       // CHANGELOG.md'nin H1'i panel başlığının ("Sürüm notları") kopyasıydı; ikinci başlık olarak atılır.
       const body = String(r.text || '').replace(/^#\s+.*(\r?\n)+/, '');
-      el.innerHTML = card(`<div class="msg assistant stg-prose">${body ? md(`> ${t('Sürüm notları Türkçe yazıldı.')}\n\n${body}`) : md(t('Sürüm notu yok'))}</div>`);
+      el.innerHTML = card(
+        row(t('Güncellemeleri denetle'), t('Açılışta GitHub’daki son sürüme bakar; yeni sürüm varsa haber verir. Hiçbir şey kendiliğinden indirilmez.'), toggle('sUpd', s.updateCheck !== false))
+        + row(t('Kurulu sürüm'), `<span id="sUpdMsg"></span>`, `<span class="mono" id="sUpdCur">—</span><button class="btn sec" id="sUpdNow">${t('Şimdi denetle')}</button>`),
+        t('Güncelleme'))
+        + card(`<div class="msg assistant stg-prose">${body ? md(`> ${t('Sürüm notları Türkçe yazıldı.')}\n\n${body}`) : md(t('Sürüm notu yok'))}</div>`);
+      const updMsg = (u) => {
+        $('#sUpdCur').textContent = u.current || '—';
+        $('#sUpdMsg').textContent = u.disabled ? t('Denetim kapalı') : u.error ? t('Denetlenemedi (çevrimdışı olabilirsiniz)') : u.available ? t('Yeni sürüm: {v}', { v: u.latest }) : t('Güncel');
+        if (u.available) showUpdate(u);
+      };
+      api('/update').then(updMsg).catch(() => {});
+      $('#sUpd').onchange = (e) => save({ updateCheck: e.target.checked });
+      $('#sUpdNow').onclick = () => { $('#sUpdMsg').textContent = t('Denetleniyor…'); api('/update?force=1').then(updMsg).catch(() => {}); };
     },
     async yardim(el) {
       const keys = (list) => list.map(([k, d]) => row(esc(d), '', k.map((x) => `<kbd>${esc(x)}</kbd>`).join(''), { sm: true })).join('');

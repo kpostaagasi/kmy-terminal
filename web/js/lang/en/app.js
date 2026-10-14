@@ -111,4 +111,10 @@ export default {
   'Yine de ekle': 'Add anyway',
   'Komutlar': 'Commands',
   'Komut': 'Command',
+  'Uygulamayı kapatıp {cmd} komutunu yeniden çalıştırın.': 'Close the app and run {cmd} again.',
+  'Proje klasöründe {cmd} çalıştırıp uygulamayı yeniden başlatın.': 'Run {cmd} in the project folder and restart the app.',
+  'Yeni sürümü indirip kurun; verileriniz korunur.': 'Download and install the new version; your data is kept.',
+  'Yeni sürüm: {v}': 'New version: {v}',
+  'kurulu: {v}': 'installed: {v}',
+  'Bu sürümü atla': 'Skip this version',
 };

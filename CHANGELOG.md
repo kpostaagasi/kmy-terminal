@@ -1,5 +1,10 @@
 # Sürüm Notları
 
+## Yayımlanmadı
+
+### Yeni
+- **Güncelleme bildirimi.** Açılışta GitHub'daki en son yayımlanan sürüme bakılır; yeni sürüm varsa sağ altta indirme bağlantısı ve kurulum biçimine göre (DMG, Windows, AppImage, npx, git) talimat çıkar. Hiçbir şey kendiliğinden indirilmez. "Bu sürümü atla" o sürümü bir daha göstermez. Ayarlar › Hakkında › Sürüm notları'ndan kapatılır veya elle denetlenir; `KMY_NO_UPDATE_CHECK=1` de kapatır.
+
 ## 0.1.0-beta — 12 Ekim 2026 (ilk genel beta)
 
 Genel beta numaralandırması 0.1.0'dan başlar; içerik 0.23.0 (iç sürüm) + beta hazırlıkları (onay, sihirbaz, artır/azalt dili, rapor bağlantıları, veri kaynağı katmanı, çapraz platform). Ayrıntı: GitHub Releases.

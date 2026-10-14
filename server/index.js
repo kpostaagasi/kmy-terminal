@@ -31,6 +31,7 @@ import * as research from './research.js';
 import * as feeds from './feeds.js';
 import * as inbox from './inbox.js';
 import * as gw from './gateway.js';
+import * as guncelleme from './guncelleme.js';
 
 const PORT = gw.appPort(); // BORSA_PORT (veya PORT), varsayılan 7420
 const REPORT_PORT = gw.reportPort(PORT); // BORSA_REPORT_PORT, varsayılan PORT+1; raporlar ayrı kökenden sunulur: rapor içindeki betikler uygulama API'sine erişemez
@@ -150,6 +151,7 @@ route('GET', '/api/meta', async () => ({
   kapClasses: kap.CLASS_LABELS, kapSignals: kap.SIGNALS, indices: market.INDICES, indexNames: market.INDEX_NAMES,
   special: Object.fromEntries(Object.entries(market.SPECIAL).map(([k, v]) => [k, v.name])),
 }));
+route('GET', '/api/update', async ({ q }) => guncelleme.check(VERSION, getSettings(), { force: q.get('force') === '1' }));
 // KOMİTE: workspace/.claude/agents altındaki alt ajan tanımları
 route('GET', '/api/committee', async () => {
   const dir = path.join(WORKSPACE_DIR, '.claude', 'agents');

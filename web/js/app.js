@@ -10,6 +10,7 @@ import './kap.js';
 import './veri-sagligi.js';
 import { openSettings } from './settings.js';
 import './sihirbaz.js';
+import './guncelleme.js';
 import { onayIste } from './onay.js';
 import { t, tx, lang, locale, translateDom, syncLangPref } from './i18n.js';
 
