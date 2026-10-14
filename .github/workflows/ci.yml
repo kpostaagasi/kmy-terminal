@@ -73,14 +73,26 @@ jobs:
         if: matrix.target == 'exe'
         shell: pwsh
         run: |
-          if (-not (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) { choco install nsis -y --no-progress | Out-Null }
+          # Runner imajında NSIS olmayabilir; kurulum çıktısı görünür kalsın, makensis yolu aranarak bulunur
+          function Find-Makensis { @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe", (Get-Command makensis -ErrorAction SilentlyContinue).Source) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1 }
+          $mk = Find-Makensis
+          if (-not $mk) { choco install nsis -y --no-progress; $mk = Find-Makensis }
+          # choco deposu çökükse (503) taşınabilir NSIS zip'i SourceForge'dan
+          if (-not $mk) {
+            Invoke-WebRequest -UserAgent "Wget" -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip" -OutFile "$env:RUNNER_TEMP\nsis.zip"
+            Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath "$env:RUNNER_TEMP\nsis"
+            $mk = "$env:RUNNER_TEMP\nsis\nsis-3.10\makensis.exe"
+          }
+          if (-not $mk) { throw "makensis.exe bulunamadı" }
+          Write-Host "makensis: $mk"
           $v = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Force dist/win/app | Out-Null
           foreach ($d in 'bin','server','web','workspace','scripts','package.json','package-lock.json','LICENSE','README.md') { if (Test-Path $d) { Copy-Item -Recurse $d dist/win/app/ } }
           Push-Location dist/win/app; npm ci --omit=dev --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { npm ci --omit=dev --ignore-scripts --no-audit --no-fund }; Pop-Location
           Copy-Item (Get-Command node).Source dist/win/node.exe
           Copy-Item packaging/windows/kmy-terminal.cmd dist/win/
-          & "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
+          & $mk /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis başarısız ($LASTEXITCODE)" }
       - uses: actions/upload-artifact@v4
         with:
           name: kmy-terminal-${{ matrix.target }}
