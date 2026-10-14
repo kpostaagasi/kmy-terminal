@@ -196,3 +196,4 @@ async function add(sym) {
 on('ws:watchlist', (m) => { state.watchlist = m.symbols; refreshQuotes(); });
 on('symbol', () => $$('.wl-row', list).forEach((r) => r.classList.toggle('sel', r.dataset.s === state.selected)));
 on('ready', load);
+on('app:refresh', load);

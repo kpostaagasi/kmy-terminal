@@ -1,6 +1,6 @@
 # kmy terminal
 
-Açık kaynak (AGPL-3.0), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex ya da oh-my-pi) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
+Açık kaynak (AGPL-3.0), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
 
 ## Hızlı başlangıç
 
@@ -13,7 +13,7 @@ macOS, Linux ve Windows'ta tek komut (Node 22.13+): `npx github:kpostaagasi/kmy-
 
 Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tarayıcıyı açar). macOS uygulaması için aşağıdaki "macOS uygulaması" bölümüne bakın.
 
-Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı), `omp` CLI ve omp içinde `/login` (oh-my-pi sağlayıcısı; CLI bulunursa model seçicide görünür).
+Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı).
 
 Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 580 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 28, denetim çekirdeği 86, hedef fiyat 33, sinyal bildirimi 37, takvim 88, radar 13, bölünme düzeltmesi 27, backtest 47, dengeleme 63, yedek uydu 8, fon ayrımı 5, sohbet plan 4; ayrıca koşu kilidi 15 ve hedef kalıcılığı 11 kontrol; gerçek verinize dokunmaz).
 
@@ -23,7 +23,7 @@ Verinin doğruluğunu canlı kaynaklara karşı denetlemek için: `npm run denet
 
 Hazır paket: GitHub › Releases › `kmy-terminal-<sürüm>-arm64.dmg`. DMG'yi açın, **kmy terminal**'i Applications klasörüne sürükleyin.
 
-- Gereksinimler: Apple Silicon (M1+) Mac, macOS 14+. Yapay zekâ ajanı için **Claude Code** kurulu ve giriş yapılmış olmalı (https://claude.com/download); Codex ve oh-my-pi isteğe bağlı. Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.
+- Gereksinimler: Apple Silicon (M1+) Mac, macOS 14+. Yapay zekâ ajanı için **Claude Code** kurulu ve giriş yapılmış olmalı (https://claude.com/download); Codex isteğe bağlı. Piyasa verisi, KAP, kurum raporları, portföy ve watchlist ajan olmadan da çalışır.
 - Uygulama Apple Developer ID ile imzalı değildir; ilk açılışta macOS uyarı verirse Sistem Ayarları › Gizlilik ve Güvenlik › **Yine de Aç**.
 - İlk açılışta uygulama Uygulamalar klasörüne taşımayı önerir. Claude Code PATH'te olmasa da resmî kurulum, Homebrew, npm, nvm, volta ve bun konumlarında bulunur; bulunamazsa sohbet ekranı kurulum adımlarını gösterir.
 - Veri: `BORSA_DATA_DIR` tanımlıysa o, yoksa `~/Library/Application Support/kmy terminal` (uygulamayı silmek verileri silmez). Bu dizin henüz yoksa depo içindeki `data/` kullanılır ve varsa uygulama dizinine taşınır. Hangi dizinin kullanıldığını `bin/kmy gateway status` her an gösterir.
@@ -81,7 +81,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
 - Rapor sunucusu (7421) rapor dosyalarında aynı çerezi veya uygulama kökenini ister. Uygulama içi rapor çerçeveleri çalışmaya devam eder.
 - Anahtarı yenilemek (`gateway token --rotate` veya Ayarlar › Yenile) eski anahtarla bağlanan harici istemcileri düşürür. Açık arayüz sekmeleri kendini tazeler.
 - `data/gateway.json` dosyası parola gibidir: paylaşmayın, yedeklere dikkat edin. Aynı kullanıcı hesabındaki yerel programlar bu dosyayı okuyabilir. Anahtar bu programlara karşı değil, tarayıcıdaki diğer sitelere ve ağa karşı korur.
-- Ajan alt süreçlerine (Claude / Codex / omp) **master anahtar verilmez**. Onlara imzalı, süreli ve oturum+kip taşıyan bir kapsamlı jeton verilir; bu jeton yalnız `/api/tools/` rotasında geçerlidir, `/api/settings` 401 döner. Yolo kipi açık olsa bile ajan tüm API'ye erişemez.
+- Ajan alt süreçlerine (Claude / Codex) **master anahtar verilmez**. Onlara imzalı, süreli ve oturum+kip taşıyan bir kapsamlı jeton verilir; bu jeton yalnız `/api/tools/` rotasında geçerlidir, `/api/settings` 401 döner. Yolo kipi açık olsa bile ajan tüm API'ye erişemez.
 - Ağdan erişim varsayılan olarak kapalıdır. `HOST=0.0.0.0` ile açarsanız izin verilen adları `BORSA_ALLOWED_HOSTS` ile ekleyin; bağlantı şifresiz (HTTP) olur.
 
 ## Özellikler
@@ -91,7 +91,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
 | **DASHBOARD** | Kayan fiyat şeridi (XU100/XU030/XBANK, USD/TL, EUR/TL, gram/ons altın, Brent, BTC, S&P 500), sembol grafiği (1G–TÜMÜ; SMA20/50/200, Bollinger, hacim; RSI/MACD), istatistikler, teknik görünüm, **temel veriler** (F/K, PD/DD, FD/FAVÖK, tahminler), temettü ve sermaye artırımları, Türkçe haberler, sinyal etiketli KAP bildirimleri, **mali tablolar** (8 çeyrek), **kurum raporları**, **ajan notları** ve **şirket belgeleri** kartları, **ekonomi haberleri**, **temettü takvimi**, BIST 100 hareketlileri, piyasa genişliği, sektör ısı haritası, **hisse tarayıcı**, sinyal radarı ve **sinyal geçmiş performansı** (BIST 100, 10 yıl, taban ve XU100 karşılaştırmalı; geçmiş geleceği garanti etmez, yalnız elle hesaplanır), endeksler |
 | **Watchlist** | Fiyat + mini grafik, sürükle-bırak sıralama, sembol arama, klavye gezinme; sağ tık menüsü (grafik, ajan özeti, KAP, işlem ekle) |
 | **Portföy** | Özet (değer, günlük/açık/toplam K/Z, kur farkı, nakit, K/Z katkısı, veri uyarıları); varlıklar (fiyat kaynağı etiketi, elle fiyat, döviz cinsi varlıkta fiyat/kur etkisi); platform bazlı pozisyonlar ve platform × para birimi nakit; 13 işlem türü (transfer ve döviz çevirme dahil; bakiye uyarısı); dağılım (varlık, sektör, para birimi, ülke, platform, HHI, TL dışı pay); temettü (brüt/net, yaklaşan, beklenen, yıl bazında sektör/varlık/ülke kırılımı); risk & performans (TWR, XIRR, CAGR, volatilite, Sharpe, Sortino, Calmar, maks düşüş, beta, devir hızı, aylık ısı haritası, çeyreklik getiri, değer–net yatırılan grafiği, 7 karşılaştırma ölçütü, özel dönem); CSV içe aktarma (sütun eşleştirme, mükerrer satır atlama) ve dışa aktarma, JSON yedek; **kurum hedefi:** Varlıklar'da pozisyon başına medyan hedef fiyata uzaklık ve Özet'te kapsam + ağırlıklı hedef getiri (son 180 gün; rapordan sonra bedelsiz olan hisselerin hedefi sayılmaz); **Dengeleme** (sınıf ve sembol düzeyinde hedef ağırlık, sapma, al/sat önerisi, ek nakitle yalnız alım; emir gönderilmez, tavsiye değildir) |
-| **TERMINAL (AGENT CHAT)** | Varsayılan ekran. Claude Agent SDK, Codex CLI veya oh-my-pi (`omp --mode rpc-ui`); akışlı yanıt, katlanan araç grupları ("N sn çalıştı ▸ · N araç"), KOMİTE satırı ve alt ajan mesaj kartları ("main → denetci"), izin onayı, soru kartları, görev listesi, PLAN modu, dosya/görsel ekleme, 27 `/` komutu; mesaj kutusunda oturum, model, efor, arka plan işi, MALİYET, TUR ve ctx göstergesi; 4 özel alt ajan, araştırma hafızası, tetikleyici radarı hatırlatması. CHAT / TERMINAL düğmesiyle aynı sekmede gerçek kabuk (xterm.js + node-pty, tek tıkla Claude Code) |
+| **TERMINAL (AGENT CHAT)** | Varsayılan ekran. Claude Agent SDK veya Codex CLI; akışlı yanıt, katlanan araç grupları ("N sn çalıştı ▸ · N araç"), KOMİTE satırı ve alt ajan mesaj kartları ("main → denetci"), izin onayı, soru kartları, görev listesi, PLAN modu, dosya/görsel ekleme, 27 `/` komutu; mesaj kutusunda oturum, model, efor, arka plan işi, MALİYET, TUR ve ctx göstergesi; 4 özel alt ajan, araştırma hafızası, tetikleyici radarı hatırlatması. CHAT / TERMINAL düğmesiyle aynı sekmede gerçek kabuk (xterm.js + node-pty, tek tıkla Claude Code) |
 | **KAP** (sağ panel) | Watchlist / portföy / tüm / sembol kapsamı (şirket bazında 1 yıla kadar); TEZ · YAP · FİN · KUR · DİĞER sinyal filtreleri; bildirim içeriği uygulama içinde; ekler uygulama içi PDF görüntüleyicide, arşive kaydetme; okundu takibi |
 | **RAPORLAR + PDF** (sağ panel) | Kurum raporu akışı (12 aracı kurumun açık raporları; kendi hesabınla indirdiklerin için klasör izleme; filtre, YENİ etiketi, uygulama içi PDF, arşive kaydet, ajanla analiz), ajan raporları, yüklenen kurum raporları (kurum + sembol etiketi), sunum modu, yazdır, indir; rapor PDF sekmesinde açılır (ANALİZ / İNDİR / YENİ SEKMEDE AÇ / KAPAT) |
 | **Zamanlanmış görevler** | Günlük kapanış raporu, sabah KAP taraması, haftalık portföy raporu, sinyal radarı, fon fiyatı güncelleme şablonları |
@@ -105,7 +105,7 @@ Kısayollar: `⌘K` sembol ara, `⌘1–3` sekmeler (TERMINAL, DASHBOARD, PORTF�
 ## Ajan
 
 - Çalışma alanı: `workspace/`
-  - `CLAUDE.md`: talimatlar. `AGENTS.md` aynı dosyaya bağlantıdır (Codex ve omp için).
+  - `CLAUDE.md`: talimatlar. `AGENTS.md` aynı dosyaya bağlantıdır (Codex için).
   - `USER.md`: kullanıcı profili.
   - `KURALLAR.md`: çalışma kuralları (araştırma tamlığı, varsayım denetimi, KAP çıktı biçimi, veri güvenliği, alt ajan kullanımı).
   - `.claude/skills/`: 14 beceri (hisse analizi, teknik analiz, DCF, KAP tarama, portföy analizi, HTML rapor, kurum raporları, şirket belgeleri, PDF okuma, Excel/tablo, yazı sesi, tahmin defteri, tetikleyici radarı, beceri oluşturma).
@@ -124,7 +124,6 @@ Kısayollar: `⌘K` sembol ara, `⌘1–3` sekmeler (TERMINAL, DASHBOARD, PORTF�
   | Otomatik (yolo) | Her araç izinli; her karar `tool_audit` tablosuna yazılır |
 
   Ayarlar › Bağlantı'daki "Ajana tam otomatik izin (yolo)" anahtarı 30 dakika / 2 saat / bu oturum seçeneğiyle açar ve seçilen süre dolunca kipi kendiliğinden "Sor"a döndürür. Bu kip yalnız ajanın kendi oturumuna ait; ana anahtarla yapılan doğrudan `POST /api/tools/...` çağrıları her zaman onay kapısından geçer.
-- oh-my-pi (omp): terminal araçları `workspace/.omp/mcp.json` üzerinden aynı stdio köprüsüyle bağlanır (sunucu bu dosyayı ilk omp çalışmasında yazar; omp araçları `xd://mcp__borsa_<araç>` olarak görür). İzin kipleri: Sor → `always-ask` (onay kartı arayüzde), Düzenlemeleri onayla → `write`, Otomatik → `yolo`, Plan → yazan her araç reddedilir. Maliyet omp tarafından API fiyatıyla tahmin edilir (`estCost`); abonelik hesaplarında oturum maliyeti "abonelik" görünür.
 - Aynı araçları başka bir Claude Code / Codex oturumuna eklemek için:
 
 ```bash

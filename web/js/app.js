@@ -350,7 +350,7 @@ const PAL_COMMANDS = [
   { label: t('Portföy risk sekmesi'), keys: 'portfoy risk', run: () => { showView('portfolio'); $('#view-portfolio .subtabs [data-t="risk"]')?.click(); } },
   { label: t('KAP taraması'), keys: 'kap', run: () => { showView('agent'); showRightTab('kap'); } },
   { label: t('Sembol ekle'), keys: 'sembol ekle', run: () => { openPanel('left'); $('#wlAddInput')?.focus(); } },
-  { label: t('Yenile'), keys: 'yenile', run: () => location.reload() },
+  { label: t('Yenile'), keys: 'yenile', run: () => { if (document.documentElement.classList.contains('native-mac')) { emit('app:refresh'); return; } location.reload(); } },
   { label: t('Tema değiştir'), keys: 'tema', run: () => openSettings('gorunum') },
   { label: t('Sekme: Sohbet'), keys: 'sohbet', run: () => showView('agent') },
   { label: t('Sekme: Piyasa'), keys: 'pazar piyasa terminal', run: () => showView('market') },
@@ -415,7 +415,9 @@ function openPalette() {
     if (isCmd(q)) return cmdraw();
     const my = ++tok;
     res.classList.add('busy');
-    const items = await api(`/search?q=${encodeURIComponent(q)}`).catch(() => []);
+    let items = [];
+    try { items = await api(`/search?q=${encodeURIComponent(q)}`); }
+    catch (e) { if (my === tok && palEl) { res.classList.remove('busy'); toast(tx(e.message), 'err'); } return; }
     if (my !== tok || !palEl) return;
     res.classList.remove('busy');
     sel = 0;

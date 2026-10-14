@@ -1,5 +1,20 @@
 # Sürüm Notları
 
+## Unreleased
+
+### Değişen
+- **oh-my-pi kaldırıldı.** Eski omp sohbet oturumları Claude'a taşınır; devam kimliği silinir, döküm korunur. `ompModel` ayarı silinir.
+
+### Düzeltilen
+- Claude girişi `claude auth login`.
+- Sohbet izin kipi Ayarlar'ı izler.
+- Zamanlanmış görevler kayıtlı model, efor ve izin kipini kullanır (varsayılan hâlâ dontAsk; onaylayacak kimse yok).
+- Uygulama, varsa kullanıcının `claude` ikilisini kullanır.
+- Arka plan işi bildirimi artık hata fırlatmaz.
+- macOS bildirim düğmeleri aynı kategoriyi paylaşmaz.
+- ⌘R pencereyi yeniden yüklemez.
+- Pinch-zoom kapalı; başlık çubuğu sağ kontrole denk gelir.
+
 ## 0.1.2-beta — 14 Ekim 2026
 
 ### Yeni

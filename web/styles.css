@@ -710,5 +710,5 @@ html.native-mac.mac-fullscreen .topbar { padding-left: 12px; }
 html.native-mac.mac-inactive .topbar { filter: saturate(.5); }
 html.native-mac.mac-inactive :is(.brand, .viewbar button[role=tab].active) { opacity: .75; }
 html.native-mac :is(button, [role=tab], .tick, .wl-row, .report-item, .kap-item, .ss-row, .pal-row, .sl-row, .seg button, summary) { cursor: default; }
-html.native-mac :is(.topbar, .tickerbar, .statusbar, .panel-bar, .panel-head, .right-tabs, .subtabs, .cm-top, .cm-status, .wl-row, .kap-bar) { -webkit-user-select: none; user-select: none; }
+html.native-mac :is(.topbar, .tickerbar, .statusbar, .panel-bar, .panel-head, .right-tabs, .subtabs, .cm-top, .cm-status, .kap-bar) { -webkit-user-select: none; user-select: none; }
 .not-advice{font-size:11px;margin-top:6px;opacity:.75}

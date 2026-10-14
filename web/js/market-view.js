@@ -1701,6 +1701,7 @@ on('view:shown', (v) => {
 });
 on('quotes', (q) => { if (q[curSym]) { renderCur(); if (rendered.sum === curSym) renderHead(); } });
 on('ready', () => { renderCur(); if (page === 'home') ensure('home', true); });
+on('app:refresh', () => { renderCur(); reload(); });
 on('settings', () => {
   if (lastHist) loadChart(); // ölçüt anahtarı değişmiş olabilir
   if (finData && rendered.fin === curSym) drawFinCharts(finData);

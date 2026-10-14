@@ -99,6 +99,7 @@ badge.onclick = () => {
   bindPanel();
 };
 on('ws:data-health.updated', load); // başka pencerede koşu bitti
+on('app:refresh', load);
 setInterval(load, 10 * 60_000); // açık uygulamada vade sunucudan gelir
 on('ws:data-health.alert', (m) => {
   notify(t('VERİ ⚠ {n} sapma', { n: m?.sapma || 0 }), [{ label: t('Aç'), run: () => badge.click() }], t('Veri uyarısı'));

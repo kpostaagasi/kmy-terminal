@@ -175,7 +175,7 @@ final class Gateway {
     return await ensureRunning()
   }
 
-  /// Sunucu ortamı: veri / çalışma alanı klasörleri, port ve PATH (paket içindeki node önce; claude / codex / omp kullanıcının kurduğu)
+  /// Sunucu ortamı: veri / çalışma alanı klasörleri, port ve PATH (paket içindeki node önce; claude / codex kullanıcının kurduğu)
   private func serverEnv() -> [String: String] {
     var env = ProcessInfo.processInfo.environment
     env["BORSA_PORT"] = String(port)
@@ -190,7 +190,7 @@ final class Gateway {
     return env
   }
 
-  /// Kullanıcının giriş kabuğundaki PATH (claude / codex / omp / python3 bulunabilsin); Finder'dan açılan uygulamalar kısa PATH alır
+  /// Kullanıcının giriş kabuğundaki PATH (claude / codex / python3 bulunabilsin); Finder'dan açılan uygulamalar kısa PATH alır
   private func userPath() -> String {
     if let p = loginPath { return p }
     let h = NSHomeDirectory()
@@ -242,7 +242,7 @@ final class Gateway {
       }
       try? version.write(to: stamp, atomically: true, encoding: .utf8)
     }
-    // Codex / omp aynı talimatları AGENTS.md'den okur
+    // Codex aynı talimatları AGENTS.md'den okur
     let agents = workspaceDir.appendingPathComponent("AGENTS.md")
     if (try? fm.destinationOfSymbolicLink(atPath: agents.path)) == nil && !fm.fileExists(atPath: agents.path) {
       try? fm.createSymbolicLink(atPath: agents.path, withDestinationPath: "CLAUDE.md")

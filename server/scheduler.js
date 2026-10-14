@@ -1,6 +1,6 @@
 // Zamanlanmış ajan görevleri: belirli gün ve saatte bir istemi arka planda çalıştırır (İstanbul saati).
-// Kullanıcı başında olmadığı için izin isteyen araçlar reddedilir (Claude: dontAsk, Codex: salt okunur).
-import { db } from './db.js';
+// Kimse onaylayamayacağı için Claude'da kayıtlı kip yoksa veya 'default' ise dontAsk kullanılır; yolo, acceptEdits ve plan kayıtlı hâliyle geçer. Codex kendi kayıtlı kipini alır. Model ve düşünme seviyesi ayarlardan geçer.
+import { db, getSettings } from './db.js';
 import * as market from './market.js';
 import * as kap from './kap.js';
 
@@ -55,9 +55,14 @@ function istanbulNow() {
 export async function runNow(id, agent) {
   const s = db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
   if (!s) throw new Error('Görev bulunamadı');
+  const settings = getSettings();
+  const provider = s.provider === 'codex' ? 'codex' : 'claude';
+  const permissionMode = provider !== 'codex' && (!settings.permissionMode || settings.permissionMode === 'default') ? 'dontAsk' : settings.permissionMode;
   const { sessionId } = await agent.send({
-    text: s.prompt, provider: s.provider,
-    permissionMode: s.provider === 'codex' ? 'default' : 'dontAsk',
+    text: s.prompt, provider,
+    model: provider === 'codex' ? settings.codexModel : settings.model,
+    effort: settings.effort,
+    permissionMode,
     title: `⏰ ${s.name}`,
   });
   db.prepare("UPDATE schedules SET last_run = datetime('now'), last_session = ? WHERE id = ?").run(sessionId, id);

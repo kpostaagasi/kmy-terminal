@@ -33,9 +33,8 @@ const hexOk = (x) => (/^#[0-9a-f]{6}$/i.test(x || '') ? x.toLowerCase() : null);
 
 // Bilinen sağlayıcılar: kurulum paketi, giriş akışı [id, düğme, komut, terminal başlığı, açıklama]; bilinmeyenler genel kalıpla çizilir
 const PROV = {
-  claude: { cli: 'Claude Code CLI', desc: t('Claude aboneliğinizle veya API anahtarınızla çalışır'), pkg: '@anthropic-ai/claude-code', login: ['sLoginC', t('Claude ile giriş'), 'claude /login', 'claude login', t('Giriş kabukta başlar, tarayıcıda tamamlanır')] },
+  claude: { cli: 'Claude Code CLI', desc: t('Claude aboneliğinizle veya API anahtarınızla çalışır'), pkg: '@anthropic-ai/claude-code', login: ['sLoginC', t('Claude ile giriş'), 'claude auth login', 'claude auth login', t('Giriş kabukta başlar, tarayıcıda tamamlanır')] },
   codex: { cli: 'Codex CLI', desc: t('ChatGPT aboneliğinizle çalışır; terminal araçlarına MCP üzerinden erişir'), pkg: '@openai/codex', login: ['sLoginX', t('ChatGPT ile giriş'), 'codex login', 'codex login', t('ChatGPT hesabınızla giriş yapın')] },
-  omp: { cli: 'oh-my-pi CLI (omp)', desc: t('omp komut satırı kodlama asistanı'), pkg: '@oh-my-pi/pi-coding-agent', alt: 'brew install can1357/tap/omp' },
 };
 // Yolo geri sayımı: süre dolunca mod 'default'a döner; sunucunun settings yayını şeridi de kapatır.
 // Tek nokta burada: yolo yalnız Ayarlar'dan açılır, kapanışı buradan ve sohbet şeridinden yapılır.
@@ -275,7 +274,7 @@ export function openSettings(section = 'genel') {
         // Sunucu anahtarı 'model' tutar (bkz. DEFAULT_SETTINGS); 'claudeModel' sessizce düşerdi
         if (sm && key !== 'codex') sm.onchange = (e) => save({ [key === 'claude' ? 'model' : `${key}Model`]: e.target.value });
       }
-      $('#sLoginC')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'claude /login', title: 'claude login' }); });
+      $('#sLoginC')?.addEventListener('click', () => { const [, , command, title] = PROV.claude.login; m.close(); emit('term:open', { command, title }); });
       $('#sLoginX')?.addEventListener('click', () => { m.close(); emit('term:open', { command: 'codex login', title: 'codex login' }); });
       $$('[data-install]', el).forEach((b) => b.onclick = () => { m.close(); emit('term:open', { command: `npm install -g ${b.dataset.install}`, title: t('kurulum') }); });
       bindCopy(el, { mcp: mcpCmd });
@@ -285,7 +284,7 @@ export function openSettings(section = 'genel') {
       if (stale()) return;
       const st = (x) => ({ connected: pill('ok', t('Bağlı')), failed: pill('bad', t('Hata')), 'needs-auth': pill('warn', t('Giriş gerekli')), pending: pill('off', t('Bağlanıyor')), disabled: pill('off', t('Devre dışı')) }[x] || pill('off', x));
       el.innerHTML = c ? card(`<p class="stg-note">${t('Son Claude oturumunun ({date}) gördüğü araçlar ve MCP bağlantıları. Değişiklikler bir sonraki oturumda geçerli olur.', { date: dateTR(c.at, true) })}</p>`
-        + kv([['Claude Code', esc(c.version || '—')], [t('Model'), esc(c.model || '—')], [t('Kimlik doğrulama'), esc(c.apiKeySource || '—')], [t('Araç sayısı'), c.tools.length], [t('Alt asistanlar'), esc((c.agents || []).join(', ') || '—'), true]])
+        + kv([['Claude Code', esc(c.version || '—')], [t('Model'), esc(c.model || '—')], [t('Kimlik doğrulama'), esc(c.apiKeySource === 'none' ? t('Claude hesabı (OAuth)') : (c.apiKeySource || '—'))], [t('Araç sayısı'), c.tools.length], [t('Alt asistanlar'), esc((c.agents || []).join(', ') || '—'), true]])
         + `<div class="stg-scroll"><table class="t"><thead><tr><th>${t('MCP sunucusu')}</th><th>${t('Durum')}</th><th>${t('Kaynak')}</th><th class="r">${t('Araç')}</th></tr></thead><tbody>${c.mcp.map((x) => `<tr><td>${esc(x.name)}</td><td>${st(x.status)}</td><td class="muted">${esc(x.source || '')}</td><td class="r num">${c.tools.filter((tool) => tool.startsWith(`mcp__${x.name.replace(/[^\w-]/g, '_')}__`) || (x.name === 'borsa' && tool.startsWith('mcp__borsa__'))).length || ''}</td></tr>`).join('')}</tbody></table></div>`
         + `<p class="stg-note">${t('Bağlayıcılar Claude Code ayarlarından gelir (claude.ai bağlayıcıları, {cmd}).', { cmd: '<span class="mono">claude mcp add</span>' })}</p>`)
         : card(`<div class="empty">${t('Henüz bir asistan oturumu yok. Sohbette bir mesaj gönderdiğinizde bağlantılar burada görünür.')}</div>`);

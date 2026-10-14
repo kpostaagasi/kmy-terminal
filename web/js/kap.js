@@ -273,5 +273,6 @@ on('symbol', (sym) => {
   load();
 });
 on('ready', () => { if (root.classList.contains('active')) load(); });
+on('app:refresh', () => load());
 
 on('kap:open', (id) => openKapDetail(id));

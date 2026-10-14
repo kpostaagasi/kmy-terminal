@@ -38,10 +38,16 @@ private let bridgeBody = """
     document.querySelectorAll('.topbar, .viewbar').forEach((el) => mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] }));
     setInterval(report, 3000);
   });
-  // Uygulama menüsü olmayan yerlerde WebKit'in "Yeniden Yükle / Öğeyi İncele" sağ tık menüsü gösterilmez
+  // Uygulama menüsü olmayan yerlerde WebKit'in "Yeniden Yükle / Öğeyi İncele" sağ tık menüsü gösterilmez.
+  // .xterm seçimi window.getSelection değildir; orada WebKit menüsü iptal edilmez.
   addEventListener('contextmenu', (e) => {
-    if (e.defaultPrevented || e.target.closest('input, textarea, [contenteditable]') || String(getSelection() || '').trim()) return;
+    const el = e.target;
+    if (el && el.closest && el.closest('input, textarea, [contenteditable], .xterm, .wl-row')) return;
     e.preventDefault();
+    const sel = String(getSelection() || '').trim();
+    const link = el && el.closest && el.closest('a[href]');
+    const href = link ? String(link.href || '') : '';
+    if (sel || href) post({ type: 'contextmenu', x: e.clientX, y: e.clientY, hasSelection: !!sel, href });
   });
   // Bildirim izni gerçek sistem değerini Swift'ten alır; önceden hep 'granted' dönüyordu
   let perm = 'default';
@@ -145,12 +151,15 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   private let isMain: Bool
   private var popups: [WebWindowController] = []
   private var downloads: [WKDownload: URL] = [:]
+  /// Eylemli bildirim kategorileri: her bildirim kendi kimliğini taşır; eski banner düğmeleri silinmesin diye birleşik küme yazılır.
+  private var liveCategories: [(id: String, category: UNNotificationCategory)] = []
+  private let categoryQueue = DispatchQueue(label: "com.kmyterminal.notification-categories")
 
   init(url: URL?, main: Bool, configuration: WKWebViewConfiguration? = nil) {
     isMain = main
     let config = configuration ?? WebWindowController.makeConfig()
     webView = KMYWebView(frame: .zero, configuration: config)
-    webView.allowsMagnification = true
+    webView.allowsMagnification = false
     webView.allowsBackForwardNavigationGestures = false
     webView.setValue(false, forKey: "drawsBackground") // yüklenirken beyaz parlama olmasın
     if #available(macOS 13.3, *) { webView.isInspectable = true } // Safari › Geliştir ile incelenebilir
@@ -269,6 +278,8 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
       (NSApp.delegate as? AppDelegate)?.connect()
     case "logs":
       NSWorkspace.shared.open(Gateway.shared.logURL)
+    case "contextmenu":
+      showContextMenu(m)
     default: break
     }
   }
@@ -282,7 +293,7 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
     }
   }
 
-  /// Eylemli bildirim: "Sonucu aç" / "İzin ver" gibi düğmeler yalnız bir kategoriyle görünür
+  /// Eylemli bildirim: düğmeler yalnız bir kategoriyle görünür. Kimlik bildirim başına tektir; küme güncellemeleri sıraya alınır.
   private func notify(title: String, body: String, actions: [[String: String]] = []) {
     let center = UNUserNotificationCenter.current()
     center.requestAuthorization(options: [.alert, .sound, .badge]) { ok, _ in
@@ -295,13 +306,60 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
         guard let id = a["id"], !id.isEmpty else { return nil }
         return UNNotificationAction(identifier: id, title: a["label"] ?? id, options: [.foreground])
       }
-      if !acts.isEmpty {
-        center.setNotificationCategories([UNNotificationCategory(identifier: "kmy", actions: acts, intentIdentifiers: [], options: [])])
-        c.categoryIdentifier = "kmy"
+      self.categoryQueue.async {
+        if !acts.isEmpty {
+          let id = UUID().uuidString
+          let cat = UNNotificationCategory(identifier: id, actions: acts, intentIdentifiers: [], options: [])
+          self.liveCategories.append((id, cat))
+          if self.liveCategories.count > 16 { self.liveCategories.removeFirst(self.liveCategories.count - 16) }
+          center.setNotificationCategories(Set(self.liveCategories.map(\.category)))
+          c.categoryIdentifier = id
+        }
+        center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
       }
-      center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
     }
     if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+  }
+
+  /// Sağ tık: seçim varsa Kopyala, bağlantı varsa Bağlantıyı Kopyala / Tarayıcıda Aç. Yeniden yükle ve incele yok.
+  private func showContextMenu(_ m: [String: Any]) {
+    let menu = NSMenu()
+    if m["hasSelection"] as? Bool == true {
+      let copy = NSMenuItem(title: L("Kopyala", "Copy"), action: #selector(WKWebView.copy(_:)), keyEquivalent: "")
+      copy.target = webView
+      menu.addItem(copy)
+    }
+    let href = m["href"] as? String ?? ""
+    if !href.isEmpty {
+      let copyLink = NSMenuItem(title: L("Bağlantıyı Kopyala", "Copy Link"), action: #selector(copyContextLink(_:)), keyEquivalent: "")
+      copyLink.target = self
+      copyLink.representedObject = href
+      menu.addItem(copyLink)
+      if let url = URL(string: href) {
+        let open = NSMenuItem(title: L("Tarayıcıda Aç", "Open in Browser"), action: #selector(openContextLink(_:)), keyEquivalent: "")
+        open.target = self
+        open.representedObject = url
+        menu.addItem(open)
+      }
+    }
+    guard !menu.items.isEmpty, let win = window else { return }
+    let x = CGFloat((m["x"] as? Double) ?? (m["x"] as? Int).map(Double.init) ?? 0)
+    let y = CGFloat((m["y"] as? Double) ?? (m["y"] as? Int).map(Double.init) ?? 0)
+    let z = max(webView.pageZoom, 0.1)
+    let local = CGPoint(x: x * z, y: webView.isFlipped ? y * z : webView.bounds.height - y * z)
+    let pt = webView.convert(local, to: nil)
+    menu.popUp(positioning: nil, at: pt, in: win.contentView)
+  }
+
+  @objc private func copyContextLink(_ sender: NSMenuItem) {
+    guard let s = sender.representedObject as? String else { return }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(s, forType: .string)
+  }
+
+  @objc private func openContextLink(_ sender: NSMenuItem) {
+    guard let url = sender.representedObject as? URL else { return }
+    NSWorkspace.shared.open(url)
   }
 
   // Bildirim düğmesi JS'e geri döner (bildirim köprüsü AppDelegate'in bildirim temsilcisinden devralındı)

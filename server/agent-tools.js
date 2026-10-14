@@ -251,7 +251,7 @@ const WRITES = new Set(WRITE_TOOLS), FILES = new Set(FILE_TOOLS);
 export const AUTO_TOOLS = toolSpecs().filter((t) => t.readOnly).map((t) => t.name);
 
 // Sunucu tarafı izin kapısı. Claude SDK'nın canUseTool'ı yalnız süreç içi araçları korur;
-// stdio köprüsünden (Codex/omp) gelen hiçbir araç oradan geçmez, burası tek kapıdır.
+// stdio köprüsünden (Codex) gelen hiçbir araç oradan geçmez, burası tek kapıdır.
 //   default            → yazma araçları onay ister (etkileşimli akış kendi sorusunu sorar)
 //   acceptEdits        → dosya yazanlar serbest, portföy/ayar yazanlar onay ister
 //   plan               → yazan hiçbir araç çalışmaz

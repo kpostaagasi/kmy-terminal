@@ -1,4 +1,4 @@
-// Ajan oturum yöneticisi: Claude (Claude Agent SDK), Codex CLI ve oh-my-pi (omp, server/omp-runner.js).
+// Ajan oturum yöneticisi: Claude (Claude Agent SDK) ve Codex CLI.
 // Her kullanıcı mesajı ayrı bir query() çağrısıdır; bağlam `resume` ile SDK oturumundan sürdürülür.
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
@@ -14,9 +14,8 @@ import { WORKSPACE_DIR, ROOT } from './paths.js';
 import { buildBorsaServer, AUTO_TOOLS, mintScopedToken } from './agent-tools.js';
 import { marketStatus } from './market.js';
 import * as memory from './memory.js';
-import { ompBin, ompModels, ompModelsReady, ompModelMeta, runOmp, ensureOmpMcp } from './omp-runner.js';
 
-// Claude Code yürütülebilir dosyası: SDK'nın platform paketi yoksa (DMG ile dağıtılan uygulama) kullanıcının kurduğu `claude` kullanılır
+// Claude Code yürütülebilir dosyası: kullanıcının `claude` ikilisi varsa o; yoksa SDK'nın gömülü CLI'si (undefined döner).
 const hasBundledCli = (() => { try { createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`); return true; } catch { return false; } })();
 // Uygulama Finder'dan açıldığında PATH kısa olabilir: yaygın kurulum yerleri de taranır (resmî kurulum, Homebrew, npm, nvm, volta, bun)
 function claudeCandidates() {
@@ -29,17 +28,16 @@ function claudeCandidates() {
 }
 export function claudeExecutable() {
   if (process.env.KMY_CLAUDE_PATH) return process.env.KMY_CLAUDE_PATH;
-  if (hasBundledCli) return undefined;
   for (const f of claudeCandidates()) {
     try { fs.accessSync(f, fs.constants.X_OK); return f; } catch { /* yok */ }
   }
+  if (hasBundledCli) return undefined;
   throw new Error('Claude Code bulunamadı. Kurun (https://claude.com/download veya: curl -fsSL https://claude.ai/install.sh | bash), ardından Terminal\'de `claude` yazıp giriş yapın ve uygulamayı yeniden açın.');
 }
 
-// omp (oh-my-pi) yalnız CLI bulunursa listelenir
-export const PROVIDERS = { claude: 'Claude Code', codex: 'ChatGPT / Codex', ...(ompBin() ? { omp: 'oh-my-pi' } : {}) };
+export const PROVIDERS = { claude: 'Claude Code', codex: 'ChatGPT / Codex' };
 // Sağlayıcıların gerçek varsayılan modeli (seçicide "varsayılan" yerine modelin adı görünsün):
-// Claude: ~/.claude/settings.json → son oturumun kullandığı model → Opus; Codex: ~/.codex/config.toml; omp: ~/.omp/agent/config.yml (modelRoles.default)
+// Claude: ~/.claude/settings.json → son oturumun kullandığı model → Opus; Codex: ~/.codex/config.toml
 const CLAUDE_ALIAS = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5-20251001', fable: 'claude-fable-5-1' };
 function normClaude(m) {
   if (!m) return null;
@@ -53,14 +51,13 @@ export function defaultModels() {
   try { claude = JSON.parse(readFile(path.join(h, '.claude', 'settings.json')) || '{}').model || null; } catch { /* bozuk */ }
   claude ||= db.prepare("SELECT model FROM chat_sessions WHERE provider = 'claude' AND model IS NOT NULL AND model != '' ORDER BY updated_at DESC LIMIT 1").get()?.model || null;
   const codex = readFile(path.join(h, '.codex', 'config.toml')).match(/^model\s*=\s*"([^"]+)"/m)?.[1] || null;
-  const omp = readFile(path.join(h, '.omp', 'agent', 'config.yml')).match(/modelRoles:\s*\n(?:\s+\w+:.*\n)*?\s+default:\s*(\S+)/)?.[1]?.replace(/:[a-z]+$/, '') || null;
-  return { claude: normClaude(claude) || 'claude-opus-5-5', codex, omp };
+  return { claude: normClaude(claude) || 'claude-opus-5-5', codex };
 }
 // Model etiketi tek yerden üretilir: sağlayıcı öneki (`openai-codex/gpt-5.5`) atılır,
 // kalan son segment okunur biçime çevrilir. `id` asla değişmez — settings.model,
-// settings.ompModel ve codexModel kayıtlı değerlerini bu id'ler eşler.
+// settings.codexModel kayıtlı değerlerini bu id'ler eşler.
 const PREFIX_NAME = { openai: 'OpenAI', 'openai-codex': 'OpenAI', 'xai-oauth': 'xAI', xai: 'xAI', 'opencode-zen': 'openCode', openrouter: 'openRouter', anthropic: 'Anthropic', google: 'Google' };
-// omp alt grubu sağlayıcı önekinden türetilir (bilinmiyorsa null → tek grupta kalır)
+// Alt grup sağlayıcı önekinden türetilir (bilinmiyorsa null → tek grupta kalır)
 const modelGroup = (id) => {
   const p = String(id || '').split('/');
   return p.length > 1 ? PREFIX_NAME[p.slice(0, -1).join('/')] || PREFIX_NAME[p[0]] || null : null;
@@ -68,28 +65,18 @@ const modelGroup = (id) => {
 function modelLabel(id, name) {
   const s = String(id || '');
   const clean = (x) => String(x || '').replace(/\s*\([^()]*\)\s*$/, '').trim();
-  // omp çoğu modele zaten insan okunur ad veriyor ("GPT-5.5", "Grok 4.20 (Reasoning)")
+  // Verilen ad zaten okunur biçimse ("GPT-5.5") olduğu gibi kullanılır
   const given = clean(name);
   if (given && !given.includes('/')) return given;
   return (clean(s.slice(s.lastIndexOf('/') + 1)) || s)
     .replace(/\bgpt/gi, 'GPT').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').replace(/^./, (c) => c.toUpperCase()).trim();
 }
-const buildProviderModels = (omp) => {
+export function providerModels() {
   const d = defaultModels();
   const codex = d.codex ? [{ id: d.codex, label: modelLabel(d.codex), provider: 'codex', group: modelGroup(d.codex) }] : [];
-  // omp: `models --json` yüzlerce modeli elediği için kullanıcının kendi varsayılanı
-  // listede çıkmayabilir; seçicide görünmezse o modelle konuşmak imkânsız.
-  let list = (omp || []).filter((x) => x.id).map((x) => ({ ...x, label: modelLabel(x.id, x.label), provider: 'omp', group: modelGroup(x.id) }));
-  // Elle eklenen varsayılanın metadatasını tam katalogdan al: openrouter gibi 40'ın üstünde
-  // modeli olan sağlayıcılar seçiciye girmiyor, ama düşünme seviyeleri yine de gerekiyor.
-  if (d.omp && !list.some((m) => m.id === d.omp)) {
-    const meta = ompModelMeta(d.omp);
-    list = [{ id: d.omp, label: modelLabel(d.omp), provider: 'omp', group: modelGroup(d.omp), contextWindow: meta?.contextWindow || null, thinking: meta?.thinking || null }, ...list];
-  }
-  return { codex, ...(PROVIDERS.omp ? { omp: list } : {}) };
-};
-export const providerModels = () => buildProviderModels(ompModels());
-export const providerModelsReady = () => ompModelsReady().then(buildProviderModels);
+  return { codex };
+}
+export const providerModelsReady = async () => providerModels();
 const MCP_STDIO = path.join(ROOT, 'server', 'mcp-stdio.js');
 
 export const MODELS = [
@@ -111,7 +98,6 @@ export const PERMISSION_MODES = {
 export const CAPABILITIES = {
   claude: { effort: true, subagent: true, cost: true, bypass: true },
   codex: { effort: false, subagent: false, cost: false, bypass: true },
-  omp: { effort: true, subagent: true, cost: 'est', bypass: true },
 };
 const SUBAGENT_TOOLS = new Set(['Task', 'Agent']);
 const DATA_CONNECTORS = ['mcp__claude_ai_Borsa_MCP__*', 'mcp__claude_ai_Matriks_MCP__*'];
@@ -158,16 +144,6 @@ export class AgentManager extends EventEmitter {
     this.running = new Map(); // sessionId -> { abort, q, startedAt, title, pending: Map }
     this.lastInit = null;      // son Claude oturumunun araç/MCP bağlantı durumu (Ayarlar > Bağlantılar)
     this.ctxWindow = new Map(); // sessionId -> model bağlam penceresi (token)
-    // ponytail: köprüdeki izin kipi en son başlatılan oturuma ait; eşzamanlı iki oturumda
-    // diğeri kendi kipinde çalışır. Düzeltme: SDK araç çağrısına oturum kimliği bağlamak.
-    this.borsaServer = buildBorsaServer((type, data) => this.emit('notify', { type, data }), () => {
-      const [id, r] = [...this.running].at(-1) || [];
-      return r ? { mode: r.perm || 'default', sessionId: id } : null;
-    });
-    if (PROVIDERS.omp) {
-      ompModels(); // model listesini arka planda önbelleğe al
-      try { ensureOmpMcp(); } catch (e) { console.error('[omp] mcp.json yazılamadı:', e.message); }
-    }
   }
 
   listSessions() {
@@ -221,10 +197,10 @@ export class AgentManager extends EventEmitter {
       this.#emit(sessionId, 'session.created', { session });
     }
     provider = session.provider || 'claude'; // oturumun sağlayıcısı sabittir
-    const defModel = { claude: settings.model, codex: settings.codexModel, omp: settings.ompModel }[provider] || '';
+    const defModel = { claude: settings.model, codex: settings.codexModel }[provider] || '';
     model = model ?? defModel;
-    // Başka sağlayıcının model adı gelirse (ör. oturum Codex, seçici Claude modeli) varsayılana düş; omp her sağlayıcının modelini alır
-    if (model && provider !== 'omp' && (provider === 'codex') === /^claude/i.test(model)) model = defModel;
+    // Claude oturumuna claude olmayan, Codex oturumuna claude* model kimliği gönderilmez
+    if (model && ((provider === 'claude' && !/^claude/i.test(model)) || (provider === 'codex' && /^claude/i.test(model)))) model = defModel;
     effort = effort || settings.effort;
     permissionMode = permissionMode || settings.permissionMode;
 
@@ -250,10 +226,6 @@ export class AgentManager extends EventEmitter {
       this.#runCodex(sessionId, run, session, prompt, { model, permissionMode, images: attachments.filter((a) => /\.(png|jpe?g|gif|webp)$/i.test(a.path)).map((a) => a.path) });
       return { sessionId };
     }
-    if (provider === 'omp') {
-      this.#runOmp(sessionId, run, session, prompt, { model, effort, permissionMode });
-      return { sessionId };
-    }
 
     let claudeBin;
     try { claudeBin = claudeExecutable(); } catch (e) {
@@ -271,7 +243,7 @@ export class AgentManager extends EventEmitter {
       includePartialMessages: true,
       settingSources: ['user', 'project', 'local'],
       ...(claudeBin ? { pathToClaudeCodeExecutable: claudeBin } : {}),
-      mcpServers: { borsa: this.borsaServer },
+      mcpServers: { borsa: buildBorsaServer((type, data) => this.emit('notify', { type, data }), () => ({ mode: run.perm || 'default', sessionId })) },
       // Portföye yazan add_transaction bilerek listede yok: her seferinde kullanıcı onayı ister
       // Salt okunur piyasa verisi bağlayıcıları da onaysız çalışır (zamanlanmış görevler dahil); e-posta vb. yazma yetkili bağlayıcılar onay ister
       allowedTools: [...AUTO_TOOLS.map((t) => `mcp__borsa__${t}`), ...DATA_CONNECTORS, 'WebSearch', 'WebFetch', 'Read', 'Glob', 'Grep', 'TodoWrite'],
@@ -617,28 +589,6 @@ export class AgentManager extends EventEmitter {
     });
   }
 
-  // ── oh-my-pi (omp) ─────────────────────────────────────
-  // Ayrıntılar server/omp-runner.js'de; burada yalnız kayıt / yayın / izin köprüsü.
-  #runOmp(sessionId, run, session, prompt, { model, effort, permissionMode }) {
-    const sys = `${systemAppend(!session.sdk_session_id, run.lang)}\n- Terminal araçları "borsa" MCP sunucusundadır (omp'de xd://mcp__borsa_<araç>). Kalıcı talimatlar: AGENTS.md / CLAUDE.md.${permissionMode === 'plan' ? '\n- PLAN MODU: dosya değiştirme, komut çalıştırma; yalnız okuyup plan öner.' : ''}`;
-    const io = {
-      record: (kind, data) => this.#record(sessionId, kind, data),
-      emit: (type, data) => this.#emit(sessionId, type, data),
-      jobs: () => this.emit('jobs'),
-      ask: (tool, input, signal, canAlways) => this.#askPermission(sessionId, run, tool, input, signal, canAlways ? ['oturum'] : undefined),
-      setSdkSession: (id) => { if (id) db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, model = COALESCE(?, model) WHERE id = ?').run(id, model || null, sessionId); },
-      setCtxWindow: (n) => this.ctxWindow.set(sessionId, n),
-      contextNote: () => this.#contextNote(sessionId),
-      end: () => {
-        for (const p of run.pending.values()) p.resolve({ behavior: 'deny', message: 'Oturum sona erdi' });
-        this.running.delete(sessionId);
-        db.prepare("UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?").run(sessionId);
-        this.#emit(sessionId, 'run.end', {});
-        this.emit('jobs');
-      },
-    };
-    runOmp({ run, session, prompt, model, effort, permissionMode, sys, io });
-  }
 
   #askPermission(sessionId, run, toolName, input, signal, suggestions) {
     return new Promise((resolve) => {
@@ -689,16 +639,25 @@ export class AgentManager extends EventEmitter {
   async summarize(text, lang = 'tr') {
     const body = String(text || '').slice(0, 60_000);
     if (!body.trim()) throw new Error('Özetlenecek metin yok');
+    let claudeBin;
+    try { claudeBin = claudeExecutable(); } catch (e) {
+      throw new Error(String(e?.message || '').startsWith('Claude Code bulunamadı') ? e.message : 'Özet alınamadı');
+    }
     let out = '';
-    const q = query({
-      prompt: `Aşağıdaki alt ajan çıktısını ${lang === 'en' ? 'İngilizce (English)' : 'Türkçe'}, en fazla 6 maddede özetle. Rakamları, tarihleri ve sonuçları koru; yorum ekleme.\n\n<cikti>\n${body}\n</cikti>`,
-      options: {
-        model: 'claude-haiku-4-5-20251001', maxTurns: 1, settingSources: [], cwd: WORKSPACE_DIR, ...(claudeExecutable() ? { pathToClaudeCodeExecutable: claudeExecutable() } : {}),
-        systemPrompt: 'Kısa ve doğru özetler yazan bir asistansın.', allowedTools: [],
-        canUseTool: async () => ({ behavior: 'deny', message: 'Özetlemede araç kullanılmaz' }),
-      },
-    });
-    for await (const m of q) if (m.type === 'result') { if (m.subtype === 'success') out = m.result; else throw new Error('Özet alınamadı'); }
+    try {
+      const q = query({
+        prompt: `Aşağıdaki alt ajan çıktısını ${lang === 'en' ? 'İngilizce (English)' : 'Türkçe'}, en fazla 6 maddede özetle. Rakamları, tarihleri ve sonuçları koru; yorum ekleme.\n\n<cikti>\n${body}\n</cikti>`,
+        options: {
+          model: 'claude-haiku-4-5-20251001', maxTurns: 1, settingSources: [], cwd: WORKSPACE_DIR, ...(claudeBin ? { pathToClaudeCodeExecutable: claudeBin } : {}),
+          systemPrompt: 'Kısa ve doğru özetler yazan bir asistansın.', allowedTools: [],
+          canUseTool: async () => ({ behavior: 'deny', message: 'Özetlemede araç kullanılmaz' }),
+        },
+      });
+      for await (const m of q) if (m.type === 'result') { if (m.subtype === 'success') out = m.result; else throw new Error('Özet alınamadı'); }
+    } catch (e) {
+      if (String(e?.message || '').startsWith('Claude Code bulunamadı') || e?.message === 'Özet alınamadı') throw e;
+      throw new Error('Özet alınamadı');
+    }
     if (!out) throw new Error('Özet alınamadı');
     return { summary: out };
   }

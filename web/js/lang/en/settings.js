@@ -97,7 +97,7 @@ export default {
   'ChatGPT aboneliğinizle çalışır; terminal araçlarına MCP üzerinden erişir': 'Works with your ChatGPT subscription; reaches the terminal’s tools over MCP',
   'ChatGPT ile giriş': 'Sign in with ChatGPT',
   'ChatGPT hesabınızla giriş yapın': 'Sign in with your ChatGPT account',
-  'omp komut satırı kodlama asistanı': 'omp command-line coding assistant',
+  'Claude hesabı (OAuth)': 'Claude account (OAuth)',
 
   // Pencere
   'Ayarlar': 'Settings',

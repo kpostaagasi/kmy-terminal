@@ -139,7 +139,7 @@ const route = (method, pattern, handler, limit = 20 * 1024 * 1024) => {
 const rowCount = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n; // t: dosya içi sabit tablo adı
 route('GET', '/api/health', async () => ({
   ok: true, version: VERSION, node: process.version, platform: `${os.platform()} ${os.arch()}`, uptimeSec: Math.round((Date.now() - startedAt) / 1000),
-  pid: process.pid, dataDir: DATA_DIR, workspace: WORKSPACE_DIR, terminal: term.available(), claudeCli: await cliVersion('claude'), codexCli: await cliVersion('codex'), ompCli: await cliVersion('omp'),
+  pid: process.pid, dataDir: DATA_DIR, workspace: WORKSPACE_DIR, terminal: term.available(), claudeCli: await cliVersion('claude'), codexCli: await cliVersion('codex'),
   clients: wss?.clients.size || 0, runningSessions: agent.running.size, market: market.marketStatus(),
   cache: cacheStats(), alerts: db.prepare('SELECT COUNT(*) AS n FROM alerts WHERE active = 1').get().n,
   db: { transactions: rowCount('transactions'), watchlist: rowCount('watchlist'), symbols: rowCount('symbols'), alerts: rowCount('alerts'), schedules: rowCount('schedules'), chatSessions: rowCount('chat_sessions') },
@@ -458,7 +458,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname.startsWith('/api/')) {
       if (!originOk(req) || gw.crossSite(req)) return send(res, 403, { error: 'Yasak köken' });
       if (!gw.authorize(req)) {
-        // Alt süreçlere (Codex/omp/Claude) master anahtar verilmez; imzalı kapsamlı jeton yalnız araç rotasında geçerli
+        // Alt süreçlere (Codex/Claude) master anahtar verilmez; imzalı kapsamlı jeton yalnız araç rotasında geçerli
         req.scoped = pathname.startsWith('/api/tools/') ? verifyScopedToken(/^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1]) : null;
         if (!req.scoped) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
       }
