@@ -1,6 +1,6 @@
 # Sürüm Notları
 
-## Unreleased
+## 0.1.3-beta — 14 Ekim 2026
 
 ### Değişen
 - **oh-my-pi kaldırıldı.** Eski omp sohbet oturumları Claude'a taşınır; devam kimliği silinir, döküm korunur. `ompModel` ayarı silinir.
@@ -14,6 +14,8 @@
 - macOS bildirim düğmeleri aynı kategoriyi paylaşmaz.
 - ⌘R pencereyi yeniden yüklemez.
 - Pinch-zoom kapalı; başlık çubuğu sağ kontrole denk gelir.
+- Dengeleme sekmesi boş taslakta çökmez.
+- Arama hatası boş sonuç gibi gizlenmez.
 
 ## 0.1.2-beta — 14 Ekim 2026
 
