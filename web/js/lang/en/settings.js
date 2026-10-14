@@ -407,4 +407,13 @@ export default {
   'kayıt': 'records',
   'Bilinmiyor': 'Unknown',
   'Hesaplanıyor…': 'Calculating…',
+  'Güncellemeleri denetle': 'Check for updates',
+  'Açılışta GitHub’daki son sürüme bakar; yeni sürüm varsa haber verir. Hiçbir şey kendiliğinden indirilmez.': 'Checks the latest release on GitHub at startup and tells you if a new version is out. Nothing is downloaded automatically.',
+  'Kurulu sürüm': 'Installed version',
+  'Şimdi denetle': 'Check now',
+  'Güncelleme': 'Updates',
+  'Denetim kapalı': 'Check is off',
+  'Denetlenemedi (çevrimdışı olabilirsiniz)': 'Could not check (you may be offline)',
+  'Güncel': 'Up to date',
+  'Denetleniyor…': 'Checking…',
 };

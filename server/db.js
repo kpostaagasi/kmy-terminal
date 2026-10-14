@@ -168,6 +168,8 @@ export const DEFAULT_SETTINGS = {
   // Sinyal bildirimi: seans sonrası taramada yeni çıkan sinyaller (server/sinyal.js, signal-watch.js)
   signalNotify: true,
   auditSchedule: true,
+  // Açılışta GitHub'daki son sürümü kontrol edip yeni sürüm varsa haber verir (server/guncelleme.js); hiçbir şey indirmez
+  updateCheck: true,
   rebalanceRate: null,
   signalTypes: ['golden', 'death', 'high52', 'low52', 'sma200_up', 'sma200_dn'],
 };
