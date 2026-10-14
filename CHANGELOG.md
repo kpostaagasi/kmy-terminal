@@ -1,9 +1,12 @@
 # Sürüm Notları
 
-## 0.1.1-beta — 14 Ekim 2026
+## 0.1.2-beta — 14 Ekim 2026
 
 ### Yeni
 - **Güncelleme bildirimi.** Açılışta GitHub'daki en son yayımlanan sürüme bakılır; yeni sürüm varsa sağ altta indirme bağlantısı ve kurulum biçimine göre (DMG, Windows, AppImage, npx, git) talimat çıkar. Hiçbir şey kendiliğinden indirilmez. "Bu sürümü atla" o sürümü bir daha göstermez. Ayarlar › Hakkında › Sürüm notları'ndan kapatılır veya elle denetlenir; `KMY_NO_UPDATE_CHECK=1` de kapatır.
+
+### Düzeltme
+- **Windows kurulum paketi.** Derleme sunucusunda NSIS bulunamadığında taşınabilir sürümü indirilir (0.1.1-beta bu yüzden paketlenemedi ve yayımlanmadı).
 
 ## 0.1.0-beta — 12 Ekim 2026 (ilk genel beta)
 
