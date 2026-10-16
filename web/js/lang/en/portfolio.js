@@ -10,7 +10,6 @@ export default {
   'İşlemler': 'Transactions',
   'Dağılım': 'Allocation',
   'Temettü': 'Dividends',
-  'Dengeleme': 'Rebalancing',
   'Portföyde zaten var: payı yukarıdaki listeden girin': 'Already in the portfolio: enter its share in the list above',
   'Hedefe göre artır': 'Increase toward target',
   'Hedefe göre azalt': 'Reduce toward target',

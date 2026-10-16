@@ -11,7 +11,6 @@ export default {
   'Dosya veya görsel ekle (en fazla 10 MB)': 'Attach a file or image (up to 10 MB)',
   'Dosya ekle': 'Attach file',
   'Model': 'Model',
-  'Model (oturumun sağlayıcısı sabittir; değiştirmek için yeni oturum açın)': "Model (a session's provider is fixed; start a new session to switch)",
   'Düşünme seviyesi (/think)': 'Thinking level (/think)',
   'Düşünme seviyesi': 'Thinking level',
   'İzin kipini plana al (dosya değiştirmez)': 'Switch permission mode to plan (does not edit files)',
