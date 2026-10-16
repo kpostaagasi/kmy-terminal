@@ -98,7 +98,7 @@ async function show(name, { focus = true } = {}) {
     // Raporlar ayrı porttan (ayrı köken) gelir; içlerindeki betikler uygulama API'sine erişemez
     v.innerHTML = `${bar}<iframe src="${url}" title="${esc(r.title)}" ${['html', 'htm'].includes(r.ext) ? 'sandbox="allow-scripts allow-same-origin allow-popups allow-modals"' : ''}></iframe>`;
   } else if (r.ext === 'md') {
-    const text = await fetch(url).then((x) => x.text()).catch(() => t('Rapor okunamadı'));
+    const text = await fetch(url, { headers: state.meta?.reportToken ? { 'X-Report-Token': state.meta.reportToken } : {} }).then((x) => x.text()).catch(() => t('Rapor okunamadı'));
     v.innerHTML = `${bar}<div class="md msg assistant">${md(text)}</div>`;
   } else {
     v.innerHTML = `${bar}<div class="empty">${t('Önizleme yok; dosyayı indirip açabilirsiniz.')}</div>`;

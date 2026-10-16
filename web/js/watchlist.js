@@ -85,7 +85,7 @@ on('quotes', (qs) => {
 // Kaldırılmış kod engellenmez: geçmiş veri var, sayfa açılır; yalnız uyarılır.
 function openRow(sym) {
   const d = uni.delisted[sym];
-  if (d) toast(t('{s} BIST listesinden kaldırıldı ({d}) — geçmiş veriler korunuyor, güncel fiyat yok.', { s, d: d.removedAt }), 'err', 7000);
+  if (d) toast(t('{s} BIST listesinden kaldırıldı ({d}) — geçmiş veriler korunuyor, güncel fiyat yok.', { s: sym, d: d.removedAt }), 'err', 7000);
   selectSymbol(sym);
 }
 

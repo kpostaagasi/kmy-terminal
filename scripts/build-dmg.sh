@@ -34,8 +34,8 @@ mkdir -p "$RES/app/scripts" && cp "$ROOT/scripts/postinstall.mjs" "$RES/app/scri
 rsync -a --exclude '.DS_Store' --exclude 'reports' --exclude 'hafiza' --exclude 'belgeler' --exclude 'uploads' --exclude '.omp' \
   --exclude 'tahminler.md' --exclude 'AGENTS.md' --exclude 'settings.local.json' --exclude '__pycache__' "$ROOT/workspace/" "$RES/app/workspace-template/"
 
-say "Üretim bağımlılıkları kuruluyor (npm ci --omit=dev)…"
-(cd "$RES/app" && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
+say "Üretim bağımlılıkları kuruluyor (npm ci --omit=dev --ignore-scripts; yaşam döngüsü betikleri çalışmaz)…"
+(cd "$RES/app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error >/dev/null)
 # Claude Code ikilisi pakete girmez (kullanıcının kurduğu `claude` kullanılır); başka platformların ikilileri de atılır
 rm -rf "$RES/app/node_modules/@anthropic-ai/"claude-agent-sdk-*
 find "$RES/app/node_modules/node-pty/prebuilds" -mindepth 1 -maxdepth 1 ! -name "darwin-$ARCH" -exec rm -rf {} +

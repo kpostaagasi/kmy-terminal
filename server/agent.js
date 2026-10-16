@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { db, getSettings } from './db.js';
+import { effectiveMode } from './yolo.js';
 import { WORKSPACE_DIR, ROOT } from './paths.js';
 import { buildBorsaServer, AUTO_TOOLS, mintScopedToken } from './agent-tools.js';
 import { marketStatus } from './market.js';
@@ -202,7 +203,8 @@ export class AgentManager extends EventEmitter {
     // Claude oturumuna claude olmayan, Codex oturumuna claude* model kimliği gönderilmez
     if (model && ((provider === 'claude' && !/^claude/i.test(model)) || (provider === 'codex' && /^claude/i.test(model)))) model = defModel;
     effort = effort || settings.effort;
-    permissionMode = permissionMode || settings.permissionMode;
+    // Yolo süresi dolduysa (ya da süre yoksa) istemci ne gönderirse göndersin bypass verilmez
+    permissionMode = effectiveMode(permissionMode || settings.permissionMode, settings);
 
     attachments = (attachments || []).filter((a) => a?.path && !a.path.includes('..')).slice(0, 10);
     this.#record(sessionId, 'user', { text, context: context || null, attachments });

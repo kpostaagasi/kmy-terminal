@@ -712,3 +712,9 @@ html.native-mac.mac-inactive :is(.brand, .viewbar button[role=tab].active) { opa
 html.native-mac :is(button, [role=tab], .tick, .wl-row, .report-item, .kap-item, .ss-row, .pal-row, .sl-row, .seg button, summary) { cursor: default; }
 html.native-mac :is(.topbar, .tickerbar, .statusbar, .panel-bar, .panel-head, .right-tabs, .subtabs, .cm-top, .cm-status, .kap-bar) { -webkit-user-select: none; user-select: none; }
 .not-advice{font-size:11px;margin-top:6px;opacity:.75}
+
+/* Yolo (bypassPermissions) kalıcı göstergesi */
+.yolo-badge { background: var(--down, #ff453a); color: #fff; border: 0; border-radius: 6px; padding: 3px 9px; font-weight: 700; font-size: 12px; cursor: pointer; margin-right: 8px; animation: yolo-pulse 2s ease-in-out infinite; }
+.yolo-badge[hidden] { display: none; }
+@keyframes yolo-pulse { 50% { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .yolo-badge { animation: none; } }

@@ -1,4 +1,6 @@
 // kmy terminal sunucusu: statik arayüz + REST API + WebSocket (canlı fiyat, ajan, terminal)
+import { appCsp, REPORT_CSP, mintReportToken, verifyReportToken, reportCors } from './web-security.js';
+import { normalizeYoloPatch } from './yolo.js';
 import { listSources } from './veri-kaynagi.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -146,7 +148,7 @@ route('GET', '/api/health', async () => ({
   gateway: { daemon: gw.isDaemon(), pid: process.pid, startedAt: new Date(startedAt).toISOString(), port: PORT, reportPort: REPORT_PORT, activeSessions: agent.running.size, clients: wss?.clients.size || 0 },
 }));
 route('GET', '/api/meta', async () => ({
-  reportPort: REPORT_PORT, providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: await providerModelsReady(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES, capabilities: CAPABILITIES,
+  reportPort: REPORT_PORT, reportToken: mintReportToken(gw.token()), providers: PROVIDERS, models: MODELS, codexModels: CODEX_MODELS, providerModels: await providerModelsReady(), defaultModels: defaultModels(), efforts: EFFORTS, permissionModes: PERMISSION_MODES, capabilities: CAPABILITIES,
   txTypes: pf.TX_TYPES, txMeta: pf.TX_META, assetTypes: pf.ASSET_TYPES, currencies: pf.CURRENCIES, benchmarks: pf.reference().benchmarks,
   kapClasses: kap.CLASS_LABELS, kapSignals: kap.SIGNALS, indices: market.INDICES, indexNames: market.INDEX_NAMES,
   special: Object.fromEntries(Object.entries(market.SPECIAL).map(([k, v]) => [k, v.name])),
@@ -164,7 +166,7 @@ route('GET', '/api/committee', async () => {
 });
 route('GET', '/api/settings', async () => getSettings());
 route('GET', '/api/data-sources', async () => listSources(getSettings()));
-route('PUT', '/api/settings', async ({ body }) => { const s = putSettings(body); broadcast({ t: 'settings', settings: s }); restartTimers(); return s; });
+route('PUT', '/api/settings', async ({ body }) => { const s = putSettings(normalizeYoloPatch(body)); broadcast({ t: 'settings', settings: s }); restartTimers(); return s; });
 
 // Piyasa
 route('GET', '/api/quotes', async ({ q }) => market.getQuotes((q.get('symbols') || '').split(',').filter(Boolean)));
@@ -485,7 +487,8 @@ const server = http.createServer(async (req, res) => {
     const file = path.resolve(WEB_DIR, '.' + (pathname === '/' ? '/index.html' : pathname));
     if (!file.startsWith(WEB_DIR)) return send(res, 403, 'Yasak');
     if (pathname === '/' || pathname === '/index.html') res.setHeader('Set-Cookie', gw.cookie()); // arayüz kabuğu: tarayıcıya erişim çerezi
-    return serveFile(res, file, {}, req);
+    const shell = /\.html?$/i.test(file) ? { 'Content-Security-Policy': appCsp(REPORT_HOSTS), 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' } : { 'X-Content-Type-Options': 'nosniff' };
+    return serveFile(res, file, shell, req);
   } catch (e) {
     if (!res.headersSent) send(res, e.status || 400, { error: e.message });
   }
@@ -642,22 +645,25 @@ async function pushKap() {
 
 // Rapor sunucusu (ayrı port = ayrı köken)
 // Rapor dosyaları gateway çerezi/anahtarı ister (çerez porta bağlı değil; uygulama iframe'leri aynı siteden gönderir).
-// Arayüzün Markdown'ı çapraz köken fetch ile okuması çerezsiz gelir: uygulama kökeninden (Origin) gelen istek de kabul edilir.
+// Arayüzün Markdown'ı çapraz köken fetch ile okuması çerezsiz gelir: /api/meta'dan alınan kısa ömürlü X-Report-Token gerekir
+// (Origin başlığına tek başına güvenilmez). CORS yalnız uygulama kökenine açık; raporlar CSP sandbox ile sunulur.
 const reportServer = http.createServer((req, res) => {
   if (!gw.hostOk(req, REPORT_HOSTS)) return send(res, 403, 'Geçersiz Host başlığı');
   const url = new URL(req.url, 'http://x');
-  const cors = { 'Access-Control-Allow-Origin': '*' }; // raporlar salt okunur; arayüz Markdown'ı fetch ile okur
+  const cors = { ...reportCors(req.headers.origin, ALLOWED_ORIGINS), 'X-Content-Type-Options': 'nosniff' };
+  if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+  const rep = { ...cors, 'Content-Security-Policy': REPORT_CSP };
   try {
     const pathname = decodeURIComponent(url.pathname);
     if (pathname === '/report.css') return serveFile(res, path.join(WEB_DIR, 'report.css'), cors, req);
     if (pathname.startsWith('/reports/')) {
-      if (!gw.authorize(req) && !ALLOWED_ORIGINS.has(req.headers.origin)) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
+      if (!gw.authorize(req) && !verifyReportToken(req.headers['x-report-token'], gw.token())) return send(res, 401, { error: 'Gateway anahtarı gerekli' });
       const file = store.safeReportPath(pathname.slice(9));
       if (url.searchParams.has('print') && /\.html?$/i.test(file) && fs.existsSync(file)) {
         const html = fs.readFileSync(file, 'utf8') + '<script>addEventListener("load",()=>setTimeout(print,300))</script>';
-        return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
+        return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8', ...rep });
       }
-      return serveFile(res, file, cors, req);
+      return serveFile(res, file, rep, req);
     }
     send(res, 404, 'Bulunamadı');
   } catch (e) { send(res, 400, e.message); }

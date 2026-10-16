@@ -38,7 +38,7 @@ const PROV = {
 };
 // Yolo geri sayımı: süre dolunca mod 'default'a döner; sunucunun settings yayını şeridi de kapatır.
 // Tek nokta burada: yolo yalnız Ayarlar'dan açılır, kapanışı buradan ve sohbet şeridinden yapılır.
-const yoloDone = (st = state.settings) => st.permissionMode !== 'bypassPermissions' || !st.yoloUntil || st.yoloUntil > Date.now();
+const yoloDone = (st = state.settings) => st.permissionMode !== 'bypassPermissions' || st.yoloUntil > Date.now();
 async function checkYolo() {
   if (yoloDone()) return;
   try {
@@ -46,8 +46,23 @@ async function checkYolo() {
     toast(t('Yolo modunun süresi doldu; ajan yeniden onay istiyor.'), '', 8000);
   } catch { /* sunucu yoksa bir sonraki tikte tekrar denenir */ }
 }
-setInterval(checkYolo, 30000);
-on('settings', checkYolo);
+// Kalıcı üst çubuk göstergesi: yolo açıkken kalan süreyle her görünümde görünür; tıklayınca kapatır
+export function yoloLabel(st, now = Date.now()) {
+  if (st?.permissionMode !== 'bypassPermissions' || !(st.yoloUntil > now)) return '';
+  const m = Math.ceil((st.yoloUntil - now) / 60000);
+  return `⚡ YOLO · ${m >= 60 ? `${Math.floor(m / 60)}s ${m % 60}dk` : `${m}dk`}`;
+}
+function paintYolo() {
+  const b = document.getElementById('yoloBadge');
+  if (!b) return;
+  const txt = yoloLabel(state.settings);
+  b.hidden = !txt; b.textContent = txt; b.title = t('Yolo modu açık: ajan tüm araçlara izinli. Kapatmak için tıklayın.');
+}
+document.getElementById('yoloBadge')?.addEventListener('click', async () => {
+  try { await api('/settings', { method: 'PUT', body: { permissionMode: 'default', yoloUntil: 0 } }); toast(t('Yolo modu kapatıldı'), 'ok'); } catch { /* yok say */ }
+});
+setInterval(() => { checkYolo(); paintYolo(); }, 15000);
+on('settings', () => { checkYolo(); paintYolo(); });
 
 export function openSettings(section = 'genel') {
   const focus = isSec(section) ? null : section; // eski anahtar → ilgili bloğa kaydır
@@ -183,7 +198,7 @@ export function openSettings(section = 'genel') {
         + row(t('Düşünme düzeyi'), t('Yeni oturumların varsayılan düşünme düzeyi'), state.meta.efforts.length <= 4 ? seg('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort) : sel('sEffort', state.meta.efforts.map((x) => [x, x]), s.effort))
         + row(t('İzin modu'), t('Asistanın bir aracı kullanmadan önce ne zaman onay isteyeceği'), sel('sMode', Object.entries(state.meta.permissionModes).map(([k, v]) => [k, tx(v)]), s.permissionMode))
         + row(t('Ajana tam otomatik izin (yolo)'), t('Açıkken ajan hiçbir araç için onay istemez; seçilen süre dolunca kendiliğinden kapanır.'),
-          `<span id="sYoloBadge"></span>${sel('sYoloDur', [[1800, t('30 dakika')], [7200, t('2 saat')], [0, t('Bu oturum')]], 1800)}${toggle('sYolo', yolo())}`, { wide: true })
+          `<span id="sYoloBadge"></span>${sel('sYoloDur', [[1800, t('30 dakika')], [7200, t('2 saat')], [28800, t('8 saat')]], 1800)}${toggle('sYolo', yolo())}`, { wide: true })
         + row(t('Günlük asistan maliyeti'), t('USD cinsinden günlük üst sınır. 0 = sınır yok, gösterge gizlenir.'),
           `<span class="stg-path"><input id="sCostAmt" class="stg-w" type="number" min="0" step="1" placeholder="0" value="${Number(s.dailyCostLimit) > 0 ? Number(s.dailyCostLimit) : ''}"></span>`, { wide: true })
         + row(t('Bütçe dolunca sohbeti kilitle'), t('Kapalıyken yalnız uyarılır; açıkken limit dolunca yeni tur gönderilemez.'),
@@ -192,8 +207,8 @@ export function openSettings(section = 'genel') {
       if ($('#sEffort').tagName === 'SELECT') $('#sEffort').onchange = (e) => save({ effort: e.target.value });
       else onSeg('sEffort', (v) => save({ effort: v }));
       $('#sModel').onchange = (e) => save({ model: e.target.value });
-      // 0 = bu oturum (süre yok); yoloUntil 0 olunca otomatik kapanma yok (bkz. checkYolo)
-      const until = () => { const d = Number($('#sYoloDur').value) * 1000; return d ? Date.now() + d : 0; };
+      // Yolo her zaman süreli (sunucu da zorlar: server/yolo.js)
+      const until = () => { const d = Number($('#sYoloDur').value) * 1000; return Date.now() + (d || 1800000); };
       $('#sMode').onchange = async (e) => {
         const v = e.target.value;
         await save({ permissionMode: v, yoloUntil: v === 'bypassPermissions' ? until() : 0 });

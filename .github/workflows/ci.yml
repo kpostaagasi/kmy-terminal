@@ -18,8 +18,8 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       # node-pty yerel derlemesi platforma göre değişir; testler onu kullanmaz.
       - run: npm ci --ignore-scripts --no-audit --no-fund
@@ -37,14 +37,27 @@ jobs:
           curl -fs -o /dev/null http://127.0.0.1:7499/ || { cat "$RUNNER_TEMP/srv.log"; exit 1; }
       - run: npm audit --omit=dev --audit-level=high
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: { fetch-depth: 0 }
       - name: gitleaks (tüm geçmiş)
         run: |
-          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz gitleaks
+          curl -fsSLo gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
           ./gitleaks git . --redact --no-banner
 
   build:
@@ -60,12 +73,12 @@ jobs:
           - { os: windows-latest, target: exe }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       - name: macOS DMG (imzasız, ad-hoc)
         if: matrix.target == 'dmg'
-        run: npm ci --no-audit --no-fund && ./scripts/build-dmg.sh
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run postinstall && ./scripts/build-dmg.sh
       - name: Linux AppImage (imzasız)
         if: matrix.target == 'appimage'
         run: sudo apt-get update && sudo apt-get install -y libfuse2 file && ./scripts/build-appimage.sh
@@ -93,7 +106,7 @@ jobs:
           Copy-Item packaging/windows/kmy-terminal.cmd dist/win/
           & $mk /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis başarısız ($LASTEXITCODE)" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kmy-terminal-${{ matrix.target }}
           path: |
@@ -109,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { path: out, merge-multiple: true }
       - name: Taslak release'e yükle
         env: { GH_TOKEN: '${{ github.token }}' }
