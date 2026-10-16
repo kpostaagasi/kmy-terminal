@@ -13,9 +13,11 @@ export default [
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-control-regex': 'off',
       'no-useless-escape': 'warn',
-      // Mevcut borç: çeviri tablolarındaki yinelenen anahtarlar ve metin içi NBSP; ayrı PR'da temizlenecek
-      'no-dupe-keys': 'warn',
+      // Mevcut borç: çeviri tablolarındaki metin içi NBSP; ayrı PR'da temizlenecek
+      'no-dupe-keys': 'error',
       'no-irregular-whitespace': 'warn',
+      // ESLint 10 recommended'a eklenen kural: mevcut kodda zararsız ölü atamalar; uyarı olarak izlenir
+      'no-useless-assignment': 'warn',
     },
   },
   { files: ['web/**/*.js'], languageOptions: { globals: { ...globals.browser, Chart: 'readonly' } } },
