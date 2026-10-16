@@ -19,7 +19,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # github-pages ortamı yalnız main'den dağıtıma izin veriyor; release olayı etiket ref'inde çalışır.
+  # Bu yüzden yayım olayı, main üzerinde workflow_dispatch tetikler (GITHUB_TOKEN buna izinlidir).
+  redispatch:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions: { actions: write }
+    steps:
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh workflow run pages.yml -R "$GITHUB_REPOSITORY" --ref main
+
   deploy:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
