@@ -1,6 +1,7 @@
 // Zamanlanmış ajan görevleri: belirli gün ve saatte bir istemi arka planda çalıştırır (İstanbul saati).
 // Kimse onaylayamayacağı için Claude'da kayıtlı kip yoksa veya 'default' ise dontAsk kullanılır; yolo, acceptEdits ve plan kayıtlı hâliyle geçer. Codex kendi kayıtlı kipini alır. Model ve düşünme seviyesi ayarlardan geçer.
 import { db, getSettings } from './db.js';
+import { effectiveMode } from './yolo.js';
 import * as market from './market.js';
 import * as kap from './kap.js';
 
@@ -57,7 +58,7 @@ export async function runNow(id, agent) {
   if (!s) throw new Error('Görev bulunamadı');
   const settings = getSettings();
   const provider = s.provider === 'codex' ? 'codex' : 'claude';
-  const permissionMode = provider !== 'codex' && (!settings.permissionMode || settings.permissionMode === 'default') ? 'dontAsk' : settings.permissionMode;
+  const permissionMode = provider !== 'codex' && (!settings.permissionMode || settings.permissionMode === 'default') ? 'dontAsk' : effectiveMode(settings.permissionMode, settings);
   const { sessionId } = await agent.send({
     text: s.prompt, provider,
     model: provider === 'codex' ? settings.codexModel : settings.model,

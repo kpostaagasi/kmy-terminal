@@ -6,7 +6,7 @@ import path from 'node:path';
 const TESTS = [
   'portfoy.test.mjs', 'guvenlik.test.mjs', 'arama.test.mjs', 'simulasyon.mjs', 'denetim.test.mjs', 'hedef.test.mjs', 'sinyal.test.mjs',
   'takvim.test.mjs', 'radar.test.mjs', 'seri.test.mjs', 'backtest.test.mjs', ['backtest-run.check.mjs', true], 'dengeleme.test.mjs',
-  ['dengeleme-kaynak.check.mjs', true], 'yedek-uydu.test.mjs', 'fon-ayrim.test.mjs', 'sohbet-plan.test.mjs', 'platform.test.mjs', 'veri-kaynagi.test.mjs', ['guncelleme.test.mjs', true],
+  ['dengeleme-kaynak.check.mjs', true], 'yedek-uydu.test.mjs', 'fon-ayrim.test.mjs', 'sohbet-plan.test.mjs', 'platform.test.mjs', 'veri-kaynagi.test.mjs', ['guncelleme.test.mjs', true], 'sertlestirme.test.mjs',
 ];
 for (const tst of TESTS) {
   const [file, tmp] = Array.isArray(tst) ? tst : [tst, false];

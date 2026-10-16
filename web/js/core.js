@@ -277,7 +277,7 @@ export function css(name) { return getComputedStyle(document.documentElement).ge
 // Markdown → güvenli HTML
 export function md(text) {
   const html = window.marked ? window.marked.parse(text || '', { breaks: true, gfm: true }) : esc(text);
-  return window.DOMPurify ? window.DOMPurify.sanitize(html, { ADD_ATTR: ['target'] }) : html;
+  return window.DOMPurify ? window.DOMPurify.sanitize(html, { ADD_ATTR: ['target'] }) : esc(text || ''); // DOMPurify yoksa asla ham HTML basma
 }
 
 export function debounce(fn, ms = 250) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }

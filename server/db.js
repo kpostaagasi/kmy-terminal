@@ -141,7 +141,7 @@ export const DEFAULT_SETTINGS = {
   codexModel: '',
   effort: 'medium',
   permissionMode: 'default',
-  // Yolo (bypassPermissions) bitiş damgası, ms cinsinden. 0 = süre yok (kullanıcı elle kapatır).
+  // Yolo (bypassPermissions) bitiş damgası, ms cinsinden. Süre zorunlu: 0/geçmiş = kapalı (bkz. yolo.js).
   // Bu anahtar tanımlı değilse putSettings sessizce düşürüyor ve otomatik kapanma hiç çalışmıyor.
   yoloUntil: 0,
   // Günlük ajan maliyet bütçesi (USD). 0 = sınır yok. costLimitEnforce true ise bütçe dolduğunda yeni tur reddedilir.
