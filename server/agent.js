@@ -643,7 +643,7 @@ export class AgentManager extends EventEmitter {
     if (!body.trim()) throw new Error('Özetlenecek metin yok');
     let claudeBin;
     try { claudeBin = claudeExecutable(); } catch (e) {
-      throw new Error(String(e?.message || '').startsWith('Claude Code bulunamadı') ? e.message : 'Özet alınamadı');
+      throw new Error(String(e?.message || '').startsWith('Claude Code bulunamadı') ? e.message : 'Özet alınamadı', { cause: e });
     }
     let out = '';
     try {
@@ -658,7 +658,7 @@ export class AgentManager extends EventEmitter {
       for await (const m of q) if (m.type === 'result') { if (m.subtype === 'success') out = m.result; else throw new Error('Özet alınamadı'); }
     } catch (e) {
       if (String(e?.message || '').startsWith('Claude Code bulunamadı') || e?.message === 'Özet alınamadı') throw e;
-      throw new Error('Özet alınamadı');
+      throw new Error('Özet alınamadı', { cause: e });
     }
     if (!out) throw new Error('Özet alınamadı');
     return { summary: out };
