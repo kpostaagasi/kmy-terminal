@@ -14,7 +14,9 @@ Without a public key one-click install stays disabled (notice + manual download 
 1. `./bin/generate_keys` from the Sparkle release → EdDSA key pair.
 2. Repo **variable** `SPARKLE_PUBLIC_ED_KEY` (public), **secret** `SPARKLE_PRIVATE_KEY` (private).
 3. CI writes `SUPublicEDKey` into Info.plist and creates a signed `appcast.xml`, which must be
-   uploaded to the release (feed: `releases/latest/download/appcast.xml`).
+   attached to the release. When the release is published, the Pages workflow verifies it against the
+   signed SHA256SUMS and serves it at `https://kpostaagasi.github.io/kmy-terminal/appcast.xml` (the
+   `SUFeedURL`). GitHub's `releases/latest` skips pre-releases, so it cannot be used as the feed.
 4. Recommended: Apple Developer ID certificate + notarization (secrets `APPLE_DEVELOPER_ID_P12`,
    `APPLE_DEVELOPER_ID_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`); without them
    the app stays ad-hoc signed and Gatekeeper warns on first launch.

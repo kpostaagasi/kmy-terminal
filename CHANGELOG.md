@@ -1,5 +1,11 @@
 # Sürüm Notları
 
+## 0.1.6-beta — 16 Ekim 2026
+
+### Düzeltilen
+- macOS güncelleme akışı (Sparkle) artık GitHub Pages'teki `appcast.xml`'i kullanıyor; GitHub'ın "latest" bağlantısı ön sürümleri atladığı için eski adres 404 veriyordu. 0.1.5-beta kullanan Mac'ler bu sürüme bir kez elle güncellenmeli.
+- CI eylemleri Node 24 sürümlerine yükseltildi.
+
 ## 0.1.5-beta — 16 Ekim 2026
 
 ### Düzeltilen

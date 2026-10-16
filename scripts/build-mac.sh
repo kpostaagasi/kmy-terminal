@@ -58,7 +58,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>NSHumanReadableCopyright</key><string>kmy terminal · Analizler yatırım tavsiyesi değildir.</string>
 $( [[ "${KMY_BUNDLE:-}" == 1 ]] || echo "  <key>KMYProjectRoot</key><string>$ROOT</string>")
-  <key>SUFeedURL</key><string>${KMY_SPARKLE_FEED:-https://github.com/kpostaagasi/kmy-terminal/releases/latest/download/appcast.xml}</string>
+  <key>SUFeedURL</key><string>${KMY_SPARKLE_FEED:-https://kpostaagasi.github.io/kmy-terminal/appcast.xml}</string>
 $( [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]] && echo "  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_ED_KEY</string>
   <key>SUEnableAutomaticChecks</key><true/>
   <key>SUVerifyUpdateBeforeExtraction</key><true/>")
