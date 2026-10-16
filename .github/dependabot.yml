@@ -6,6 +6,10 @@ updates:
     open-pull-requests-limit: 5
     groups:
       minor-patch: { update-types: [minor, patch] }
+    ignore:
+      # Node 22 hedefleniyor (engines >=22.13); tipler çalışma zamanının önüne geçmesin
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
