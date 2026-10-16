@@ -1,5 +1,10 @@
 # Sürüm Notları
 
+## 0.1.5-beta — 16 Ekim 2026
+
+### Düzeltilen
+- Tek tıkla güncelleme paketi (`kmy-terminal-<sürüm>.tgz`) artık `package-lock.json` içeriyor; 0.1.4-beta paketinde kilit dosyası olmadığı için istemcideki `npm ci` adımı başarısız oluyordu. CI her PR'da paketi kurarak doğruluyor.
+
 ## 0.1.4-beta — 16 Ekim 2026
 
 ### Eklenen
