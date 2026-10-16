@@ -247,6 +247,10 @@ final class WebWindowController: NSWindowController, NSWindowDelegate, WKNavigat
   func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
     guard let m = message.body as? [String: Any], let type = m["type"] as? String else { return }
     switch type {
+    case "checkForUpdates":
+      Updater.shared.checkForUpdates()
+    case "updateAuto":
+      Updater.shared.setAutomaticChecks((m["on"] as? Bool) ?? true)
     case "notify":
       notify(title: m["title"] as? String ?? "kmy terminal", body: m["body"] as? String ?? "",
         actions: (m["actions"] as? [[String: Any]] ?? []).compactMap { a in

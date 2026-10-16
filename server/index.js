@@ -1,4 +1,6 @@
 // kmy terminal sunucusu: statik arayüz + REST API + WebSocket (canlı fiyat, ajan, terminal)
+import './boot-redirect.js'; // önce: doğrulanmış yeni sürüm kuruluysa oradan başlar
+import { apply as updateApply } from './update-apply.js';
 import { appCsp, REPORT_CSP, mintReportToken, verifyReportToken, reportCors } from './web-security.js';
 import { normalizeYoloPatch } from './yolo.js';
 import { listSources } from './veri-kaynagi.js';
@@ -154,6 +156,15 @@ route('GET', '/api/meta', async () => ({
   special: Object.fromEntries(Object.entries(market.SPECIAL).map(([k, v]) => [k, v.name])),
 }));
 route('GET', '/api/update', async ({ q }) => guncelleme.check(VERSION, getSettings(), { force: q.get('force') === '1' }));
+// Tek tıkla güncelleme: indir → imza + SHA-256 doğrula → ayrı klasöre kur → yeniden başlat
+route('POST', '/api/update/apply', async () => {
+  const u = await guncelleme.check(VERSION, getSettings(), { force: true });
+  if (!u.available) throw Object.assign(new Error('Güncelleme yok'), { status: 409 });
+  if (!u.oneClick) throw Object.assign(new Error('Bu kurulum için tek tıkla güncelleme kullanılamıyor'), { status: 409 });
+  const r = await updateApply(u);
+  broadcast({ t: 'update.applied', version: r.version });
+  return { ...r, restart: restartServer() };
+});
 // KOMİTE: workspace/.claude/agents altındaki alt ajan tanımları
 route('GET', '/api/committee', async () => {
   const dir = path.join(WORKSPACE_DIR, '.claude', 'agents');

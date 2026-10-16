@@ -718,3 +718,5 @@ html.native-mac :is(.topbar, .tickerbar, .statusbar, .panel-bar, .panel-head, .r
 .yolo-badge[hidden] { display: none; }
 @keyframes yolo-pulse { 50% { opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .yolo-badge { animation: none; } }
+.upd-notes { margin: 6px 0; max-height: 240px; overflow: auto; }
+.upd-notes summary { cursor: pointer; }
