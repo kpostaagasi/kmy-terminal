@@ -25,7 +25,7 @@ fs.mkdirSync(path.join(tmp, 'src', 'package', 'server'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'src', 'package', 'server', 'index.js'), 'console.log("v9")');
 fs.writeFileSync(path.join(tmp, 'src', 'package', 'package.json'), '{"version":"9.0.0"}');
 const tgzPath = path.join(tmp, 'p.tgz');
-assert.equal(spawnSync('tar', ['-czf', tgzPath, '-C', path.join(tmp, 'src'), 'package']).status, 0);
+assert.equal(spawnSync('tar', ['-czf', path.join('..', 'p.tgz'), 'package'], { cwd: path.join(tmp, 'src') }).status, 0);
 const file = fs.readFileSync(tgzPath);
 const name = pkgName('9.0.0');
 const sums = `${sha256(file)}  ${name}\n${'0'.repeat(64)}  other.dmg\n`;

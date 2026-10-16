@@ -42,7 +42,8 @@ export async function apply(release, { fetchImpl = fetch, pub = publicKey(), dir
   const tgz = path.join(dir, name);
   fs.writeFileSync(tgz, file);
   // npm pack biçimi: package/ öneki atılır; mutlak yol ve .. içeren girdiler tar tarafından reddedilir
-  const t = spawnSync('tar', ['-xzf', tgz, '-C', target, '--strip-components=1', '--no-same-owner'], { stdio: 'pipe' });
+  // Göreli yollar: Windows'ta GNU tar "D:\\…" yolunu uzak sunucu sanıyor
+  const t = spawnSync('tar', ['-xzf', name, '-C', v, '--strip-components=1', '--no-same-owner'], { cwd: dir, stdio: 'pipe' });
   if (t.status !== 0) throw new Error(`Paket açılamadı: ${t.stderr}`);
   if (!fs.existsSync(path.join(target, 'server', 'index.js'))) throw new Error('Paket içeriği beklenen yapıda değil');
   if (install) {
