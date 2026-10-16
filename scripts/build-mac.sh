@@ -22,6 +22,10 @@ echo "› Uygulama paketi hazırlanıyor…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/KMYTerminal" "$APP/Contents/MacOS/KMYTerminal"
+# Sparkle çerçevesi (güncelleyici) uygulama paketine gömülür
+mkdir -p "$APP/Contents/Frameworks"
+cp -R "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/KMYTerminal" 2>/dev/null || true
 
 # Simge: 1024 px PNG → tüm boyutlar → .icns
 TMP="$(mktemp -d)"
@@ -54,6 +58,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>NSHumanReadableCopyright</key><string>kmy terminal · Analizler yatırım tavsiyesi değildir.</string>
 $( [[ "${KMY_BUNDLE:-}" == 1 ]] || echo "  <key>KMYProjectRoot</key><string>$ROOT</string>")
+  <key>SUFeedURL</key><string>${KMY_SPARKLE_FEED:-https://github.com/kpostaagasi/kmy-terminal/releases/latest/download/appcast.xml}</string>
+$( [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]] && echo "  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_ED_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>")
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict>

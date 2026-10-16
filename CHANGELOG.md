@@ -1,5 +1,26 @@
 # Sürüm Notları
 
+## 0.1.5-beta — 16 Ekim 2026
+
+### Düzeltilen
+- Tek tıkla güncelleme paketi (`kmy-terminal-<sürüm>.tgz`) artık `package-lock.json` içeriyor; 0.1.4-beta paketinde kilit dosyası olmadığı için istemcideki `npm ci` adımı başarısız oluyordu. CI her PR'da paketi kurarak doğruluyor.
+
+## 0.1.4-beta — 16 Ekim 2026
+
+### Eklenen
+- **Tek tıkla güncelleme.** Uygulama içi bildirim sürüm notlarını gösterir; sunucu/tarayıcı kurulumunda imzası (Ed25519) ve SHA-256 özeti doğrulanan paket indirilip kurulur. macOS uygulaması Sparkle (EdDSA) kullanır. Ayarlardan kapatılabilir.
+- Üst çubukta kalan süreyi gösteren kalıcı **YOLO göstergesi**.
+
+### Güvenlik
+- DOMPurify yüklenmezse Markdown ham HTML yerine kaçışlı metin olarak gösterilir; arayüze sıkı CSP.
+- Yolo (tüm araçlara izin) modu her zaman süreli (varsayılan 30 dk, en fazla 8 saat) ve sunucuda zorlanır.
+- Rapor sunucusu: Origin'e güvenmek yerine kısa ömürlü jeton, `ACAO *` kaldırıldı, raporlar CSP sandbox ile sunulur.
+- CI: Dependabot, SHA ile sabitlenmiş eylemler, gitleaks sağlama doğrulaması, ESLint/Prettier/tür denetimi.
+
+### Düzeltilen
+- Listeden kaldırılmış sembol açılırken oluşan hata.
+- İngilizce çevirilerde yinelenen anahtarlar.
+
 ## 0.1.3-beta — 14 Ekim 2026
 
 ### Değişen

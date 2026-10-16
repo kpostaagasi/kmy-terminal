@@ -18,7 +18,7 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       # node-pty yerel derlemesi platforma göre değişir; testler onu kullanmaz.
@@ -40,18 +40,32 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
+      # Güncelleme paketi istemcideki gibi kurulabilmeli (kilit dosyası + npm ci)
+      - name: Güncelleme paketi duman testi
+        run: |
+          out="$RUNNER_TEMP/upd"; scripts/build-update-pkg.sh "$out"
+          mkdir "$out/x" && tar -xzf "$out"/kmy-terminal-*.tgz -C "$out/x" --strip-components=1
+          test -f "$out/x/server/index.js" && test -f "$out/x/package-lock.json"
+          (cd "$out/x" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
+
+  # macOS kabuğu (Sparkle dahil) her PR'da derlenir
+  mac-shell:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: cd macos && swift build -c release --product KMYTerminal
 
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0 }
       - name: gitleaks (tüm geçmiş)
         run: |
@@ -73,12 +87,26 @@ jobs:
           - { os: windows-latest, target: exe }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', cache: npm }
       - name: macOS DMG (imzasız, ad-hoc)
         if: matrix.target == 'dmg'
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
         run: npm ci --ignore-scripts --no-audit --no-fund && npm run postinstall && ./scripts/build-dmg.sh
+      - name: Sparkle EdDSA imzası + appcast (anahtar tanımlıysa)
+        if: matrix.target == 'dmg'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          [ -n "$SPARKLE_PRIVATE_KEY" ] || { echo "::warning::SPARKLE_PRIVATE_KEY yok: appcast üretilmedi"; exit 0; }
+          SPK="$(find macos/.build -path '*Sparkle*/bin/generate_appcast' -print -quit)"
+          [ -n "$SPK" ] || { echo "generate_appcast bulunamadı"; exit 1; }
+          v="$(node -p "require('./package.json').version")"
+          echo "$SPARKLE_PRIVATE_KEY" | "$SPK" --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/v$v/" \
+            --link "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v$v" dist/
       - name: Linux AppImage (imzasız)
         if: matrix.target == 'appimage'
         run: sudo apt-get update && sudo apt-get install -y libfuse2 file && ./scripts/build-appimage.sh
@@ -106,13 +134,14 @@ jobs:
           Copy-Item packaging/windows/kmy-terminal.cmd dist/win/
           & $mk /DVERSION=$v /DSRC=dist\win packaging\windows\kmy-terminal.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis başarısız ($LASTEXITCODE)" }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kmy-terminal-${{ matrix.target }}
           path: |
             dist/*.dmg
             dist/*.AppImage
             dist/*-setup.exe
+            dist/appcast.xml
           if-no-files-found: error
 
   # Etiket (v*) gelince dosyaları TASLAK release'e ekler; yayımlamaz.
@@ -124,6 +153,23 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { path: out, merge-multiple: true }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { path: src }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '22' }
+      # Tek tıkla güncelleme paketi + imzalı SHA256SUMS (KMY_RELEASE_SIGNING_KEY: Ed25519 PEM özel anahtar)
+      - name: Sunucu paketi, SHA256SUMS ve imza
+        env: { KMY_RELEASE_SIGNING_KEY: '${{ secrets.KMY_RELEASE_SIGNING_KEY }}' }
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          src/scripts/build-update-pkg.sh "$PWD/out"
+          test -f "out/kmy-terminal-$v.tgz"
+          (cd out && sha256sum * > SHA256SUMS)
+          if [ -n "$KMY_RELEASE_SIGNING_KEY" ]; then
+            printf '%s' "$KMY_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/k.pem"; chmod 600 "$RUNNER_TEMP/k.pem"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/k.pem" -rawin -in out/SHA256SUMS | base64 -w0 > out/SHA256SUMS.sig
+            rm -f "$RUNNER_TEMP/k.pem"
+          else echo "::warning::KMY_RELEASE_SIGNING_KEY yok: SHA256SUMS imzasız, tek tıkla güncelleme bu sürümde çalışmaz"; fi
       - name: Taslak release'e yükle
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
