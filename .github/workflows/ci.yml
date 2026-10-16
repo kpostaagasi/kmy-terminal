@@ -47,6 +47,13 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
+      # Güncelleme paketi istemcideki gibi kurulabilmeli (kilit dosyası + npm ci)
+      - name: Güncelleme paketi duman testi
+        run: |
+          out="$RUNNER_TEMP/upd"; scripts/build-update-pkg.sh "$out"
+          mkdir "$out/x" && tar -xzf "$out"/kmy-terminal-*.tgz -C "$out/x" --strip-components=1
+          test -f "$out/x/server/index.js" && test -f "$out/x/package-lock.json"
+          (cd "$out/x" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
 
   # macOS kabuğu (Sparkle dahil) her PR'da derlenir
   mac-shell:
@@ -155,7 +162,7 @@ jobs:
         env: { KMY_RELEASE_SIGNING_KEY: '${{ secrets.KMY_RELEASE_SIGNING_KEY }}' }
         run: |
           v="${GITHUB_REF_NAME#v}"
-          (cd src && npm pack --ignore-scripts --pack-destination ../out >/dev/null)
+          src/scripts/build-update-pkg.sh "$PWD/out"
           test -f "out/kmy-terminal-$v.tgz"
           (cd out && sha256sum * > SHA256SUMS)
           if [ -n "$KMY_RELEASE_SIGNING_KEY" ]; then
