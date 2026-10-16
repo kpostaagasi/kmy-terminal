@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, INSTALLED } from './paths.js';
+import { canApply } from './update-apply.js';
 
 export const REPO = 'kpostaagasi/kmy-terminal';
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=20`;
@@ -58,6 +59,8 @@ export function pickUpdate(releases, current, platform = process.platform) {
   return {
     current, latest, available: compareVersions(latest, current) > 0,
     name: r.name || r.tag_name, url: r.html_url, assetUrl: asset?.browser_download_url || null, publishedAt: r.published_at,
+    notes: String(r.body || '').slice(0, 20000), // sürüm notları (changelog), arayüzde Markdown olarak güvenli biçimde gösterilir
+    assets: (r.assets || []).map((a) => ({ name: a.name, browser_download_url: a.browser_download_url, size: a.size })),
   };
 }
 
@@ -72,7 +75,8 @@ export async function check(current, settings, { force = false } = {}) {
   try {
     const res = await fetch(API, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': `kmy-terminal/${current}` }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`GitHub ${res.status}`);
-    const result = { ...pickUpdate(await res.json(), current), kind: installKind(), checkedAt: new Date().toISOString() };
+    const base = { ...pickUpdate(await res.json(), current), kind: installKind() };
+    const result = { ...base, oneClick: base.available && canApply(base, base.kind), checkedAt: new Date().toISOString() };
     cached = { at: Date.now(), result };
     return result;
   } catch (e) {

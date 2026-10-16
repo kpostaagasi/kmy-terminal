@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     statusBar = StatusBar(app: self)
     statusBar.start()
     Gateway.shared.syncMenubarAgent()
+    Updater.shared.start()
     connect()
   }
 
@@ -163,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
   /// Sayfa arayüz dilini değiştirdi: menüler yeni dille yeniden kurulur
   func languageChanged() { buildMenu() }
+  @objc func checkForUpdates() { Updater.shared.checkForUpdates() }
 
   private func buildMenu() {
     let bar = NSMenu()
@@ -177,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let name = "kmy terminal"
     _ = menu(name, [
       item(L("\(name) Hakkında", "About \(name)"), #selector(about)),
+      item(L("Güncellemeleri Denetle…", "Check for Updates…"), #selector(checkForUpdates)),
       .separator(),
       item(L("Ayarlar…", "Settings…"), #selector(openSettings), ","),
       .separator(),

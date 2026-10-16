@@ -20,8 +20,8 @@
     "dmg": "./scripts/build-dmg.sh",
     "server": "node server/index.js",
     "lint": "eslint .",
-    "format:check": "prettier --check server/yolo.js server/web-security.js test/sertlestirme.test.mjs eslint.config.js",
-    "format": "prettier --write server/yolo.js server/web-security.js test/sertlestirme.test.mjs eslint.config.js",
+    "format:check": "prettier --check server/yolo.js server/web-security.js test/sertlestirme.test.mjs eslint.config.js server/update-verify.js server/update-key.js test/guncelleme-uygula.test.mjs",
+    "format": "prettier --write server/yolo.js server/web-security.js test/sertlestirme.test.mjs eslint.config.js server/update-verify.js server/update-key.js test/guncelleme-uygula.test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "keywords": [],

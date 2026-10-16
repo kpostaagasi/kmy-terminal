@@ -4,5 +4,5 @@
     "target": "es2022", "module": "nodenext", "moduleResolution": "nodenext",
     "types": ["node"], "skipLibCheck": true
   },
-  "include": ["server/yolo.js", "server/web-security.js"]
+  "include": ["server/yolo.js", "server/web-security.js", "server/update-verify.js", "server/update-key.js"]
 }
