@@ -15,8 +15,6 @@ export default {
   'Henüz denetlenmedi. Tıklayıp “Şimdi denetle”ye basın.': 'Not audited yet. Click and press “Audit now”.',
   'OK {ok} · SAPMA {sapma} · ATLANDI {atlandi}': 'OK {ok} · MISMATCH {sapma} · SKIPPED {atlandi}',
   'son denetim {t}': 'last audit {t}',
-  'Veri sağlığı': 'Data health',
-  'Şimdi denetle': 'Audit now',
   'denetleniyor… (≈40 sn)': 'auditing… (≈40 s)',
   'Henüz denetlenmedi. “Şimdi denetle” bağımsız ikinci kaynaklarla karşılaştırır (yaklaşık 40 sn).': 'Not audited yet. “Audit now” compares against independent second sources (about 40 s).',
   'ATLANDI hata değildir, doğrulanamadı demektir (seans açık, kaynağa erişilemedi…). Denetim bağımsız ikinci kaynaklarla karşılaştırır: TCMB, İş Yatırım, TEFAS, KAP mali tabloları.': 'SKIPPED is not an error: it means the value could not be verified (market open, source unreachable…). The audit compares against independent second sources: CBRT, İş Yatırım, TEFAS, KAP financial statements.',
@@ -56,7 +54,6 @@ export default {
   'Veri sağlığı': 'Data health',
   'Veri uyarısı': 'Data alert',
   'VERİ ⚠ {n} sapma': 'DATA ⚠ {n} mismatch',
-  'Aç': 'Open',
   'Bildirilecek sinyaller': 'Signals to alert on',
   'RSI, MACD ve hacim sinyalleri sık çıktığından varsayılan kapalıdır': 'RSI, MACD and volume signals fire often, so they are off by default',
   // Bölümler
