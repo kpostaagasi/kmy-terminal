@@ -1,8 +1,35 @@
 # kmy terminal
 
-Açık kaynak (AGPL-3.0), BIST odaklı, yerel çalışan bir borsa terminali. Ücretsiz **beta**; yatırım tavsiyesi değildir. Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex) tabanlı bir analiz ajanından oluşur. Tüm veriler bilgisayarınızda, tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini).
+Yapay zekâ destekli, bilgisayarınızda çalışan, açık kaynak BIST terminali.
+
+[![Sürüm](https://img.shields.io/github/v/release/kpostaagasi/kmy-terminal?include_prereleases&label=s%C3%BCr%C3%BCm)](https://github.com/kpostaagasi/kmy-terminal/releases)
+[![Lisans](https://img.shields.io/github/license/kpostaagasi/kmy-terminal?label=lisans)](LICENSE)
+
+**[Web sitesi](https://kpostaagasi.github.io/kmy-terminal/)** · **[İndir](https://github.com/kpostaagasi/kmy-terminal/releases)** · [Değişiklikler](CHANGELOG.md) · [Katkı](CONTRIBUTING.md)
+
+> Ücretsiz **beta**. Ürettiği analizler yatırım tavsiyesi değildir.
+
+Tarayıcıda çalışan arayüz, yerel bir Node sunucusu ve Claude (veya ChatGPT/Codex) tabanlı bir analiz ajanından oluşur.
+
+## Öne çıkanlar
+
+- **Analiz ajanı:** 14 beceri ve 4 alt ajanla hisse analizi, DCF, KAP taraması ve portföy analizi. Yazma işlemleri varsayılan olarak onay ister.
+- **Piyasa ekranı:** grafik ve teknik göstergeler, temel veriler, mali tablolar, haberler, KAP bildirimleri ve kurum raporları.
+- **Portföy:** 13 işlem türü, platform ve para birimi bazında pozisyonlar, K/Z, dağılım ve temettü takibi.
+- **Veri doğruluğu:** her fiyatın yanında kaynak ve gecikme etiketi, ikinci kaynakla çapraz denetim.
+- **Veriler sizde:** her şey tek bir SQLite dosyasında tutulur (bkz. [Gateway](#gateway) › Veri dizini); sunucu yalnızca `127.0.0.1` üzerinde dinler.
 
 ## Hızlı başlangıç
+
+**Hazır paket:** [Releases](https://github.com/kpostaagasi/kmy-terminal/releases) sayfasından platformunuza uygun dosyayı indirin.
+
+| Platform | Dosya |
+|---|---|
+| macOS (Apple Silicon) | `kmy-terminal-<sürüm>-arm64.dmg` |
+| Windows (x64) | `kmy-terminal-<sürüm>-x64-setup.exe` |
+| Linux (x86_64) | `kmy-terminal-<sürüm>-x86_64.AppImage` |
+
+**Kaynaktan:**
 
 ```bash
 npm install
@@ -15,11 +42,7 @@ Tek tıkla açmak için: `npm run open` (sunucuyu arka planda başlatır ve tara
 
 Gereksinimler: Node 22.13+, ajan için `claude` CLI'da oturum açık olması (`claude` → `/login`). İsteğe bağlı: `codex login` (ChatGPT sağlayıcısı).
 
-Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 580 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 28, denetim çekirdeği 86, hedef fiyat 33, sinyal bildirimi 37, takvim 88, radar 13, bölünme düzeltmesi 27, backtest 47, dengeleme 63, yedek uydu 8, fon ayrımı 5, sohbet plan 4; ayrıca koşu kilidi 15 ve hedef kalıcılığı 11 kontrol; gerçek verinize dokunmaz).
-
-Verinin doğruluğunu canlı kaynaklara karşı denetlemek için: `npm run denetim` (ağ gerekir; `npm test` zincirinde değildir). Döviz (TCMB), gram altın (ons × kur), altın türleri, hisse fiyatı (İş Yatırım), TEFAS fon fiyatı, gecikme etiketleri ve temel oranlar (FAVÖK, net kâr, F/K; mali tablo ham satırlarından yeniden hesap) ikinci bir kaynakla karşılaştırılır. `-- --portfoy` portföy toplamlarını gerçek veritabanının **kopyasında** yeniden toplar; çıktıya tutar yazılmaz. `-- --json` makine okunur çıktı verir. Hisse fiyatı kontrolü seans açıkken atlanır (kapanıştan sonra çalıştırın). Çıkış kodu: 0 temiz, 1 sapma var, 2 hiçbir şey doğrulanamadı. Aynı denetim arayüzde durum çubuğundaki **VERİ** rozetinden de çalıştırılır.
-
-## Kurulum (DMG)
+## macOS kurulumu (DMG)
 
 Hazır paket: GitHub › Releases › `kmy-terminal-<sürüm>-arm64.dmg`. DMG'yi açın, **kmy terminal**'i Applications klasörüne sürükleyin.
 
@@ -29,60 +52,11 @@ Hazır paket: GitHub › Releases › `kmy-terminal-<sürüm>-arm64.dmg`. DMG'yi
 - Veri: `BORSA_DATA_DIR` tanımlıysa o, yoksa `~/Library/Application Support/kmy terminal` (uygulamayı silmek verileri silmez). Bu dizin henüz yoksa depo içindeki `data/` kullanılır ve varsa uygulama dizinine taşınır. Hangi dizinin kullanıldığını `bin/kmy gateway status` her an gösterir.
 - Paketi yeniden üretmek için: `npm run dmg` → `dist/kmy-terminal-<sürüm>-arm64.dmg`.
 
-## macOS uygulaması
-
-Terminal, yerel bir macOS uygulaması olarak da çalışır (Swift + AppKit + WKWebView, ~1 MB; Chromium taşımaz).
-
-```bash
-npm run mac
-```
-
-`dist/kmy terminal.app` derlenir ve `~/Applications` altına kurulur; Dock, Spotlight ve Launchpad'den açılır. Gerekenler: Xcode veya Command Line Tools (Swift 5.10+), macOS 14+.
-
-- **Gateway:** uygulama açılınca sunucuya bağlanır. `./bin/kmy gateway install` ile servis kuruluysa onu kullanır (gerekirse başlatır); kurulu değilse sunucuyu kendi alt süreci olarak başlatır ve kapanınca durdurur.
-- **Yerel özellikler:** macOS bildirimleri (ajan izin ve soru istekleri), Dock rozeti (çalışan ajan işi sayısı), ~/Downloads'a indirme, dosya seçme penceresi, tema ile uyumlu pencere çubuğu, pencere konumunu hatırlama.
-- **Menü:** Dosya (⌘N yeni ajan oturumu, ⌘K sembol ara), Görünüm (⌘1 Terminal, ⌘2 Dashboard, ⌘3 Portföy, ⌘\\ sağ panel, yakınlaştırma, ⌘R yenile), Gateway (durum, yeniden başlat, loglar), ⌘, Ayarlar.
-- Dış bağlantılar varsayılan tarayıcıda, yerel raporlar yeni uygulama penceresinde açılır. Safari › Geliştir menüsünden sayfa incelenebilir.
-- Uygulama yerel (ad-hoc) imzalıdır; başka bir Mac'e dağıtmak için Developer ID ile imzalanıp notarize edilmesi gerekir.
-- **Menü çubuğu:** gateway çalıştığı sürece menü çubuğunda logo görünür (durum, çalışma süresi, çalışan işler, hızlı komutlar). Pencere kapatılınca uygulama menü çubuğunda sürer; servis kuruluysa oturum açılışında menü çubuğunda başlar.
-
-## Gateway
-
-kmy gateway, sunucuyu arka planda çalışan yönetilen bir servis olarak kurar ve yerel API'yi bir erişim anahtarıyla korur. Oturum açıldığında kendiliğinden başlar, çökerse servis yöneticisi yeniden açar (macOS: LaunchAgent `com.kmyterminal.gateway`, Linux: `systemd --user` birimi `borsa-gateway.service`).
-
-```bash
-sh scripts/install.sh            # npm install + servis kurulumu (tekrar çalıştırılabilir, sudo kullanmaz; --link, --no-service, --dry-run)
-./bin/kmy gateway install      # yalnız servis (--dry-run: plist/birim dosyasını ve komutları yazdırır)
-./bin/kmy gateway status       # kurulu mu, çalışıyor mu, PID, port, çalışma süresi (--json)
-./bin/kmy gateway start | stop | restart
-./bin/kmy gateway logs -f      # data/logs/gateway.log
-./bin/kmy gateway token        # erişim anahtarını yazdır (--rotate: yenile)
-./bin/kmy gateway open         # arayüzü tarayıcıda aç
-./bin/kmy gateway uninstall
-```
-
-`npm link` ile (veya `sh scripts/install.sh --link`) `kmy` komutu PATH'e eklenir. Durum, anahtar ve yeniden başlatma/durdurma Ayarlar › SİSTEM › Gateway bölümünde de bulunur. Port `BORSA_PORT` (rapor portu `BORSA_REPORT_PORT`, varsayılan port+1), veri klasörü `BORSA_DATA_DIR` ile değiştirilebilir; kurulum sırasında tanımlıysa servise aktarılır.
-
-Veri dizini tek kaynaktan çözülür: `BORSA_DATA_DIR` → `~/Library/Application Support/kmy terminal/data` (macOS) → depodaki `data/`. Uygulama ile `npm start` böylece aynı veritabanını görür; eski depo kopyası varsa doğrulanarak (boyut ve tablo sayısı) uygulama dizinine taşınır. `bin/kmy gateway status` (veya `--json`) etkin veri dizinini gösterir.
-
-**Erişim anahtarı.** İlk çalıştırmada `data/gateway.json` dosyasında (izin 0600) 32 baytlık rastgele bir anahtar oluşur. Tüm `/api/*` istekleri ve WebSocket bağlantısı bu anahtarı ister; yoksa `401 {"error":"Gateway anahtarı gerekli"}` döner. Tarayıcı anahtarı arayüz yüklenirken verilen `borsa_gw` çerezi (HttpOnly, SameSite=Strict) ile otomatik gönderir. Betikler ve harici istemciler başlıkla gönderir:
-
-```bash
-TOKEN=$(./bin/kmy gateway token)
-curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
-# veya: -H "x-gateway-token: $TOKEN"
-```
-
-`server/mcp-stdio.js` anahtarı dosyadan kendisi okur; ek ayar gerekmez.
-
-**Güvenlik notları.**
-- Sunucu yalnız `127.0.0.1` üzerinde dinler. Host başlığı `127.0.0.1`, `localhost` veya `[::1]` (doğru portla) değilse istek 403 ile reddedilir (DNS rebinding koruması). WebSocket ayrıca Origin başlığını denetler; başka sitelerden gelen API istekleri de reddedilir.
-- Statik dosyalar (`/js`, `/vendor`, stil, simge, manifest) anahtarsız sunulur; veri içermezler.
-- Rapor sunucusu (7421) rapor dosyalarında aynı çerezi veya uygulama kökenini ister. Uygulama içi rapor çerçeveleri çalışmaya devam eder.
-- Anahtarı yenilemek (`gateway token --rotate` veya Ayarlar › Yenile) eski anahtarla bağlanan harici istemcileri düşürür. Açık arayüz sekmeleri kendini tazeler.
-- `data/gateway.json` dosyası parola gibidir: paylaşmayın, yedeklere dikkat edin. Aynı kullanıcı hesabındaki yerel programlar bu dosyayı okuyabilir. Anahtar bu programlara karşı değil, tarayıcıdaki diğer sitelere ve ağa karşı korur.
-- Ajan alt süreçlerine (Claude / Codex) **master anahtar verilmez**. Onlara imzalı, süreli ve oturum+kip taşıyan bir kapsamlı jeton verilir; bu jeton yalnız `/api/tools/` rotasında geçerlidir, `/api/settings` 401 döner. Yolo kipi açık olsa bile ajan tüm API'ye erişemez.
-- Ağdan erişim varsayılan olarak kapalıdır. `HOST=0.0.0.0` ile açarsanız izin verilen adları `BORSA_ALLOWED_HOSTS` ile ekleyin; bağlantı şifresiz (HTTP) olur.
+## macOS: imzasız uygulamayı açma
+Uygulama Apple Developer imzası/notarizasyonu olmadan dağıtılır; macOS ilk açılışta "doğrulanamayan geliştirici" uyarısı verir.
+- **Yol 1:** Finder'da `kmy terminal.app` üzerine **sağ tık › Aç**, ardından açılan pencerede tekrar **Aç**.
+- **Yol 2 (Terminal):** `xattr -dr com.apple.quarantine "/Applications/kmy terminal.app"`
+Yalnız resmî GitHub Releases sayfasından indirdiğiniz dosyalar için yapın.
 
 ## Özellikler
 
@@ -154,12 +128,70 @@ claude mcp add borsa -- node "$(pwd)/server/mcp-stdio.js"
 
 Değişiklikler için `CHANGELOG.md` dosyasına bakın. Bu yazılımın ürettiği analizler yatırım tavsiyesi değildir.
 
+## macOS uygulaması
 
-## macOS: imzasız uygulamayı açma
-Uygulama Apple Developer imzası/notarizasyonu olmadan dağıtılır; macOS ilk açılışta "doğrulanamayan geliştirici" uyarısı verir.
-- **Yol 1:** Finder'da `kmy terminal.app` üzerine **sağ tık › Aç**, ardından açılan pencerede tekrar **Aç**.
-- **Yol 2 (Terminal):** `xattr -dr com.apple.quarantine "/Applications/kmy terminal.app"`
-Yalnız resmî GitHub Releases sayfasından indirdiğiniz dosyalar için yapın.
+Terminal, yerel bir macOS uygulaması olarak da çalışır (Swift + AppKit + WKWebView, ~1 MB; Chromium taşımaz).
+
+```bash
+npm run mac
+```
+
+`dist/kmy terminal.app` derlenir ve `~/Applications` altına kurulur; Dock, Spotlight ve Launchpad'den açılır. Gerekenler: Xcode veya Command Line Tools (Swift 5.10+), macOS 14+.
+
+- **Gateway:** uygulama açılınca sunucuya bağlanır. `./bin/kmy gateway install` ile servis kuruluysa onu kullanır (gerekirse başlatır); kurulu değilse sunucuyu kendi alt süreci olarak başlatır ve kapanınca durdurur.
+- **Yerel özellikler:** macOS bildirimleri (ajan izin ve soru istekleri), Dock rozeti (çalışan ajan işi sayısı), ~/Downloads'a indirme, dosya seçme penceresi, tema ile uyumlu pencere çubuğu, pencere konumunu hatırlama.
+- **Menü:** Dosya (⌘N yeni ajan oturumu, ⌘K sembol ara), Görünüm (⌘1 Terminal, ⌘2 Dashboard, ⌘3 Portföy, ⌘\\ sağ panel, yakınlaştırma, ⌘R yenile), Gateway (durum, yeniden başlat, loglar), ⌘, Ayarlar.
+- Dış bağlantılar varsayılan tarayıcıda, yerel raporlar yeni uygulama penceresinde açılır. Safari › Geliştir menüsünden sayfa incelenebilir.
+- Uygulama yerel (ad-hoc) imzalıdır; başka bir Mac'e dağıtmak için Developer ID ile imzalanıp notarize edilmesi gerekir.
+- **Menü çubuğu:** gateway çalıştığı sürece menü çubuğunda logo görünür (durum, çalışma süresi, çalışan işler, hızlı komutlar). Pencere kapatılınca uygulama menü çubuğunda sürer; servis kuruluysa oturum açılışında menü çubuğunda başlar.
+
+## Gateway
+
+kmy gateway, sunucuyu arka planda çalışan yönetilen bir servis olarak kurar ve yerel API'yi bir erişim anahtarıyla korur. Oturum açıldığında kendiliğinden başlar, çökerse servis yöneticisi yeniden açar (macOS: LaunchAgent `com.kmyterminal.gateway`, Linux: `systemd --user` birimi `borsa-gateway.service`).
+
+```bash
+sh scripts/install.sh            # npm install + servis kurulumu (tekrar çalıştırılabilir, sudo kullanmaz; --link, --no-service, --dry-run)
+./bin/kmy gateway install      # yalnız servis (--dry-run: plist/birim dosyasını ve komutları yazdırır)
+./bin/kmy gateway status       # kurulu mu, çalışıyor mu, PID, port, çalışma süresi (--json)
+./bin/kmy gateway start | stop | restart
+./bin/kmy gateway logs -f      # data/logs/gateway.log
+./bin/kmy gateway token        # erişim anahtarını yazdır (--rotate: yenile)
+./bin/kmy gateway open         # arayüzü tarayıcıda aç
+./bin/kmy gateway uninstall
+```
+
+`npm link` ile (veya `sh scripts/install.sh --link`) `kmy` komutu PATH'e eklenir. Durum, anahtar ve yeniden başlatma/durdurma Ayarlar › SİSTEM › Gateway bölümünde de bulunur. Port `BORSA_PORT` (rapor portu `BORSA_REPORT_PORT`, varsayılan port+1), veri klasörü `BORSA_DATA_DIR` ile değiştirilebilir; kurulum sırasında tanımlıysa servise aktarılır.
+
+Veri dizini tek kaynaktan çözülür: `BORSA_DATA_DIR` → `~/Library/Application Support/kmy terminal/data` (macOS) → depodaki `data/`. Uygulama ile `npm start` böylece aynı veritabanını görür; eski depo kopyası varsa doğrulanarak (boyut ve tablo sayısı) uygulama dizinine taşınır. `bin/kmy gateway status` (veya `--json`) etkin veri dizinini gösterir.
+
+**Erişim anahtarı.** İlk çalıştırmada `data/gateway.json` dosyasında (izin 0600) 32 baytlık rastgele bir anahtar oluşur. Tüm `/api/*` istekleri ve WebSocket bağlantısı bu anahtarı ister; yoksa `401 {"error":"Gateway anahtarı gerekli"}` döner. Tarayıcı anahtarı arayüz yüklenirken verilen `borsa_gw` çerezi (HttpOnly, SameSite=Strict) ile otomatik gönderir. Betikler ve harici istemciler başlıkla gönderir:
+
+```bash
+TOKEN=$(./bin/kmy gateway token)
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7420/api/portfolio
+# veya: -H "x-gateway-token: $TOKEN"
+```
+
+`server/mcp-stdio.js` anahtarı dosyadan kendisi okur; ek ayar gerekmez.
+
+**Güvenlik notları.**
+- Sunucu yalnız `127.0.0.1` üzerinde dinler. Host başlığı `127.0.0.1`, `localhost` veya `[::1]` (doğru portla) değilse istek 403 ile reddedilir (DNS rebinding koruması). WebSocket ayrıca Origin başlığını denetler; başka sitelerden gelen API istekleri de reddedilir.
+- Statik dosyalar (`/js`, `/vendor`, stil, simge, manifest) anahtarsız sunulur; veri içermezler.
+- Rapor sunucusu (7421) rapor dosyalarında aynı çerezi veya uygulama kökenini ister. Uygulama içi rapor çerçeveleri çalışmaya devam eder.
+- Anahtarı yenilemek (`gateway token --rotate` veya Ayarlar › Yenile) eski anahtarla bağlanan harici istemcileri düşürür. Açık arayüz sekmeleri kendini tazeler.
+- `data/gateway.json` dosyası parola gibidir: paylaşmayın, yedeklere dikkat edin. Aynı kullanıcı hesabındaki yerel programlar bu dosyayı okuyabilir. Anahtar bu programlara karşı değil, tarayıcıdaki diğer sitelere ve ağa karşı korur.
+- Ajan alt süreçlerine (Claude / Codex) **master anahtar verilmez**. Onlara imzalı, süreli ve oturum+kip taşıyan bir kapsamlı jeton verilir; bu jeton yalnız `/api/tools/` rotasında geçerlidir, `/api/settings` 401 döner. Yolo kipi açık olsa bile ajan tüm API'ye erişemez.
+- Ağdan erişim varsayılan olarak kapalıdır. `HOST=0.0.0.0` ile açarsanız izin verilen adları `BORSA_ALLOWED_HOSTS` ile ekleyin; bağlantı şifresiz (HTTP) olur.
+
+## Test ve denetim
+
+Portföy hesaplarını ve güvenlik sınırlarını doğrulamak için: `npm test` (geçici veritabanında 580 kontrol: portföy 63, güvenlik 19, arama 59, hata senaryoları 28, denetim çekirdeği 86, hedef fiyat 33, sinyal bildirimi 37, takvim 88, radar 13, bölünme düzeltmesi 27, backtest 47, dengeleme 63, yedek uydu 8, fon ayrımı 5, sohbet plan 4; ayrıca koşu kilidi 15 ve hedef kalıcılığı 11 kontrol; gerçek verinize dokunmaz).
+
+Verinin doğruluğunu canlı kaynaklara karşı denetlemek için: `npm run denetim` (ağ gerekir; `npm test` zincirinde değildir). Döviz (TCMB), gram altın (ons × kur), altın türleri, hisse fiyatı (İş Yatırım), TEFAS fon fiyatı, gecikme etiketleri ve temel oranlar (FAVÖK, net kâr, F/K; mali tablo ham satırlarından yeniden hesap) ikinci bir kaynakla karşılaştırılır. `-- --portfoy` portföy toplamlarını gerçek veritabanının **kopyasında** yeniden toplar; çıktıya tutar yazılmaz. `-- --json` makine okunur çıktı verir. Hisse fiyatı kontrolü seans açıkken atlanır (kapanıştan sonra çalıştırın). Çıkış kodu: 0 temiz, 1 sapma var, 2 hiçbir şey doğrulanamadı. Aynı denetim arayüzde durum çubuğundaki **VERİ** rozetinden de çalıştırılır.
 
 ## Katkı
 Bkz. [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Lisans
+
+[AGPL-3.0](LICENSE)
