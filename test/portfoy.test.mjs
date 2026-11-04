@@ -1,12 +1,39 @@
 // Portföy motoru regresyon testi (npm test): geçici veritabanında, elle hesaplanmış beklenen değerlerle.
-// Gerçek veritabanına (data/) dokunmaz. Değer, K/Z ve XIRR kontrolleri güncel fiyat için internet ister.
+// Gerçek veritabanına (data/) ve canlı piyasa verilerine dokunmaz.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'borsa-test-'));
 process.env.BORSA_DATA_DIR = dir;
+const fixedNow = Date.parse('2026-06-15T12:00:00Z');
+const RealDate = Date;
+globalThis.Date = class extends RealDate {
+  constructor(...args) { super(...(args.length ? args : [fixedNow])); }
+  static now() { return fixedNow; }
+};
+
+const prices = { THYAO: 350, TUPRS: 180, BIMAS: 400, 'AAPL.US': 220, CEYREK: 7500, TTE: 1.5, ASELS: 80, USDTRY: 42 };
+const yahooPrices = { 'THYAO.IS': 350, 'TUPRS.IS': 180, 'BIMAS.IS': 400, AAPL: 220, 'ASELS.IS': 80, 'USDTRY=X': 42 };
+globalThis.fetch = async (url) => {
+  const u = new URL(url);
+  if (u.hostname !== 'query1.finance.yahoo.com' || u.pathname !== '/v7/finance/spark') throw new Error(`Beklenmeyen ağ isteği: ${url}`);
+  const result = u.searchParams.get('symbols').split(',').filter((s) => yahooPrices[s] != null).map((symbol) => ({
+    symbol, response: [{ meta: { regularMarketPrice: yahooPrices[symbol], chartPreviousClose: yahooPrices[symbol], currency: symbol === 'AAPL' ? 'USD' : 'TRY' } }],
+  }));
+  return { ok: true, json: async () => ({ spark: { result } }) };
+};
+const { db, cachePut, putSettings } = await import('../server/db.js');
+putSettings({ dataSources: { truncgil: false }, riskFreeSource: 'fixed' });
+cachePut('isy:all', { stocks: {}, actions: [], at: fixedNow });
+const barTimes = [Date.parse('2025-01-02T12:00:00Z'), fixedNow];
+for (const [symbol, price] of Object.entries(prices)) {
+  cachePut(`hist:${symbol}:2y:1d`, barTimes.map((t) => ({ t, o: price, h: price, l: price, c: price, v: 0 })));
+}
+cachePut('tefas:px:TTE:1', barTimes.map((t) => ({ t, c: prices.TTE, name: 'TTE' })));
+
 const pf = await import('../server/portfolio.js');
+pf.setManualPrice('CEYREK', prices.CEYREK, '2026-06-15');
 
 const TX = [
   { date: '2025-01-02', platform: 'Kurum A', type: 'DEPOSIT', price: 100000 },
@@ -72,6 +99,9 @@ const S = await pf.summary();
 const t = S.totals;
 check('Net yatırılan', t.netInvested, 90000);
 check('Toplam maliyet', t.cost, 64014);
+check('Sabit fiyatlarla toplam değer', t.value, 110703);
+for (const h of S.holdings) check(`${h.symbol} sabit fiyat`, h.price, prices[h.symbol]);
+check('Sabit USD kuru', S.fx.USD, prices.USDTRY);
 check('Toplam K/Z = değer − net yatırılan', t.totalPnl, t.value - t.netInvested);
 const decomposition = t.unrealized + t.realized + t.dividends + t.interest - t.fees + t.fxRealized + t.fxUnrealized;
 check('K/Z ayrıştırması tutarlı', decomposition, t.totalPnl);
@@ -121,18 +151,14 @@ check('CSV: aynı dosya tekrar yüklenince mükerrer', p2.duplicates, 2);
 // Sıralama önemli: CSV içe aktarımı yukarıda ASELS ekledi, bu yüzden özet ve seri aynı
 // durumdan okunmalı — önceki S/t içe aktarımdan önce alınmıştı ve %1,09'luk sapma
 // gerçek bir hata değil, karşılaştırılan iki farklı portföydü.
-// Canlı fiyat kaynakları ara sıra tek bir sembolde boş/gecikmeli yanıt verir (CI'da %6,5'lik sapma);
-// karşılaştırma ağ hatasına değil hesaplamaya bakmalı: birkaç kez yeniden okunur, son deneme raporlanır.
-let S2, VS, lpt, drift;
-for (let i = 0; i < 4; i++) {
-  S2 = await pf.summary();
-  VS = await pf.valueSeries();
-  lpt = VS.at(-1);
-  drift = Math.abs(lpt.value - S2.totals.value) / S2.totals.value;
-  if (drift < 0.01) break;
-  console.log(`  (deneme ${i + 1}: sapma %${(drift * 100).toFixed(2)}; ${S2.holdings.map((h) => `${h.symbol}=${h.price}`).join(' ')})`);
-  await new Promise((r) => setTimeout(r, 3000));
-}
+// Aynı portföy ve aynı sabit piyasa verileriyle iki gerçek hesaplamayı karşılaştır.
+const S2 = await pf.summary();
+const VS = await pf.valueSeries();
+const lpt = VS.at(-1);
+const drift = Math.abs(lpt.value - S2.totals.value) / S2.totals.value;
+check('CSV sonrası sabit fiyatlarla toplam değer', S2.totals.value, 110826);
+check('Serinin sabit piyasa günü', lpt.date === '2026-06-15', true);
+check('CSV sonrası seri sonu değeri', lpt.value, 110826);
 assert('Denetim: audit dizisi ve zorunlu alanlar', Array.isArray(S2.audit) && S2.audit.every((a) => a.code && ['kritik', 'uyari', 'bilgi'].includes(a.severity) && a.title && a.action !== undefined), `${S2.audit.length} madde`);
 assert('Seri son noktası ≈ bugünkü değer (%1)', drift < 0.01, `seri ${lpt.date} ${Math.round(lpt.value)} vs özet ${Math.round(S2.totals.value)} (%${(drift * 100).toFixed(2)})`);
 assert('Serideki döviz varlık sıfıra düşmüyor', S2.holdings.filter((h) => h.currency !== 'TRY').every((h) => h.value > 0), S2.holdings.filter((h) => h.currency !== 'TRY').map((h) => `${h.symbol}:${Math.round(h.value)}`).join(' '));
@@ -150,7 +176,6 @@ check('Beyanname toplam stopaj = defter stopajı', TR.total.tax, pf.computeLedge
 check('Beyanname 2025: komisyon (AAPL ücreti 41 TL kuruyla)', y25.commission, 113, 0.01);
 
 // Geriye uyum: tax/other_fee sütunu olmayan eski bir satır yazıldığında okuma patlamıyor
-const { db } = await import('../server/db.js');
 db.prepare("INSERT INTO transactions(date, type, symbol, asset_type, quantity, price, fee, currency, fx_rate) VALUES('2025-11-01','BUY','ASELS','stock',1,10,1,'TRY',1)").run();
 const oldRow = db.prepare("SELECT tax, other_fee FROM transactions WHERE date = '2025-11-01'").get();
 let oldOk = true, oldErr = '';
