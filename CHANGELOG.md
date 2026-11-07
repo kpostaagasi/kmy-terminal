@@ -1,5 +1,11 @@
 # Sürüm Notları
 
+## Yayımlanmamış
+
+### Değişen
+- Geçişli bağımlılıklarda uyumlu yama güncellemeleri: `@hono/node-server` 2.1.6, `hono` 4.13.16 ve `ip-address` 10.7.6.
+- Portföy regresyon testinde canlı fiyatlar yerine sabit tarihli, tutarlı fiyat ve kur verileri kullanıldı; ağ kaynaklı tekrar denemeleri kaldırıldı.
+
 ## 0.1.6-beta — 16 Ekim 2026
 
 ### Düzeltilen
